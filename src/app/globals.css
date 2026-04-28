@@ -1,0 +1,52 @@
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Lao:wght@400;700;900&family=Playfair+Display:wght@700;900&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --brown: #3d1f0a;
+  --brown2: #6b3a1f;
+  --brown3: #a0522d;
+  --cream: #fdf6ee;
+  --cream2: #f5ebe0;
+  --cream3: #e8d5c0;
+  --warm-white: #fffbf6;
+  --gray3: #8a6a55;
+}
+
+* {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  font-family: 'Noto Sans Lao', sans-serif;
+  background: var(--cream);
+  color: var(--brown);
+  min-height: 100vh;
+}
+
+@layer components {
+  .btn-primary {
+    @apply w-full py-4 bg-[#3d1f0a] text-[#fdf6ee] rounded-xl font-black text-base cursor-pointer border-none;
+  }
+  .btn-primary:disabled {
+    @apply bg-[#e8d5c0] text-[#8a6a55] cursor-not-allowed;
+  }
+  .btn-outline {
+    @apply w-full py-4 bg-[#fffbf6] text-[#3d1f0a] rounded-xl font-black text-base border-2 border-[#3d1f0a] cursor-pointer;
+  }
+  .card {
+    @apply bg-[#fffbf6] border border-[#e8d5c0] rounded-xl p-4 shadow-sm;
+  }
+  .input-field {
+    @apply w-full border-2 border-[#e8d5c0] rounded-xl px-4 py-3 text-base font-bold bg-[#fffbf6] text-[#3d1f0a] outline-none;
+  }
+  .input-field:focus {
+    @apply border-[#3d1f0a];
+  }
+  .tag {
+    @apply inline-block text-xs font-black rounded px-2 py-1;
+  }
+}
