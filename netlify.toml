@@ -1,6 +1,13 @@
 [build]
-  command = "rm -rf .next && npm run build"
-  publish = ".next"
+  command = "rm -rf .next out && npm run build"
+  publish = "out"
 
-[[plugins]]
-  package = "@netlify/plugin-nextjs"
+[[redirects]]
+  from = "/"
+  to = "/order"
+  status = 302
+
+[[redirects]]
+  from = "/*"
+  to = "/:splat"
+  status = 200
