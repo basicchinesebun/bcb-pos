@@ -45,11 +45,11 @@ export default function PreOrderPage() {
   const [isOnline, setIsOnline] = useState(true)
   const [shopInfo, setShopInfo] = useState({ name: 'Basic Chinese Bun' })
   const [branches, setBranches] = useState([])
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    if (!supabase) { setLoading(false); return }
     loadShopData()
-
-    if (!supabase) return
     const channel = supabase
       .channel('preorder-stock')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'shop_config' }, loadShopData)
@@ -79,9 +79,9 @@ export default function PreOrderPage() {
   }, [currentOrder?.id])
 
   async function loadShopData() {
-    if (!supabase) return
+    if (!supabase) { setLoading(false); return }
     const { data } = await supabase.from('shop_config').select('*')
-    if (!data) return
+    if (!data) { setLoading(false); return }
     const cfg = {}
     data.forEach(r => { cfg[r.key] = r.value })
     setMenus(cfg.menus ? JSON.parse(cfg.menus) : [
@@ -103,6 +103,7 @@ export default function PreOrderPage() {
       const s = JSON.parse(cfg.settings)
       setShopOpen(s.onlineOn !== false)
     }
+    setLoading(false)
   }
 
   const totalPrice = Object.entries(selected).reduce((s, [i, q]) => s + (prices[+i] || 0) * q, 0)
@@ -257,6 +258,20 @@ export default function PreOrderPage() {
   }
 
   const statusInfo = STATUS_MAP[currentOrder?.status] || STATUS_MAP.pending
+
+  if (loading) return (
+    <div className="min-h-screen flex items-center justify-center" style={{ background: 'var(--cream)' }}>
+      <div className="text-sm font-bold" style={{ color: 'var(--brown)' }}>ກຳລັງໂຫຼດ...</div>
+    </div>
+  )
+
+  if (!supabase) return (
+    <div className="min-h-screen flex items-center justify-center" style={{ background: 'var(--cream)' }}>
+      <div className="text-sm font-bold text-center px-6" style={{ color: 'var(--brown)' }}>
+        ບໍ່ສາມາດເຊື່ອມຕໍ່ຖານຂໍ້ມູນໄດ້<br/>ກະລຸນາລອງໃໝ່ອີກຄັ້ງ
+      </div>
+    </div>
+  )
 
   return (
     <div

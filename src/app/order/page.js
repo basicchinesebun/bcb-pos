@@ -32,11 +32,12 @@ export default function OrderPage() {
   const [submitting, setSubmitting] = useState(false)
   const [shopInfo, setShopInfo] = useState({ name: 'Basic Chinese Bun' })
   const [branches, setBranches] = useState([])
+  const [loading, setLoading] = useState(true)
 
   // Load shop data
   useEffect(() => {
+    if (!supabase) { setLoading(false); return }
     loadShopData()
-    if (!supabase) return
     const channel = supabase
       .channel('shop-walkin-realtime')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'shop_config' }, () => loadShopData())
@@ -86,6 +87,8 @@ export default function OrderPage() {
       }
     } catch (e) {
       console.error('loadShopData error:', e)
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -227,6 +230,20 @@ export default function OrderPage() {
     qty,
     sub: (prices[+i] || 0) * qty,
   }))
+
+  if (loading) return (
+    <div className="min-h-screen flex items-center justify-center" style={{ background: 'var(--cream)' }}>
+      <div className="text-sm font-bold" style={{ color: 'var(--brown)' }}>ກຳລັງໂຫຼດ...</div>
+    </div>
+  )
+
+  if (!supabase) return (
+    <div className="min-h-screen flex items-center justify-center" style={{ background: 'var(--cream)' }}>
+      <div className="text-sm font-bold text-center px-6" style={{ color: 'var(--brown)' }}>
+        ບໍ່ສາມາດເຊື່ອມຕໍ່ຖານຂໍ້ມູນໄດ້<br/>ກະລຸນາລອງໃໝ່ອີກຄັ້ງ
+      </div>
+    </div>
+  )
 
   return (
     <div

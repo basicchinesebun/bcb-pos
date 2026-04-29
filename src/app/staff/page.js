@@ -44,12 +44,12 @@ export default function StaffPage() {
   const [salesDate, setSalesDate] = useState(new Date().toISOString().split('T')[0])
   const [isOnline, setIsOnline] = useState(true)
   const [liveStatus, setLiveStatus] = useState('connecting') // 'live' | 'connecting' | 'error'
+  const [loading, setLoading] = useState(true)
   const voicesRef = useRef([])
 
   useEffect(() => {
+    if (!supabase) { setLoading(false); return }
     loadAll()
-
-    if (!supabase) return
 
     // Real-time orders — direct state mutations (instant UI) + status tracking
     const ch = supabase.channel('staff-orders')
@@ -112,6 +112,7 @@ export default function StaffPage() {
 
   async function loadAll() {
     await Promise.all([loadOrders(), loadConfig()])
+    setLoading(false)
   }
 
   async function loadOrders() {
@@ -619,6 +620,20 @@ export default function StaffPage() {
     new Date(o.done_at || o.created_at).toISOString().split('T')[0]
   ))].sort().reverse()
   if (!salesDates.includes(salesDate)) salesDates.unshift(salesDate)
+
+  if (loading) return (
+    <div className="min-h-screen flex items-center justify-center" style={{ background: 'var(--cream)' }}>
+      <div className="text-sm font-bold" style={{ color: 'var(--brown)' }}>ກຳລັງໂຫຼດ...</div>
+    </div>
+  )
+
+  if (!supabase) return (
+    <div className="min-h-screen flex items-center justify-center" style={{ background: 'var(--cream)' }}>
+      <div className="text-sm font-bold text-center px-6" style={{ color: 'var(--brown)' }}>
+        ບໍ່ສາມາດເຊື່ອມຕໍ່ຖານຂໍ້ມູນໄດ້<br/>ກວດສອບ Environment Variables
+      </div>
+    </div>
+  )
 
   return (
     <div className="min-h-screen" style={{ background: 'var(--cream)', paddingBottom: 64 }}>
