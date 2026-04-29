@@ -52,6 +52,7 @@ export default function PreOrderPage() {
   useEffect(() => {
     loadShopData()
 
+    if (!supabase) return
     const channel = supabase
       .channel('preorder-stock')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'shop_config' }, loadShopData)
@@ -69,7 +70,7 @@ export default function PreOrderPage() {
   }, [])
 
   useEffect(() => {
-    if (!currentOrder?.id) return
+    if (!currentOrder?.id || !supabase) return
     const channel = supabase
       .channel('order-status-' + currentOrder.id)
       .on('postgres_changes', {
@@ -81,6 +82,7 @@ export default function PreOrderPage() {
   }, [currentOrder?.id])
 
   async function loadShopData() {
+    if (!supabase) return
     const { data } = await supabase.from('shop_config').select('*')
     if (!data) return
     const cfg = {}

@@ -39,7 +39,7 @@ export default function OrderPage() {
   // Load shop data
   useEffect(() => {
     loadShopData()
-    // Real-time stock + menu listener
+    if (!supabase) return
     const channel = supabase
       .channel('shop-walkin-realtime')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'shop_config' }, () => loadShopData())
@@ -61,6 +61,7 @@ export default function OrderPage() {
 
   async function loadShopData() {
     try {
+      if (!supabase) return
       const { data, error } = await supabase.from('shop_config').select('*')
       if (error) throw error
       const cfg = {}

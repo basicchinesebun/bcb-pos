@@ -52,6 +52,8 @@ export default function StaffPage() {
   useEffect(() => {
     loadAll()
 
+    if (!supabase) return
+
     // Real-time orders — direct state mutations (instant UI) + status tracking
     const ch = supabase.channel('staff-orders')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'orders' },
@@ -116,6 +118,7 @@ export default function StaffPage() {
   }
 
   async function loadOrders() {
+    if (!supabase) return
     const { data } = await supabase.from('orders').select('*').order('created_at', { ascending: false })
     if (data) setOrders(data)
   }
@@ -131,6 +134,7 @@ export default function StaffPage() {
   ]
 
   async function loadConfig() {
+    if (!supabase) return
     const { data, error } = await supabase.from('shop_config').select('*')
     if (error) { console.error('loadConfig error:', error); return }
     const cfg = {}

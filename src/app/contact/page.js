@@ -78,6 +78,7 @@ export default function ContactPage() {
 
   useEffect(() => {
     async function load() {
+      if (!supabase) { setBranches(DEFAULT_BRANCHES); setLoading(false); return }
       const { data } = await supabase.from('shop_config').select('*')
       if (data) {
         const cfg = {}
