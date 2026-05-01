@@ -52,7 +52,7 @@ export default function StaffPage() {
     loadAll()
 
     // Real-time orders — direct state mutations (instant UI) + status tracking
-    const ch = supabase.channel('staff-orders')
+    const ch = supabase.channel('stuff-orders')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'orders' },
         payload => setOrders(prev => [payload.new, ...prev]))
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'orders' },
