@@ -1,0 +1,5 @@
+1:"$Sreact.fragment"
+2:I[32733,["/_next/static/chunks/0tini1tz0wuq7.js"],"ViewportBoundary"]
+3:I[32733,["/_next/static/chunks/0tini1tz0wuq7.js"],"MetadataBoundary"]
+4:"$Sreact.suspense"
+0:{"rsc":["$","$1","h",{"children":[["$","meta",null,{"name":"robots","content":"noindex"}],["$","$L2",null,{"children":[["$","meta","0",{"charSet":"utf-8"}],["$","meta","1",{"name":"viewport","content":"width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"}]]}],["$","div",null,{"hidden":true,"children":["$","$L3",null,{"children":["$","$4",null,{"name":"Next.Metadata","children":[["$","title","0",{"children":"Basic Chinese Bun"}],["$","meta","1",{"name":"description","content":"ຮ້ານຊາລາເປົາ Basic Chinese Bun"}]]}]}]}],null]}],"isPartial":false,"staleTime":300,"varyParams":null,"buildId":"5GQwMDTYezbgIAWBLez4S"}
