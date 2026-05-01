@@ -1,7 +1,4 @@
 {
   "buildCommand": "npm run build",
-  "outputDirectory": "out",
-  "redirects": [
-    { "source": "/", "destination": "/order", "permanent": false }
-  ]
+  "outputDirectory": "out"
 }
