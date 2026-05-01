@@ -1,4 +1,4 @@
-const CACHE_NAME = 'bcb-staff-v1';
+const CACHE_NAME = 'bcb-staff-v2';
 const URLS_TO_CACHE = ['/staff', '/icon-staff-192.png'];
 
 self.addEventListener('install', event => {
