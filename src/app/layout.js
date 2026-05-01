@@ -1,4 +1,5 @@
 import './globals.css'
+import PwaHelper from './PwaHelper'
 
 export const metadata = {
   title: 'Basic Chinese Bun',
@@ -15,7 +16,10 @@ export const viewport = {
 export default function RootLayout({ children }) {
   return (
     <html lang="lo">
-      <body>{children}</body>
+      <body>
+        <PwaHelper />
+        {children}
+      </body>
     </html>
   )
 }

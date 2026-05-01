@@ -1,0 +1,13 @@
+{
+  "name": "Basic Chinese Bun Order",
+  "short_name": "BCB Walk In",
+  "start_url": "/order",
+  "scope": "/order",
+  "display": "standalone",
+  "theme_color": "#3E2723",
+  "background_color": "#3E2723",
+  "icons": [
+    {"src": "/icon-order-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable"},
+    {"src": "/icon-order-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable"}
+  ]
+}
