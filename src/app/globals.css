@@ -27,6 +27,17 @@ body {
   min-height: 100vh;
 }
 
+@layer utilities {
+  .h-dvh {
+    height: 100vh;
+    height: 100dvh;
+  }
+  .min-h-dvh {
+    min-height: 100vh;
+    min-height: 100dvh;
+  }
+}
+
 @layer components {
   .btn-primary {
     @apply w-full py-4 bg-[#3d1f0a] text-[#fdf6ee] rounded-xl font-black text-base cursor-pointer border-none;

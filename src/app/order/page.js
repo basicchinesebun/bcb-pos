@@ -247,8 +247,8 @@ export default function OrderPage() {
 
   return (
     <div
-      className={`flex flex-col${step !== 3 ? ' overflow-hidden' : ''}`}
-      style={{ background: 'var(--cream)', ...(step === 3 ? { minHeight: '100dvh' } : { height: '100dvh' }) }}
+      className={`flex flex-col${step !== 3 ? ' overflow-hidden h-dvh' : ' min-h-dvh'}`}
+      style={{ background: 'var(--cream)' }}
     >
       {/* Offline banner */}
       {!isOnline && (

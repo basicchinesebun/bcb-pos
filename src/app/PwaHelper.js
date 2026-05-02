@@ -40,7 +40,7 @@ export default function PwaHelper() {
     themeMeta.content = '#3E2723'
 
     if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
-      navigator.serviceWorker.register(config.sw, { scope: base + '/' }).catch(() => {})
+      navigator.serviceWorker.register(config.sw, { scope: base }).catch(() => {})
     }
   }, [pathname])
 

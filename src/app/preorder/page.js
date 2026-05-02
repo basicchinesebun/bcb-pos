@@ -275,8 +275,8 @@ export default function PreOrderPage() {
 
   return (
     <div
-      className={`flex flex-col${step !== 4 ? ' overflow-hidden' : ''}`}
-      style={{ background: 'var(--cream)', ...(step === 4 ? { minHeight: '100dvh' } : { height: '100dvh' }) }}
+      className={`flex flex-col${step !== 4 ? ' overflow-hidden h-dvh' : ' min-h-dvh'}`}
+      style={{ background: 'var(--cream)' }}
     >
       {!isOnline && (
         <div className="bg-red-700 text-white text-center py-2 text-sm font-black">

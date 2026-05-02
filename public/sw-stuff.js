@@ -1,4 +1,4 @@
-const CACHE_NAME = 'bcb-stuff-v1';
+const CACHE_NAME = 'bcb-stuff-v2';
 const URLS_TO_CACHE = ['/stuff', '/icon-staff-192.png'];
 
 self.addEventListener('install', event => {
@@ -18,6 +18,7 @@ self.addEventListener('activate', event => {
 });
 
 self.addEventListener('fetch', event => {
+  if (!event.request.url.startsWith(self.location.origin)) return;
   event.respondWith(
     caches.match(event.request).then(cached => cached || fetch(event.request))
   );
