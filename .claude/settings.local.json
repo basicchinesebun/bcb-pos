@@ -3,7 +3,10 @@
     "allow": [
       "PowerShell(gh --version 2>$null)",
       "Bash(npm install *)",
-      "Bash(node -e \"const p=require\\('./package.json'\\); console.log\\('next:', p.dependencies.next\\)\")"
+      "Bash(node -e \"const p=require\\('./package.json'\\); console.log\\('next:', p.dependencies.next\\)\")",
+      "mcp__65ee66eb-d88e-4bfe-80a7-336cef5f67d5__list_projects",
+      "mcp__65ee66eb-d88e-4bfe-80a7-336cef5f67d5__get_deployment",
+      "mcp__65ee66eb-d88e-4bfe-80a7-336cef5f67d5__get_project"
     ]
   }
 }

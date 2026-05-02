@@ -50,6 +50,7 @@ export default function PreOrderPage() {
   useEffect(() => {
     if (!supabase) { setLoading(false); return }
     loadShopData()
+    const timer = setTimeout(() => setLoading(false), 6000)
     const channel = supabase
       .channel('preorder-stock')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'shop_config' }, loadShopData)
@@ -61,6 +62,7 @@ export default function PreOrderPage() {
     window.addEventListener('offline', onOffline)
     return () => {
       supabase.removeChannel(channel)
+      clearTimeout(timer)
       window.removeEventListener('online', onOnline)
       window.removeEventListener('offline', onOffline)
     }
@@ -78,12 +80,7 @@ export default function PreOrderPage() {
     return () => supabase.removeChannel(channel)
   }, [currentOrder?.id])
 
-  async function loadShopData() {
-    if (!supabase) { setLoading(false); return }
-    const { data } = await supabase.from('shop_config').select('*')
-    if (!data) { setLoading(false); return }
-    const cfg = {}
-    data.forEach(r => { cfg[r.key] = r.value })
+  function applyCfg(cfg) {
     setMenus(cfg.menus ? JSON.parse(cfg.menus) : [
       { lo: 'ຊາລາເປົາໝູສັບ', en: 'Pork Steamed Bun' },
       { lo: 'ໝັນໂຖ Dark Chocolate', en: 'Dark Choc Mantou' },
@@ -103,6 +100,20 @@ export default function PreOrderPage() {
       const s = JSON.parse(cfg.settings)
       setShopOpen(s.onlineOn !== false)
     }
+  }
+
+  async function loadShopData() {
+    try {
+      const raw = localStorage.getItem('bcb-shop-config')
+      if (raw) { applyCfg(JSON.parse(raw)); setLoading(false) }
+    } catch (_) {}
+    if (!supabase) { setLoading(false); return }
+    const { data } = await supabase.from('shop_config').select('*')
+    if (!data) { setLoading(false); return }
+    const cfg = {}
+    data.forEach(r => { cfg[r.key] = r.value })
+    try { localStorage.setItem('bcb-shop-config', JSON.stringify(cfg)) } catch (_) {}
+    applyCfg(cfg)
     setLoading(false)
   }
 
@@ -275,8 +286,8 @@ export default function PreOrderPage() {
 
   return (
     <div
-      className={`flex flex-col${step !== 4 ? ' overflow-hidden' : ''}`}
-      style={{ background: 'var(--cream)', ...(step === 4 ? { minHeight: '100dvh' } : { height: '100dvh' }) }}
+      className={`flex flex-col${step !== 4 ? ' overflow-hidden h-dvh' : ' min-h-dvh'}`}
+      style={{ background: 'var(--cream)' }}
     >
       {!isOnline && (
         <div className="bg-red-700 text-white text-center py-2 text-sm font-black">

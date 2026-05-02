@@ -38,11 +38,12 @@ export default function OrderPage() {
   useEffect(() => {
     if (!supabase) { setLoading(false); return }
     loadShopData()
+    const timer = setTimeout(() => setLoading(false), 6000)
     const channel = supabase
       .channel('shop-walkin-realtime')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'shop_config' }, () => loadShopData())
       .subscribe()
-    return () => supabase.removeChannel(channel)
+    return () => { supabase.removeChannel(channel); clearTimeout(timer) }
   }, [])
 
   // Online/offline detection
@@ -57,34 +58,42 @@ export default function OrderPage() {
     }
   }, [])
 
+  function applyCfg(cfg) {
+    setMenus(cfg.menus ? JSON.parse(cfg.menus) : [
+      { lo: 'ຊາລາເປົາໝູສັບ', en: 'Pork Steamed Bun' },
+      { lo: 'ໝັນໂຖ Dark Chocolate', en: 'Dark Choc Mantou' },
+      { lo: 'ໝັນໂຖ Matcha', en: 'Matcha Mantou' },
+      { lo: 'ເມນູ 4', en: 'Menu 4' },
+      { lo: 'ເມນູ 5', en: 'Menu 5' },
+      { lo: 'ເມນູ 6', en: 'Menu 6' },
+      { lo: 'ເມນູ 7', en: 'Menu 7' },
+    ])
+    setPrices(cfg.prices ? JSON.parse(cfg.prices) : [15000,15000,15000,15000,15000,15000,15000])
+    setStock(cfg.stock_shop ? JSON.parse(cfg.stock_shop) : [0,0,0,0,0,0,0])
+    setImages(cfg.menu_images ? JSON.parse(cfg.menu_images) : {})
+    setQrImage(cfg.qr_image || null)
+    setShopInfo(cfg.shop_info ? JSON.parse(cfg.shop_info) : { name: 'Basic Chinese Bun' })
+    if (cfg.branches) setBranches(JSON.parse(cfg.branches))
+    if (cfg.settings) {
+      const s = JSON.parse(cfg.settings)
+      setShopOpen(s.walkinOn !== false)
+    }
+  }
+
   async function loadShopData() {
+    // Load from cache instantly — avoids blank screen when Supabase is slow/sleeping
+    try {
+      const raw = localStorage.getItem('bcb-shop-config')
+      if (raw) { applyCfg(JSON.parse(raw)); setLoading(false) }
+    } catch (_) {}
     try {
       if (!supabase) return
       const { data, error } = await supabase.from('shop_config').select('*')
       if (error) throw error
       const cfg = {}
       data.forEach(row => { cfg[row.key] = row.value })
-
-      setMenus(cfg.menus ? JSON.parse(cfg.menus) : [
-        { lo: 'ຊາລາເປົາໝູສັບ', en: 'Pork Steamed Bun' },
-        { lo: 'ໝັນໂຖ Dark Chocolate', en: 'Dark Choc Mantou' },
-        { lo: 'ໝັນໂຖ Matcha', en: 'Matcha Mantou' },
-        { lo: 'ເມນູ 4', en: 'Menu 4' },
-        { lo: 'ເມນູ 5', en: 'Menu 5' },
-        { lo: 'ເມນູ 6', en: 'Menu 6' },
-        { lo: 'ເມນູ 7', en: 'Menu 7' },
-      ])
-      setPrices(cfg.prices ? JSON.parse(cfg.prices) : [15000,15000,15000,15000,15000,15000,15000])
-      setStock(cfg.stock_shop ? JSON.parse(cfg.stock_shop) : [0,0,0,0,0,0,0])
-      setImages(cfg.menu_images ? JSON.parse(cfg.menu_images) : {})
-      setQrImage(cfg.qr_image || null)
-      setShopInfo(cfg.shop_info ? JSON.parse(cfg.shop_info) : { name: 'Basic Chinese Bun' })
-      if (cfg.branches) setBranches(JSON.parse(cfg.branches))
-      // Read walkinOn from settings
-      if (cfg.settings) {
-        const s = JSON.parse(cfg.settings)
-        setShopOpen(s.walkinOn !== false) // default true
-      }
+      try { localStorage.setItem('bcb-shop-config', JSON.stringify(cfg)) } catch (_) {}
+      applyCfg(cfg)
     } catch (e) {
       console.error('loadShopData error:', e)
     } finally {
@@ -247,8 +256,8 @@ export default function OrderPage() {
 
   return (
     <div
-      className={`flex flex-col${step !== 3 ? ' overflow-hidden' : ''}`}
-      style={{ background: 'var(--cream)', ...(step === 3 ? { minHeight: '100dvh' } : { height: '100dvh' }) }}
+      className={`flex flex-col${step !== 3 ? ' overflow-hidden h-dvh' : ' min-h-dvh'}`}
+      style={{ background: 'var(--cream)' }}
     >
       {/* Offline banner */}
       {!isOnline && (
