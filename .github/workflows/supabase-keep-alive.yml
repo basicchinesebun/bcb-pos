@@ -1,0 +1,24 @@
+name: Supabase Keep-Alive
+
+on:
+  schedule:
+    - cron: '0 2 * * *'  # Every day at 2am UTC (9am Laos time)
+  workflow_dispatch:      # Allow manual trigger anytime
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Supabase to prevent project from pausing
+        run: |
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            -H "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Impic2Nvb2xvZGtrbnB3ZXVmdXdsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY4ODEzMDQsImV4cCI6MjA5MjQ1NzMwNH0.pvl9wv7dUMhwddgw5Sb8X-CGLsViMJICSNHxroGspTs" \
+            -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Impic2Nvb2xvZGtrbnB3ZXVmdXdsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY4ODEzMDQsImV4cCI6MjA5MjQ1NzMwNH0.pvl9wv7dUMhwddgw5Sb8X-CGLsViMJICSNHxroGspTs" \
+            "https://jbscoolodkknpweufuwl.supabase.co/rest/v1/shop_config?select=key&limit=1")
+          echo "Supabase response: $STATUS"
+          if [ "$STATUS" = "200" ]; then
+            echo "✓ Supabase is alive and healthy"
+          else
+            echo "⚠ Unexpected status: $STATUS"
+            exit 1
+          fi
