@@ -50,6 +50,7 @@ export default function PreOrderPage() {
   useEffect(() => {
     if (!supabase) { setLoading(false); return }
     loadShopData()
+    const timer = setTimeout(() => setLoading(false), 6000)
     const channel = supabase
       .channel('preorder-stock')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'shop_config' }, loadShopData)
@@ -61,6 +62,7 @@ export default function PreOrderPage() {
     window.addEventListener('offline', onOffline)
     return () => {
       supabase.removeChannel(channel)
+      clearTimeout(timer)
       window.removeEventListener('online', onOnline)
       window.removeEventListener('offline', onOffline)
     }

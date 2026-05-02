@@ -50,6 +50,7 @@ export default function StaffPage() {
   useEffect(() => {
     if (!supabase) { setLoading(false); return }
     loadAll()
+    const timer = setTimeout(() => setLoading(false), 6000)
 
     // Real-time orders — direct state mutations (instant UI) + status tracking
     const ch = supabase.channel('staff-orders')
@@ -84,6 +85,7 @@ export default function StaffPage() {
     return () => {
       supabase.removeChannel(ch)
       clearInterval(poll)
+      clearTimeout(timer)
       window.removeEventListener('online', onOnline)
       window.removeEventListener('offline', onOffline)
     }

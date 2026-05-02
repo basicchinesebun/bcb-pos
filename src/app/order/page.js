@@ -38,11 +38,12 @@ export default function OrderPage() {
   useEffect(() => {
     if (!supabase) { setLoading(false); return }
     loadShopData()
+    const timer = setTimeout(() => setLoading(false), 6000)
     const channel = supabase
       .channel('shop-walkin-realtime')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'shop_config' }, () => loadShopData())
       .subscribe()
-    return () => supabase.removeChannel(channel)
+    return () => { supabase.removeChannel(channel); clearTimeout(timer) }
   }, [])
 
   // Online/offline detection
