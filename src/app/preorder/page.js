@@ -80,12 +80,7 @@ export default function PreOrderPage() {
     return () => supabase.removeChannel(channel)
   }, [currentOrder?.id])
 
-  async function loadShopData() {
-    if (!supabase) { setLoading(false); return }
-    const { data } = await supabase.from('shop_config').select('*')
-    if (!data) { setLoading(false); return }
-    const cfg = {}
-    data.forEach(r => { cfg[r.key] = r.value })
+  function applyCfg(cfg) {
     setMenus(cfg.menus ? JSON.parse(cfg.menus) : [
       { lo: 'ຊາລາເປົາໝູສັບ', en: 'Pork Steamed Bun' },
       { lo: 'ໝັນໂຖ Dark Chocolate', en: 'Dark Choc Mantou' },
@@ -105,6 +100,20 @@ export default function PreOrderPage() {
       const s = JSON.parse(cfg.settings)
       setShopOpen(s.onlineOn !== false)
     }
+  }
+
+  async function loadShopData() {
+    try {
+      const raw = localStorage.getItem('bcb-shop-config')
+      if (raw) { applyCfg(JSON.parse(raw)); setLoading(false) }
+    } catch (_) {}
+    if (!supabase) { setLoading(false); return }
+    const { data } = await supabase.from('shop_config').select('*')
+    if (!data) { setLoading(false); return }
+    const cfg = {}
+    data.forEach(r => { cfg[r.key] = r.value })
+    try { localStorage.setItem('bcb-shop-config', JSON.stringify(cfg)) } catch (_) {}
+    applyCfg(cfg)
     setLoading(false)
   }
 
