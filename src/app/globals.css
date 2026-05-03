@@ -20,9 +20,14 @@
   -webkit-tap-highlight-color: transparent;
 }
 
+html {
+  background: #fdf6ee;
+  color-scheme: only light;
+}
+
 body {
   font-family: 'Noto Sans Lao', sans-serif;
-  background: var(--cream);
+  background: #fdf6ee;
   color: var(--brown);
   min-height: 100vh;
 }
