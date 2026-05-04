@@ -420,6 +420,62 @@ export default function StaffPage() {
   const [btConnected, setBtConnected] = useState(false)
   const hasBluetooth = typeof navigator !== 'undefined' && 'bluetooth' in navigator
 
+  // ─── USB Printer (WebUSB / ESC/POS) ───
+  const usbDeviceRef = useRef(null)
+  const usbEndpointRef = useRef(null)
+  const [usbConnected, setUsbConnected] = useState(false)
+  const hasUsb = typeof navigator !== 'undefined' && 'usb' in navigator
+
+  async function connectUsbPrinter() {
+    if (!hasUsb) { showToast('❌ ໃຊ້ Chrome ສຳລັບ USB', 'red'); return }
+    try {
+      showToast('ກຳລັງເຊື່ອມ USB...', 'blue')
+      const device = await navigator.usb.requestDevice({ filters: [] })
+      await device.open()
+      if (device.configuration === null) await device.selectConfiguration(1)
+      let endpoint = null
+      for (const iface of device.configuration.interfaces) {
+        try {
+          await device.claimInterface(iface.interfaceNumber)
+          for (const ep of iface.alternate.endpoints) {
+            if (ep.direction === 'out' && ep.type === 'bulk') {
+              endpoint = ep
+              break
+            }
+          }
+          if (endpoint) break
+        } catch { continue }
+      }
+      if (!endpoint) { showToast('❌ ບໍ່ພົບ USB endpoint', 'red'); await device.close(); return }
+      usbDeviceRef.current = device
+      usbEndpointRef.current = endpoint
+      setUsbConnected(true)
+      showToast(`🖨 USB ${device.productName || 'Printer'} ✅`, 'green')
+      device.addEventListener('disconnect', () => {
+        usbDeviceRef.current = null
+        usbEndpointRef.current = null
+        setUsbConnected(false)
+        showToast('USB ຕັດການເຊື່ອມ', 'orange')
+      })
+    } catch (e) {
+      if (e.name !== 'NotFoundError') showToast('❌ USB: ' + (e.message || e.name), 'red')
+    }
+  }
+
+  async function usbPrint(o) {
+    if (!usbDeviceRef.current || !usbEndpointRef.current) { printOrder(o); return }
+    const data = buildEscPos(o)
+    const chunkSize = 64
+    try {
+      for (let i = 0; i < data.length; i += chunkSize) {
+        await usbDeviceRef.current.transferOut(usbEndpointRef.current.endpointNumber, data.slice(i, i + chunkSize))
+      }
+      showToast('ພິມແລ້ວ ✅', 'green')
+    } catch (e) {
+      showToast('❌ USB ພິມຜິດ', 'red')
+    }
+  }
+
   async function connectPrinter() {
     if (!hasBluetooth) {
       const ua = navigator.userAgent
@@ -536,7 +592,8 @@ export default function StaffPage() {
   }
 
   function smartPrint(o) {
-    if (btCharRef.current) btPrint(o)
+    if (usbDeviceRef.current && usbEndpointRef.current) usbPrint(o)
+    else if (btCharRef.current) btPrint(o)
     else printOrder(o)
   }
 
@@ -674,6 +731,9 @@ export default function StaffPage() {
               </div>
             </div>
             <div className="flex gap-2">
+              <button onClick={connectUsbPrinter} className={`text-xs font-black px-3 py-2 rounded-lg border ${usbConnected ? 'border-green-400 text-green-300' : 'border-[rgba(253,246,238,0.35)] text-[#fdf6ee]'}`}>
+                🖨 {usbConnected ? '✓' : 'USB'}
+              </button>
               <button onClick={connectPrinter} className={`text-xs font-black px-3 py-2 rounded-lg border ${btConnected ? 'border-green-400 text-green-300' : 'border-[rgba(253,246,238,0.35)] text-[#fdf6ee]'}`}>
                 🖨 {btConnected ? '✓' : 'BT'}
               </button>
