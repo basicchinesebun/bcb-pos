@@ -368,6 +368,11 @@ export default function PreOrderPage() {
                       <div className="text-xs font-bold mt-0.5" style={{ color: 'var(--brown2)' }}>
                         {isOut ? 'ໝົດ' : `${(prices[i] || 0).toLocaleString()}`}
                       </div>
+                      {!isOut && (
+                        <div className="text-xs mt-0.5 font-bold" style={{ color: s <= 5 ? '#dc2626' : 'var(--gray3)' }}>
+                          ເຫຼືອ {s}{s <= 5 ? ' ⚠' : ''}
+                        </div>
+                      )}
                     </div>
                     {isSel && (
                       <div className="flex items-center justify-between px-1.5 py-1 border-t border-[#e8d5c0]" style={{ background: 'var(--cream2)' }} onClick={e => e.stopPropagation()}>

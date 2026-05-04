@@ -350,6 +350,11 @@ export default function OrderPage() {
                       <div className="text-sm font-black mt-1" style={{ color: 'var(--brown2)' }}>
                         {isOut ? 'ໝົດ' : `${(prices[i] || 0).toLocaleString()} ກີບ`}
                       </div>
+                      {!isOut && (
+                        <div className="text-xs mt-0.5 font-bold" style={{ color: s <= 5 ? '#dc2626' : 'var(--gray3)' }}>
+                          ເຫຼືອ {s} ກ້ອນ{s <= 5 ? ' ⚠' : ''}
+                        </div>
+                      )}
                     </div>
 
                     {/* Qty row */}
