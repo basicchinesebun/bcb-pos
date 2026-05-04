@@ -35,6 +35,7 @@ export default function StaffPage() {
     { id: 'houayhong', name: 'ສາຂາຫວຍຫົງ', nameEn: 'Houay Hong Branch', visible: true, schedule: 'ຄ · ສກ · ອ (Tue / Thu / Sat)', mapUrl: '', facebookUrl: '', tiktokUrl: '', phone1: '', phone2: '', whatsapp: '' },
   ])
   const [filter, setFilter] = useState('all')
+  const [search, setSearch] = useState('')
   const [toast, setToast] = useState([])
   const [slipModal, setSlipModal] = useState(null)
   const [confirmModal, setConfirmModal] = useState(null) // { message, onConfirm }
@@ -182,12 +183,28 @@ export default function StaffPage() {
   }
 
   // ─── Orders ───
-  const filteredOrders = orders.filter(o => filter === 'all' ? true : o.type === filter)
+  const filteredOrders = orders.filter(o => {
+    if (filter !== 'all' && o.type !== filter) return false
+    if (!search.trim()) return true
+    const q = search.trim().toLowerCase()
+    if (String(o.qnum).includes(q)) return true
+    const items = typeof o.items === 'string' ? JSON.parse(o.items) : o.items || []
+    if (items.some(it => (it.name || '').toLowerCase().includes(q))) return true
+    if (o.customer) {
+      const c = typeof o.customer === 'string' ? JSON.parse(o.customer) : o.customer
+      if ((c.name || '').toLowerCase().includes(q)) return true
+      if ((c.phone || '').includes(q)) return true
+    }
+    return false
+  })
   const activeOrders = filteredOrders.filter(o => !o.done && !o.cancelled && o.status !== 'rejected')
   const archivedOrders = filteredOrders.filter(o => o.done || o.cancelled || o.status === 'rejected')
   const waiting = orders.filter(o => !o.done && !o.cancelled && o.status !== 'rejected').length
   const done = orders.filter(o => o.done).length
   const pendingOnline = orders.filter(o => o.type === 'online' && o.status === 'pending' && !o.cancelled).length
+  const LOW_STOCK = 5
+  const lowStockMenus = menus.map((m, i) => ({ name: m.lo, shop: stockShop[i] || 0, online: stockOnline[i] || 0 }))
+    .filter(m => m.shop <= LOW_STOCK || m.online <= LOW_STOCK)
 
   async function doneOrder(o) {
     const doneAt = new Date().toISOString()
@@ -709,6 +726,11 @@ export default function StaffPage() {
       </div>
 
       {!isOnline && <div className="bg-red-700 text-white text-center py-2 text-sm font-black">⚠ ບໍ່ມີອິນເຕີເນັດ</div>}
+      {lowStockMenus.length > 0 && (
+        <div className="px-3 py-2 text-xs font-black" style={{ background: '#fef3c7', color: '#92400e' }}>
+          ⚠ ສຕ໋ອກໃກ້ໝົດ: {lowStockMenus.map(m => `${m.name} (ຮ້ານ:${m.shop} ອອນໄລ:${m.online})`).join(' · ')}
+        </div>
+      )}
 
       {/* ─── ORDERS TAB ─── */}
       {tab === 'orders' && (
@@ -954,13 +976,24 @@ export default function StaffPage() {
 
             {/* Orders Main */}
             <div className="p-3">
-              <div className="flex gap-2 items-center mb-3 flex-wrap">
+              <div className="flex gap-2 items-center mb-2 flex-wrap">
                 <span className="text-xs font-black tracking-widest uppercase" style={{ color: 'var(--gray3)' }}>ລາຍການ</span>
                 <div className="flex gap-1 ml-auto">
                   {[['all','ທັງໝົດ'],['walkin','🏪'],['online','🌐']].map(([f,l]) => (
                     <button key={f} onClick={() => setFilter(f)} className={`px-3 py-1 rounded-lg text-xs font-black border ${filter===f ? 'bg-[#3d1f0a] text-[#fdf6ee] border-[#3d1f0a]' : 'border-[#e8d5c0] text-[#8a6a55]'}`}>{l}</button>
                   ))}
                 </div>
+              </div>
+              <div className="relative mb-3">
+                <input
+                  type="text"
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                  placeholder="ຄົ້ນຫາ: ເລກຄິວ, ຊື່, ເບີໂທ, ເມນູ..."
+                  className="input-field w-full text-sm pl-8"
+                />
+                <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-sm" style={{ color: 'var(--gray3)' }}>🔍</span>
+                {search && <button onClick={() => setSearch('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs font-black" style={{ color: 'var(--gray3)' }}>✕</button>}
               </div>
 
               {activeOrders.length === 0 && <div className="text-center py-12 text-lg font-bold" style={{ color: 'var(--cream3)' }}>ຍັງບໍ່ມີອໍເດີ</div>}

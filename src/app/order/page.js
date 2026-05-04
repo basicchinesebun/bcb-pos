@@ -372,6 +372,16 @@ export default function OrderPage() {
           </div>
 
           <div className="p-4 border-t-2 border-[#e8d5c0]" style={{ background: 'var(--warm-white)' }}>
+            {totalItems > 0 && (
+              <div className="flex items-center justify-between mb-3 px-1">
+                <span className="text-sm font-black" style={{ color: 'var(--brown)' }}>
+                  🛍 {totalItems} ກ້ອນ
+                </span>
+                <span className="text-sm font-black" style={{ color: 'var(--brown)' }}>
+                  {totalPrice.toLocaleString()} ກີບ
+                </span>
+              </div>
+            )}
             <button
               className="btn-primary"
               disabled={totalItems === 0}
