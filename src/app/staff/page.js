@@ -20,6 +20,7 @@ export default function StaffPage() {
   const [orders, setOrders] = useState([])
   const [menus, setMenus] = useState([])
   const [prices, setPrices] = useState([])
+  const [costs, setCosts] = useState([])
   const [stockTotal, setStockTotal] = useState([])
   const [stockShop, setStockShop] = useState([])
   const [stockOnline, setStockOnline] = useState([])
@@ -144,12 +145,14 @@ export default function StaffPage() {
     // ใช้ค่า default ถ้า Supabase ยังว่างอยู่
     const loadedMenus = cfg.menus ? JSON.parse(cfg.menus) : DEFAULT_MENUS
     const loadedPrices = cfg.prices ? JSON.parse(cfg.prices) : new Array(loadedMenus.length).fill(15000)
+    const loadedCosts = cfg.costs ? JSON.parse(cfg.costs) : new Array(loadedMenus.length).fill(0)
     const loadedStockTotal = cfg.stock_total ? JSON.parse(cfg.stock_total) : new Array(loadedMenus.length).fill(0)
     const loadedStockShop = cfg.stock_shop ? JSON.parse(cfg.stock_shop) : new Array(loadedMenus.length).fill(0)
     const loadedStockOnline = cfg.stock_online ? JSON.parse(cfg.stock_online) : new Array(loadedMenus.length).fill(0)
 
     setMenus(loadedMenus)
     setPrices(loadedPrices)
+    setCosts(loadedCosts)
     setStockTotal(loadedStockTotal)
     setStockShop(loadedStockShop)
     setStockOnline(loadedStockOnline)
@@ -267,8 +270,11 @@ export default function StaffPage() {
       lo: document.getElementById(`mn-${i}`)?.value || m.lo,
     }))
     const newPrices = menus.map((_, i) => parseInt(document.getElementById(`mp-${i}`)?.value || 0) || 0)
+    const newCosts = menus.map((_, i) => parseInt(document.getElementById(`mc-${i}`)?.value || 0) || 0)
     await saveConfig('menus', newMenus)
     await saveConfig('prices', newPrices)
+    await saveConfig('costs', newCosts)
+    setCosts(newCosts)
     showToast('ບັນທຶກເມນູ ✅', 'green')
   }
 
@@ -686,10 +692,17 @@ export default function StaffPage() {
   const walkinTotal = salesOrders.filter(o => o.type === 'walkin').reduce((s, o) => s + (o.total || 0), 0)
   const onlineTotal = salesOrders.filter(o => o.type === 'online').reduce((s, o) => s + (o.total || 0), 0)
   const menuCount = {}
+  let totalCost = 0
   salesOrders.forEach(o => {
     const items = typeof o.items === 'string' ? JSON.parse(o.items) : o.items || []
-    items.forEach(it => { menuCount[it.name] = (menuCount[it.name] || 0) + it.qty })
+    items.forEach(it => {
+      menuCount[it.name] = (menuCount[it.name] || 0) + it.qty
+      const idx = menus.findIndex(m => (m.lo || m) === it.name)
+      if (idx >= 0 && costs[idx]) totalCost += (costs[idx] || 0) * it.qty
+    })
   })
+  const salesProfit = salesTotal - totalCost
+  const hasCosts = costs.some(c => c > 0)
 
   // Get all sales dates
   const salesDates = [...new Set(orders.filter(o => o.done).map(o =>
@@ -808,7 +821,10 @@ export default function StaffPage() {
                       <span className="text-xs font-black w-4" style={{ color: 'var(--cream3)' }}>{i+1}</span>
                       <div className="flex-1 flex flex-col gap-1">
                         <input id={`mn-${i}`} defaultValue={m.lo} className="input-field text-xs py-2" />
-                        <input id={`mp-${i}`} defaultValue={prices[i] || ''} type="text" inputMode="numeric" placeholder="0" className="input-field text-xs py-2" />
+                        <div className="flex gap-1">
+                          <input id={`mp-${i}`} defaultValue={prices[i] || ''} type="text" inputMode="numeric" placeholder="ລາຄາ" className="input-field text-xs py-2 flex-1" />
+                          <input id={`mc-${i}`} defaultValue={costs[i] || ''} type="text" inputMode="numeric" placeholder="ຕົ້ນທຶນ" className="input-field text-xs py-2 flex-1" style={{ borderColor: '#fbbf24' }} />
+                        </div>
                       </div>
                       <div className="flex flex-col items-center gap-1">
                         <label className="w-10 h-10 rounded-lg border-2 border-dashed border-[#e8d5c0] flex items-center justify-center cursor-pointer overflow-hidden relative">
@@ -1189,9 +1205,30 @@ export default function StaffPage() {
               {salesDates.map(d => <option key={d} value={d}>{d}</option>)}
             </select>
 
-            <div className="rounded-2xl p-4 flex justify-between items-center mb-3" style={{ background: 'var(--brown)' }}>
-              <span className="text-sm font-bold" style={{ color: 'rgba(253,246,238,0.7)' }}>ຍອດລວມ</span>
-              <span className="font-serif text-2xl font-black" style={{ color: 'var(--cream)' }}>{salesTotal.toLocaleString()} ກີບ</span>
+            <div className="rounded-2xl p-4 mb-3" style={{ background: 'var(--brown)' }}>
+              <div className="flex justify-between items-center">
+                <span className="text-sm font-bold" style={{ color: 'rgba(253,246,238,0.7)' }}>ຍອດລວມ</span>
+                <span className="font-serif text-2xl font-black" style={{ color: 'var(--cream)' }}>{salesTotal.toLocaleString()} ກີບ</span>
+              </div>
+              {hasCosts && (
+                <div className="mt-2 pt-2 border-t border-[rgba(253,246,238,0.15)] flex flex-col gap-1">
+                  <div className="flex justify-between text-sm">
+                    <span style={{ color: 'rgba(253,246,238,0.6)' }}>ຕົ້ນທຶນ</span>
+                    <span className="font-black text-red-300">- {totalCost.toLocaleString()} ກີບ</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span style={{ color: 'rgba(253,246,238,0.6)' }}>ກຳໄລ</span>
+                    <span className={`font-black ${salesProfit >= 0 ? 'text-green-300' : 'text-red-300'}`}>{salesProfit.toLocaleString()} ກີບ</span>
+                  </div>
+                  <div className="flex justify-between text-xs mt-0.5">
+                    <span style={{ color: 'rgba(253,246,238,0.4)' }}>margin</span>
+                    <span style={{ color: 'rgba(253,246,238,0.6)' }}>{salesTotal > 0 ? Math.round(salesProfit / salesTotal * 100) : 0}%</span>
+                  </div>
+                </div>
+              )}
+              {!hasCosts && (
+                <div className="mt-2 text-xs" style={{ color: 'rgba(253,246,238,0.4)' }}>ຕັ້ງຕົ້ນທຶນໃນ ⚙ ຕັ້ງຄ່າ ເພື່ອເບິ່ງກຳໄລ</div>
+              )}
             </div>
 
             <div className="grid grid-cols-2 gap-3 mb-3">
