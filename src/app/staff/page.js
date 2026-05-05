@@ -17,6 +17,15 @@ const STATUS_COLORS = {
 
 export default function StaffPage() {
   const [tab, setTab] = useState('orders')
+  const [staffPin, setStaffPin] = useState('')
+  const [profitPin, setProfitPin] = useState('')
+  const [staffUnlocked, setStaffUnlocked] = useState(false)
+  const [profitUnlocked, setProfitUnlocked] = useState(false)
+  const [pinMode, setPinMode] = useState(null) // 'staff'|'profit'|'set-staff'|'set-profit'
+  const [pinInput, setPinInput] = useState('')
+  const [pinStep, setPinStep] = useState(1) // 1=enter old, 2=enter new, 3=confirm new
+  const [pinNew, setPinNew] = useState('')
+  const [pinError, setPinError] = useState('')
   const [orders, setOrders] = useState([])
   const [menus, setMenus] = useState([])
   const [prices, setPrices] = useState([])
@@ -164,6 +173,8 @@ export default function StaffPage() {
     // Fix stale closure: use functional update for settings
     if (cfg.settings) setSettings(prev => ({ ...prev, ...JSON.parse(cfg.settings) }))
     if (cfg.branches) setBranches(JSON.parse(cfg.branches))
+    if (cfg.staff_pin) setStaffPin(cfg.staff_pin)
+    if (cfg.profit_pin) setProfitPin(cfg.profit_pin)
 
     // ถ้ายังไม่มีข้อมูลใน Supabase ให้ save default ขึ้นไปก่อน
     if (!cfg.menus) {
@@ -637,6 +648,65 @@ export default function StaffPage() {
     showToast('ບັນທຶກສະຕ໋ອກ ✅', 'green')
   }
 
+  // ─── PIN ───
+  function openPinSetting(type) {
+    const currentPin = type === 'staff' ? staffPin : profitPin
+    setPinMode(`set-${type}`)
+    setPinStep(currentPin ? 1 : 2)
+    setPinInput('')
+    setPinError('')
+    setPinNew('')
+  }
+
+  function openRemovePin(type) {
+    setPinMode(`remove-${type}`)
+    setPinStep(1)
+    setPinInput('')
+    setPinError('')
+  }
+
+  function pinModeSubtitle() {
+    if (pinMode === 'profit') return 'ໃສ່ລະຫັດ Profit'
+    if (pinMode === 'remove-staff' || pinMode === 'remove-profit') return 'ໃສ່ລະຫັດປັດຈຸບັນ'
+    if (pinStep === 1) return 'ໃສ່ລະຫັດເກົ່າ'
+    if (pinStep === 2) return 'ໃສ່ລະຫັດໃໝ່ (6 ຕົວ)'
+    if (pinStep === 3) return 'ໃສ່ລະຫັດໃໝ່ອີກຄັ້ງ'
+    return ''
+  }
+
+  function handlePinModeSubmit(pin) {
+    if (pinMode === 'profit') {
+      if (pin === profitPin) {
+        setProfitUnlocked(true); setPinMode(null); setPinInput(''); setPinError('')
+      } else { setPinError('ລະຫັດຜິດ'); setPinInput('') }
+    } else if (pinMode === 'set-staff' || pinMode === 'set-profit') {
+      const currentPin = pinMode === 'set-staff' ? staffPin : profitPin
+      if (pinStep === 1) {
+        if (pin !== currentPin) { setPinError('ລະຫັດເກົ່າຜິດ'); setPinInput(''); return }
+        setPinStep(2); setPinInput(''); setPinError('')
+      } else if (pinStep === 2) {
+        setPinNew(pin); setPinStep(3); setPinInput(''); setPinError('')
+      } else if (pinStep === 3) {
+        if (pin !== pinNew) { setPinError('ລະຫັດບໍ່ຕົງກັນ'); setPinInput(''); setPinStep(2); setPinNew(''); return }
+        const key = pinMode === 'set-staff' ? 'staff_pin' : 'profit_pin'
+        saveConfig(key, pin)
+        if (pinMode === 'set-staff') setStaffPin(pin)
+        else setProfitPin(pin)
+        setPinMode(null); setPinInput(''); setPinStep(1); setPinNew(''); setPinError('')
+        showToast('ບັນທຶກລະຫັດ ✅', 'green')
+      }
+    } else if (pinMode === 'remove-staff' || pinMode === 'remove-profit') {
+      const currentPin = pinMode === 'remove-staff' ? staffPin : profitPin
+      if (pin !== currentPin) { setPinError('ລະຫັດຜິດ'); setPinInput(''); return }
+      const key = pinMode === 'remove-staff' ? 'staff_pin' : 'profit_pin'
+      saveConfig(key, '')
+      if (pinMode === 'remove-staff') { setStaffPin(''); setStaffUnlocked(false) }
+      else setProfitPin('')
+      setPinMode(null); setPinInput(''); setPinError('')
+      showToast('ລຶບລະຫັດ ✅', 'green')
+    }
+  }
+
   // ─── Settings toggle ───
   async function toggleSetting(key) {
     setSettings(prev => {
@@ -714,6 +784,18 @@ export default function StaffPage() {
     <div className="min-h-screen flex items-center justify-center" style={{ background: 'var(--cream)' }}>
       <div className="text-sm font-bold" style={{ color: 'var(--brown)' }}>ກຳລັງໂຫຼດ...</div>
     </div>
+  )
+
+  if (staffPin && !staffUnlocked) return (
+    <PinPad
+      fullScreen
+      title="🔒 Staff" subtitle="ໃສ່ລະຫັດ Staff"
+      onSubmit={pin => {
+        if (pin === staffPin) { setStaffUnlocked(true); setPinInput(''); setPinError('') }
+        else { setPinError('ລະຫັດຜິດ'); setPinInput('') }
+      }}
+      pinInput={pinInput} setPinInput={setPinInput} error={pinError} setError={setPinError}
+    />
   )
 
   if (!supabase) return (
@@ -809,6 +891,24 @@ export default function StaffPage() {
                       </button>
                     </div>
                   ))}
+                  {/* PIN Settings */}
+                  <div className="border-t border-[#e8d5c0] pt-3 mt-1 flex flex-col gap-2">
+                    <div className="text-xs font-black uppercase tracking-widest" style={{ color: 'var(--brown3)' }}>🔒 ລະຫັດຜ່ານ</div>
+                    {[['staff', 'ລະຫັດ Staff', staffPin], ['profit', 'ລະຫັດ Profit', profitPin]].map(([type, label, pin]) => (
+                      <div key={type} className="flex items-center justify-between py-1">
+                        <div>
+                          <span className="text-sm font-bold" style={{ color: 'var(--brown)' }}>{label}</span>
+                          <span className="ml-1.5 text-xs font-bold" style={{ color: pin ? '#16a34a' : 'var(--gray3)' }}>{pin ? '● ຕັ້ງແລ້ວ' : '○ ຍັງບໍ່ຕັ້ງ'}</span>
+                        </div>
+                        <div className="flex gap-1.5">
+                          <button onClick={() => openPinSetting(type)} className="text-xs px-2.5 py-1.5 rounded-lg font-black" style={{ background: 'var(--cream2)', color: 'var(--brown2)', border: '1.5px solid var(--cream3)' }}>
+                            {pin ? '🔑 ປ່ຽນ' : '+ ຕັ້ງ'}
+                          </button>
+                          {pin && <button onClick={() => openRemovePin(type)} className="text-xs px-2.5 py-1.5 rounded-lg font-black" style={{ background: '#fef2f2', color: '#dc2626', border: '1.5px solid #fca5a5' }}>ລຶບ</button>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </details>
 
@@ -1210,7 +1310,7 @@ export default function StaffPage() {
                 <span className="text-sm font-bold" style={{ color: 'rgba(253,246,238,0.7)' }}>ຍອດລວມ</span>
                 <span className="font-serif text-2xl font-black" style={{ color: 'var(--cream)' }}>{salesTotal.toLocaleString()} ກີບ</span>
               </div>
-              {hasCosts && (
+              {hasCosts && (!profitPin || profitUnlocked) && (
                 <div className="mt-2 pt-2 border-t border-[rgba(253,246,238,0.15)] flex flex-col gap-1">
                   <div className="flex justify-between text-sm">
                     <span style={{ color: 'rgba(253,246,238,0.6)' }}>ຕົ້ນທຶນ</span>
@@ -1224,10 +1324,18 @@ export default function StaffPage() {
                     <span style={{ color: 'rgba(253,246,238,0.4)' }}>margin</span>
                     <span style={{ color: 'rgba(253,246,238,0.6)' }}>{salesTotal > 0 ? Math.round(salesProfit / salesTotal * 100) : 0}%</span>
                   </div>
+                  {profitUnlocked && <button onClick={() => setProfitUnlocked(false)} className="text-xs mt-1 text-left" style={{ color: 'rgba(253,246,238,0.3)' }}>🔒 ລັອກ</button>}
                 </div>
               )}
               {!hasCosts && (
                 <div className="mt-2 text-xs" style={{ color: 'rgba(253,246,238,0.4)' }}>ຕັ້ງຕົ້ນທຶນໃນ ⚙ ຕັ້ງຄ່າ ເພື່ອເບິ່ງກຳໄລ</div>
+              )}
+              {hasCosts && profitPin && !profitUnlocked && (
+                <button onClick={() => { setPinMode('profit'); setPinInput(''); setPinError('') }}
+                  className="mt-2 w-full py-2 rounded-xl text-xs font-black"
+                  style={{ background: 'rgba(253,246,238,0.1)', color: 'rgba(253,246,238,0.5)', border: '1px solid rgba(253,246,238,0.2)' }}>
+                  🔒 ກົດເພື່ອເບິ່ງຕົ້ນທຶນ/ກຳໄລ
+                </button>
               )}
             </div>
 
@@ -1286,6 +1394,26 @@ export default function StaffPage() {
         </div>
       )}
 
+      {/* PIN Modal Overlay */}
+      {pinMode && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center" style={{ background: 'rgba(61,31,10,0.85)' }}>
+          <div className="w-full max-w-xs mx-4 rounded-3xl overflow-hidden shadow-2xl" style={{ background: 'var(--cream)' }}>
+            <PinPad
+              title={
+                pinMode === 'profit' ? '🔒 Profit' :
+                (pinMode === 'set-staff' || pinMode === 'set-profit') ? '🔑 ຕັ້ງລະຫັດ' :
+                '🗑 ລຶບລະຫັດ'
+              }
+              subtitle={pinModeSubtitle()}
+              onSubmit={handlePinModeSubmit}
+              pinInput={pinInput} setPinInput={setPinInput}
+              error={pinError} setError={setPinError}
+              onCancel={() => { setPinMode(null); setPinInput(''); setPinError(''); setPinStep(1); setPinNew('') }}
+            />
+          </div>
+        </div>
+      )}
+
       {/* Confirm Modal */}
       {confirmModal && (
         <div
@@ -1339,4 +1467,64 @@ export default function StaffPage() {
 
     </div>
   )
+}
+
+function PinPad({ title, subtitle, onSubmit, pinInput, setPinInput, error, setError, onCancel, fullScreen }) {
+  function press(digit) {
+    if (pinInput.length >= 6) return
+    setError('')
+    const next = pinInput + digit
+    setPinInput(next)
+    if (next.length === 6) setTimeout(() => onSubmit(next), 120)
+  }
+  function del() { setError(''); setPinInput(pinInput.slice(0, -1)) }
+
+  const inner = (
+    <div className="flex flex-col items-center py-10 px-6">
+      <div className="font-serif text-2xl font-black mb-1" style={{ color: 'var(--brown)' }}>{title}</div>
+      <div className="text-sm font-bold mb-7" style={{ color: 'var(--gray3)' }}>{subtitle}</div>
+      {/* 6 dots */}
+      <div className="flex gap-4 mb-4">
+        {[0,1,2,3,4,5].map(i => (
+          <div key={i} className="w-4 h-4 rounded-full border-2 transition-all"
+            style={{ borderColor: 'var(--brown)', background: i < pinInput.length ? 'var(--brown)' : 'transparent' }} />
+        ))}
+      </div>
+      <div className="h-6 mb-3 flex items-center justify-center">
+        {error && <span className="text-sm font-black text-red-600">{error}</span>}
+      </div>
+      {/* Keypad */}
+      <div className="grid grid-cols-3 gap-3">
+        {[1,2,3,4,5,6,7,8,9].map(n => (
+          <button key={n} onClick={() => press(String(n))}
+            className="w-20 h-16 rounded-2xl text-2xl font-black transition-opacity active:opacity-60"
+            style={{ background: 'var(--warm-white)', color: 'var(--brown)', border: '2px solid var(--cream3)' }}>
+            {n}
+          </button>
+        ))}
+        <button onClick={onCancel}
+          className="w-20 h-16 rounded-2xl text-xs font-black transition-opacity active:opacity-60"
+          style={{ background: 'var(--cream2)', color: 'var(--gray3)', border: '2px solid var(--cream3)' }}>
+          ຍົກເລີກ
+        </button>
+        <button onClick={() => press('0')}
+          className="w-20 h-16 rounded-2xl text-2xl font-black transition-opacity active:opacity-60"
+          style={{ background: 'var(--warm-white)', color: 'var(--brown)', border: '2px solid var(--cream3)' }}>
+          0
+        </button>
+        <button onClick={del}
+          className="w-20 h-16 rounded-2xl text-2xl font-black transition-opacity active:opacity-60"
+          style={{ background: 'var(--cream2)', color: 'var(--brown)', border: '2px solid var(--cream3)' }}>
+          ⌫
+        </button>
+      </div>
+    </div>
+  )
+
+  if (fullScreen) return (
+    <div className="min-h-dvh flex items-center justify-center" style={{ background: 'var(--cream)' }}>
+      {inner}
+    </div>
+  )
+  return inner
 }
