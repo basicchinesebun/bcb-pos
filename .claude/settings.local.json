@@ -8,7 +8,8 @@
       "mcp__65ee66eb-d88e-4bfe-80a7-336cef5f67d5__get_deployment",
       "mcp__65ee66eb-d88e-4bfe-80a7-336cef5f67d5__get_project",
       "mcp__65ee66eb-d88e-4bfe-80a7-336cef5f67d5__web_fetch_vercel_url",
-      "mcp__65ee66eb-d88e-4bfe-80a7-336cef5f67d5__list_teams"
+      "mcp__65ee66eb-d88e-4bfe-80a7-336cef5f67d5__list_teams",
+      "mcp__65ee66eb-d88e-4bfe-80a7-336cef5f67d5__deploy_to_vercel"
     ]
   }
 }
