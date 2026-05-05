@@ -170,7 +170,7 @@ function OrderCard({ o, onDone, onCancel, menus, images, dimmed }) {
         {/* ── Bag breakdown (big display) ── */}
         {hasBags && (
           <div className="flex flex-col gap-2 pt-2 border-t" style={{ borderColor: 'var(--cream3)' }}>
-            <div className="text-xs font-black tracking-widest uppercase" style={{ color: 'var(--brown3)' }}>🛍 ແຍກຖຸງ</div>
+            <div className="text-xs font-black tracking-widest uppercase" style={{ color: 'var(--brown3)' }}>🛍 ແຍກຖົງ</div>
             {bags.map((bag, bi) => (
               <div key={bi} className="rounded-xl overflow-hidden" style={{ border: '2px solid var(--cream3)' }}>
                 {/* Bag label */}

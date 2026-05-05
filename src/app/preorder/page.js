@@ -8,9 +8,9 @@ import ClosedOverlay from '../../components/ClosedOverlay'
 const EMOJIS = ['🥟','🍫','🍵','🧁','🍞','🥐','🍮']
 
 const QUICK_BAGS = [
-  { id: 'single',  icon: '🛍',     label: 'ຖຸງດຽວ',       desc: 'ທຸກຢ່າງໃນ 1 ຖຸງ' },
-  { id: 'bytype',  icon: '🛍🛍',   label: 'ແຍກຕາມເມນູ',   desc: 'ແຕ່ລະເມນູ 1 ຖຸງ' },
-  { id: 'each',    icon: '🛍🛍🛍', label: 'ແຍກທຸກກ້ອນ',   desc: '1 ກ້ອນ 1 ຖຸງ' },
+  { id: 'single',  icon: '🛍',     label: 'ຖົງດຽວ',       desc: 'ທຸກຢ່າງໃນ 1 ຖົງ' },
+  { id: 'bytype',  icon: '🛍🛍',   label: 'ແຍກຕາມເມນູ',   desc: 'ແຕ່ລະເມນູ 1 ຖົງ' },
+  { id: 'each',    icon: '🛍🛍🛍', label: 'ແຍກທຸກກ້ອນ',   desc: '1 ກ້ອນ 1 ຖົງ' },
 ]
 
 const STATUS_MAP = {
@@ -21,7 +21,7 @@ const STATUS_MAP = {
 }
 
 // Step labels: 1=Menu, 2=Bag, 3=Info, 4=Payment, 5=Status
-const STEPS = ['ເລືອກເມນູ', 'ຖຸງ', 'ຂໍ້ມູນ', 'ຊຳລະ', 'ສະຖານະ']
+const STEPS = ['ເລືອກເມນູ', 'ຖົງ', 'ຂໍ້ມູນ', 'ຊຳລະ', 'ສະຖານະ']
 
 export default function PreOrderPage() {
   const [step, setStep] = useState(1)
@@ -219,7 +219,7 @@ export default function PreOrderPage() {
       }))
 
       const packingLabel = bagPacks
-        .map((b, i) => { const t = bagText(b); return t ? `ຖຸງ ${i + 1}: ${t}` : null })
+        .map((b, i) => { const t = bagText(b); return t ? `ຖົງ ${i + 1}: ${t}` : null })
         .filter(Boolean)
         .join(' | ')
 
@@ -476,7 +476,7 @@ export default function PreOrderPage() {
                         {n + 1}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <div className="font-black text-base" style={{ color: 'var(--brown)' }}>ຖຸງທີ {n + 1}</div>
+                        <div className="font-black text-base" style={{ color: 'var(--brown)' }}>ຖົງທີ {n + 1}</div>
                         {filled ? (
                           <div className="flex flex-wrap gap-1.5 mt-1.5">
                             {Object.entries(bag).filter(([, qty]) => qty > 0).map(([idx, qty]) => (
@@ -547,7 +547,7 @@ export default function PreOrderPage() {
                 onClick={() => setBagPacks(prev => [...prev, {}])}
                 className="flex items-center gap-2 px-6 py-3 rounded-2xl font-black text-base active:scale-95 transition-all"
                 style={{ background: 'var(--brown)', color: 'var(--cream)', boxShadow: '0 4px 12px rgba(61,31,10,0.25)' }}>
-                ➕ ເພີ່ມຖຸງ
+                ➕ ເພີ່ມຖົງ
               </button>
             </div>
           </div>
@@ -556,7 +556,7 @@ export default function PreOrderPage() {
             style={{ background: 'var(--warm-white)' }}>
             {bagPacks.every(b => !Object.keys(b).length) && (
               <div className="text-center text-sm font-bold mb-1" style={{ color: 'var(--gray3)' }}>
-                ເລືອກດ່ວນ ຫຼື ໃສ່ຢ່າງໜ້ອຍ 1 ຖຸງ
+                ເລືອກດ່ວນ ຫຼື ໃສ່ຢ່າງໜ້ອຍ 1 ຖົງ
               </div>
             )}
             <button
