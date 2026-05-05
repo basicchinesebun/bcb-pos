@@ -909,6 +909,16 @@ export default function StaffPage() {
                       </div>
                     ))}
                   </div>
+                  {/* Kitchen link */}
+                  <div className="border-t border-[#e8d5c0] pt-3 mt-1">
+                    <div className="text-xs font-black uppercase tracking-widest mb-2" style={{ color: 'var(--brown3)' }}>🍳 ຈໍຄົວ</div>
+                    <a href="/kitchen" target="_blank" rel="noopener noreferrer"
+                      className="flex items-center justify-between px-3 py-2.5 rounded-xl font-black text-sm"
+                      style={{ background: 'var(--cream2)', color: 'var(--brown)', border: '1.5px solid var(--cream3)' }}>
+                      <span>🍳 ເປີດ Kitchen Display</span>
+                      <span style={{ color: 'var(--gray3)' }}>↗</span>
+                    </a>
+                  </div>
                 </div>
               </details>
 
