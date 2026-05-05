@@ -1,5 +1,5 @@
-const CACHE_NAME = 'bcb-order-v4';
-const URLS_TO_CACHE = ['/order', '/icon-order-192.png'];
+const CACHE_NAME = 'bcb-order-v5';
+const URLS_TO_CACHE = ['/icon-order-192.png'];
 
 self.addEventListener('install', event => {
   event.waitUntil(
@@ -19,6 +19,12 @@ self.addEventListener('activate', event => {
 
 self.addEventListener('fetch', event => {
   if (!event.request.url.startsWith(self.location.origin)) return;
+  // HTML pages: always fetch from network (never cache)
+  if (event.request.destination === 'document') {
+    event.respondWith(fetch(event.request));
+    return;
+  }
+  // Other assets: cache first
   event.respondWith(
     caches.match(event.request).then(cached => cached || fetch(event.request))
   );
