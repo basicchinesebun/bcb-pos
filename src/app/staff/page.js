@@ -781,13 +781,13 @@ export default function StaffPage() {
   if (!salesDates.includes(salesDate)) salesDates.unshift(salesDate)
 
   if (loading) return (
-    <div className="min-h-dvh flex flex-col items-center justify-center" style={{ background: 'var(--brown)' }}>
+    <div className="min-h-dvh flex flex-col items-center justify-center" style={{ background: '#3d1f0a' }}>
       <div className="flex flex-col items-center gap-6">
         <div className="w-16 h-16 rounded-full border-4 animate-spin"
-          style={{ borderColor: 'rgba(253,246,238,0.12)', borderTopColor: '#fdf6ee' }} />
+          style={{ borderColor: 'rgba(253,246,238,0.15)', borderTopColor: '#fdf6ee' }} />
         <div className="text-center">
-          <div className="font-serif text-xl font-black" style={{ color: 'var(--cream)' }}>🥟 Basic Chinese Bun</div>
-          <div className="text-sm font-bold mt-2" style={{ color: 'rgba(253,246,238,0.45)' }}>ກຳລັງໂຫຼດ...</div>
+          <div className="font-serif text-xl font-black" style={{ color: '#fdf6ee' }}>🥟 Basic Chinese Bun</div>
+          <div className="text-sm font-bold mt-2" style={{ color: 'rgba(253,246,238,0.5)' }}>ກຳລັງໂຫຼດ...</div>
         </div>
       </div>
     </div>
