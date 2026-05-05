@@ -1,4 +1,4 @@
-const CACHE_NAME = 'bcb-order-v3';
+const CACHE_NAME = 'bcb-order-v4';
 const URLS_TO_CACHE = ['/order', '/icon-order-192.png'];
 
 self.addEventListener('install', event => {

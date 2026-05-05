@@ -1,4 +1,4 @@
-const CACHE_NAME = 'bcb-preorder-v3';
+const CACHE_NAME = 'bcb-preorder-v4';
 const URLS_TO_CACHE = ['/preorder', '/icon-preorder-192.png'];
 
 self.addEventListener('install', event => {
