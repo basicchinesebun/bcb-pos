@@ -17,9 +17,19 @@ const STATUS_COLORS = {
 
 export default function StaffPage() {
   const [tab, setTab] = useState('orders')
+  const [staffPin, setStaffPin] = useState('')
+  const [profitPin, setProfitPin] = useState('')
+  const [staffUnlocked, setStaffUnlocked] = useState(false)
+  const [profitUnlocked, setProfitUnlocked] = useState(false)
+  const [pinMode, setPinMode] = useState(null) // 'staff'|'profit'|'set-staff'|'set-profit'
+  const [pinInput, setPinInput] = useState('')
+  const [pinStep, setPinStep] = useState(1) // 1=enter old, 2=enter new, 3=confirm new
+  const [pinNew, setPinNew] = useState('')
+  const [pinError, setPinError] = useState('')
   const [orders, setOrders] = useState([])
   const [menus, setMenus] = useState([])
   const [prices, setPrices] = useState([])
+  const [costs, setCosts] = useState([])
   const [stockTotal, setStockTotal] = useState([])
   const [stockShop, setStockShop] = useState([])
   const [stockOnline, setStockOnline] = useState([])
@@ -35,6 +45,7 @@ export default function StaffPage() {
     { id: 'houayhong', name: 'ສາຂາຫວຍຫົງ', nameEn: 'Houay Hong Branch', visible: true, schedule: 'ຄ · ສກ · ອ (Tue / Thu / Sat)', mapUrl: '', facebookUrl: '', tiktokUrl: '', phone1: '', phone2: '', whatsapp: '' },
   ])
   const [filter, setFilter] = useState('all')
+  const [search, setSearch] = useState('')
   const [toast, setToast] = useState([])
   const [slipModal, setSlipModal] = useState(null)
   const [confirmModal, setConfirmModal] = useState(null) // { message, onConfirm }
@@ -143,12 +154,14 @@ export default function StaffPage() {
     // ใช้ค่า default ถ้า Supabase ยังว่างอยู่
     const loadedMenus = cfg.menus ? JSON.parse(cfg.menus) : DEFAULT_MENUS
     const loadedPrices = cfg.prices ? JSON.parse(cfg.prices) : new Array(loadedMenus.length).fill(15000)
+    const loadedCosts = cfg.costs ? JSON.parse(cfg.costs) : new Array(loadedMenus.length).fill(0)
     const loadedStockTotal = cfg.stock_total ? JSON.parse(cfg.stock_total) : new Array(loadedMenus.length).fill(0)
     const loadedStockShop = cfg.stock_shop ? JSON.parse(cfg.stock_shop) : new Array(loadedMenus.length).fill(0)
     const loadedStockOnline = cfg.stock_online ? JSON.parse(cfg.stock_online) : new Array(loadedMenus.length).fill(0)
 
     setMenus(loadedMenus)
     setPrices(loadedPrices)
+    setCosts(loadedCosts)
     setStockTotal(loadedStockTotal)
     setStockShop(loadedStockShop)
     setStockOnline(loadedStockOnline)
@@ -160,6 +173,8 @@ export default function StaffPage() {
     // Fix stale closure: use functional update for settings
     if (cfg.settings) setSettings(prev => ({ ...prev, ...JSON.parse(cfg.settings) }))
     if (cfg.branches) setBranches(JSON.parse(cfg.branches))
+    if (cfg.staff_pin) setStaffPin(cfg.staff_pin)
+    if (cfg.profit_pin) setProfitPin(cfg.profit_pin)
 
     // ถ้ายังไม่มีข้อมูลใน Supabase ให้ save default ขึ้นไปก่อน
     if (!cfg.menus) {
@@ -182,12 +197,28 @@ export default function StaffPage() {
   }
 
   // ─── Orders ───
-  const filteredOrders = orders.filter(o => filter === 'all' ? true : o.type === filter)
+  const filteredOrders = orders.filter(o => {
+    if (filter !== 'all' && o.type !== filter) return false
+    if (!search.trim()) return true
+    const q = search.trim().toLowerCase()
+    if (String(o.qnum).includes(q)) return true
+    const items = typeof o.items === 'string' ? JSON.parse(o.items) : o.items || []
+    if (items.some(it => (it.name || '').toLowerCase().includes(q))) return true
+    if (o.customer) {
+      const c = typeof o.customer === 'string' ? JSON.parse(o.customer) : o.customer
+      if ((c.name || '').toLowerCase().includes(q)) return true
+      if ((c.phone || '').includes(q)) return true
+    }
+    return false
+  })
   const activeOrders = filteredOrders.filter(o => !o.done && !o.cancelled && o.status !== 'rejected')
   const archivedOrders = filteredOrders.filter(o => o.done || o.cancelled || o.status === 'rejected')
   const waiting = orders.filter(o => !o.done && !o.cancelled && o.status !== 'rejected').length
   const done = orders.filter(o => o.done).length
   const pendingOnline = orders.filter(o => o.type === 'online' && o.status === 'pending' && !o.cancelled).length
+  const LOW_STOCK = 5
+  const lowStockMenus = menus.map((m, i) => ({ name: m.lo, shop: stockShop[i] || 0, online: stockOnline[i] || 0 }))
+    .filter(m => m.shop <= LOW_STOCK || m.online <= LOW_STOCK)
 
   async function doneOrder(o) {
     const doneAt = new Date().toISOString()
@@ -250,8 +281,11 @@ export default function StaffPage() {
       lo: document.getElementById(`mn-${i}`)?.value || m.lo,
     }))
     const newPrices = menus.map((_, i) => parseInt(document.getElementById(`mp-${i}`)?.value || 0) || 0)
+    const newCosts = menus.map((_, i) => parseInt(document.getElementById(`mc-${i}`)?.value || 0) || 0)
     await saveConfig('menus', newMenus)
     await saveConfig('prices', newPrices)
+    await saveConfig('costs', newCosts)
+    setCosts(newCosts)
     showToast('ບັນທຶກເມນູ ✅', 'green')
   }
 
@@ -614,6 +648,65 @@ export default function StaffPage() {
     showToast('ບັນທຶກສະຕ໋ອກ ✅', 'green')
   }
 
+  // ─── PIN ───
+  function openPinSetting(type) {
+    const currentPin = type === 'staff' ? staffPin : profitPin
+    setPinMode(`set-${type}`)
+    setPinStep(currentPin ? 1 : 2)
+    setPinInput('')
+    setPinError('')
+    setPinNew('')
+  }
+
+  function openRemovePin(type) {
+    setPinMode(`remove-${type}`)
+    setPinStep(1)
+    setPinInput('')
+    setPinError('')
+  }
+
+  function pinModeSubtitle() {
+    if (pinMode === 'profit') return 'ໃສ່ລະຫັດ Profit'
+    if (pinMode === 'remove-staff' || pinMode === 'remove-profit') return 'ໃສ່ລະຫັດປັດຈຸບັນ'
+    if (pinStep === 1) return 'ໃສ່ລະຫັດເກົ່າ'
+    if (pinStep === 2) return 'ໃສ່ລະຫັດໃໝ່ (6 ຕົວ)'
+    if (pinStep === 3) return 'ໃສ່ລະຫັດໃໝ່ອີກຄັ້ງ'
+    return ''
+  }
+
+  function handlePinModeSubmit(pin) {
+    if (pinMode === 'profit') {
+      if (pin === profitPin) {
+        setProfitUnlocked(true); setPinMode(null); setPinInput(''); setPinError('')
+      } else { setPinError('ລະຫັດຜິດ'); setPinInput('') }
+    } else if (pinMode === 'set-staff' || pinMode === 'set-profit') {
+      const currentPin = pinMode === 'set-staff' ? staffPin : profitPin
+      if (pinStep === 1) {
+        if (pin !== currentPin) { setPinError('ລະຫັດເກົ່າຜິດ'); setPinInput(''); return }
+        setPinStep(2); setPinInput(''); setPinError('')
+      } else if (pinStep === 2) {
+        setPinNew(pin); setPinStep(3); setPinInput(''); setPinError('')
+      } else if (pinStep === 3) {
+        if (pin !== pinNew) { setPinError('ລະຫັດບໍ່ຕົງກັນ'); setPinInput(''); setPinStep(2); setPinNew(''); return }
+        const key = pinMode === 'set-staff' ? 'staff_pin' : 'profit_pin'
+        saveConfig(key, pin)
+        if (pinMode === 'set-staff') setStaffPin(pin)
+        else setProfitPin(pin)
+        setPinMode(null); setPinInput(''); setPinStep(1); setPinNew(''); setPinError('')
+        showToast('ບັນທຶກລະຫັດ ✅', 'green')
+      }
+    } else if (pinMode === 'remove-staff' || pinMode === 'remove-profit') {
+      const currentPin = pinMode === 'remove-staff' ? staffPin : profitPin
+      if (pin !== currentPin) { setPinError('ລະຫັດຜິດ'); setPinInput(''); return }
+      const key = pinMode === 'remove-staff' ? 'staff_pin' : 'profit_pin'
+      saveConfig(key, '')
+      if (pinMode === 'remove-staff') { setStaffPin(''); setStaffUnlocked(false) }
+      else setProfitPin('')
+      setPinMode(null); setPinInput(''); setPinError('')
+      showToast('ລຶບລະຫັດ ✅', 'green')
+    }
+  }
+
   // ─── Settings toggle ───
   async function toggleSetting(key) {
     setSettings(prev => {
@@ -669,10 +762,17 @@ export default function StaffPage() {
   const walkinTotal = salesOrders.filter(o => o.type === 'walkin').reduce((s, o) => s + (o.total || 0), 0)
   const onlineTotal = salesOrders.filter(o => o.type === 'online').reduce((s, o) => s + (o.total || 0), 0)
   const menuCount = {}
+  let totalCost = 0
   salesOrders.forEach(o => {
     const items = typeof o.items === 'string' ? JSON.parse(o.items) : o.items || []
-    items.forEach(it => { menuCount[it.name] = (menuCount[it.name] || 0) + it.qty })
+    items.forEach(it => {
+      menuCount[it.name] = (menuCount[it.name] || 0) + it.qty
+      const idx = menus.findIndex(m => (m.lo || m) === it.name)
+      if (idx >= 0 && costs[idx]) totalCost += (costs[idx] || 0) * it.qty
+    })
   })
+  const salesProfit = salesTotal - totalCost
+  const hasCosts = costs.some(c => c > 0)
 
   // Get all sales dates
   const salesDates = [...new Set(orders.filter(o => o.done).map(o =>
@@ -684,6 +784,18 @@ export default function StaffPage() {
     <div className="min-h-screen flex items-center justify-center" style={{ background: 'var(--cream)' }}>
       <div className="text-sm font-bold" style={{ color: 'var(--brown)' }}>ກຳລັງໂຫຼດ...</div>
     </div>
+  )
+
+  if (staffPin && !staffUnlocked) return (
+    <PinPad
+      fullScreen
+      title="🔒 Staff" subtitle="ໃສ່ລະຫັດ Staff"
+      onSubmit={pin => {
+        if (pin === staffPin) { setStaffUnlocked(true); setPinInput(''); setPinError('') }
+        else { setPinError('ລະຫັດຜິດ'); setPinInput('') }
+      }}
+      pinInput={pinInput} setPinInput={setPinInput} error={pinError} setError={setPinError}
+    />
   )
 
   if (!supabase) return (
@@ -709,6 +821,11 @@ export default function StaffPage() {
       </div>
 
       {!isOnline && <div className="bg-red-700 text-white text-center py-2 text-sm font-black">⚠ ບໍ່ມີອິນເຕີເນັດ</div>}
+      {lowStockMenus.length > 0 && (
+        <div className="px-3 py-2 text-xs font-black" style={{ background: '#fef3c7', color: '#92400e' }}>
+          ⚠ ສຕ໋ອກໃກ້ໝົດ: {lowStockMenus.map(m => `${m.name} (ຮ້ານ:${m.shop} ອອນໄລ:${m.online})`).join(' · ')}
+        </div>
+      )}
 
       {/* ─── ORDERS TAB ─── */}
       {tab === 'orders' && (
@@ -774,6 +891,24 @@ export default function StaffPage() {
                       </button>
                     </div>
                   ))}
+                  {/* PIN Settings */}
+                  <div className="border-t border-[#e8d5c0] pt-3 mt-1 flex flex-col gap-2">
+                    <div className="text-xs font-black uppercase tracking-widest" style={{ color: 'var(--brown3)' }}>🔒 ລະຫັດຜ່ານ</div>
+                    {[['staff', 'ລະຫັດ Staff', staffPin], ['profit', 'ລະຫັດ Profit', profitPin]].map(([type, label, pin]) => (
+                      <div key={type} className="flex items-center justify-between py-1">
+                        <div>
+                          <span className="text-sm font-bold" style={{ color: 'var(--brown)' }}>{label}</span>
+                          <span className="ml-1.5 text-xs font-bold" style={{ color: pin ? '#16a34a' : 'var(--gray3)' }}>{pin ? '● ຕັ້ງແລ້ວ' : '○ ຍັງບໍ່ຕັ້ງ'}</span>
+                        </div>
+                        <div className="flex gap-1.5">
+                          <button onClick={() => openPinSetting(type)} className="text-xs px-2.5 py-1.5 rounded-lg font-black" style={{ background: 'var(--cream2)', color: 'var(--brown2)', border: '1.5px solid var(--cream3)' }}>
+                            {pin ? '🔑 ປ່ຽນ' : '+ ຕັ້ງ'}
+                          </button>
+                          {pin && <button onClick={() => openRemovePin(type)} className="text-xs px-2.5 py-1.5 rounded-lg font-black" style={{ background: '#fef2f2', color: '#dc2626', border: '1.5px solid #fca5a5' }}>ລຶບ</button>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </details>
 
@@ -786,7 +921,10 @@ export default function StaffPage() {
                       <span className="text-xs font-black w-4" style={{ color: 'var(--cream3)' }}>{i+1}</span>
                       <div className="flex-1 flex flex-col gap-1">
                         <input id={`mn-${i}`} defaultValue={m.lo} className="input-field text-xs py-2" />
-                        <input id={`mp-${i}`} defaultValue={prices[i] || ''} type="text" inputMode="numeric" placeholder="0" className="input-field text-xs py-2" />
+                        <div className="flex gap-1">
+                          <input id={`mp-${i}`} defaultValue={prices[i] || ''} type="text" inputMode="numeric" placeholder="ລາຄາ" className="input-field text-xs py-2 flex-1" />
+                          <input id={`mc-${i}`} defaultValue={costs[i] || ''} type="text" inputMode="numeric" placeholder="ຕົ້ນທຶນ" className="input-field text-xs py-2 flex-1" style={{ borderColor: '#fbbf24' }} />
+                        </div>
                       </div>
                       <div className="flex flex-col items-center gap-1">
                         <label className="w-10 h-10 rounded-lg border-2 border-dashed border-[#e8d5c0] flex items-center justify-center cursor-pointer overflow-hidden relative">
@@ -954,13 +1092,24 @@ export default function StaffPage() {
 
             {/* Orders Main */}
             <div className="p-3">
-              <div className="flex gap-2 items-center mb-3 flex-wrap">
+              <div className="flex gap-2 items-center mb-2 flex-wrap">
                 <span className="text-xs font-black tracking-widest uppercase" style={{ color: 'var(--gray3)' }}>ລາຍການ</span>
                 <div className="flex gap-1 ml-auto">
                   {[['all','ທັງໝົດ'],['walkin','🏪'],['online','🌐']].map(([f,l]) => (
                     <button key={f} onClick={() => setFilter(f)} className={`px-3 py-1 rounded-lg text-xs font-black border ${filter===f ? 'bg-[#3d1f0a] text-[#fdf6ee] border-[#3d1f0a]' : 'border-[#e8d5c0] text-[#8a6a55]'}`}>{l}</button>
                   ))}
                 </div>
+              </div>
+              <div className="relative mb-3">
+                <input
+                  type="text"
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                  placeholder="ຄົ້ນຫາ: ເລກຄິວ, ຊື່, ເບີໂທ, ເມນູ..."
+                  className="input-field w-full text-sm pl-8"
+                />
+                <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-sm" style={{ color: 'var(--gray3)' }}>🔍</span>
+                {search && <button onClick={() => setSearch('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs font-black" style={{ color: 'var(--gray3)' }}>✕</button>}
               </div>
 
               {activeOrders.length === 0 && <div className="text-center py-12 text-lg font-bold" style={{ color: 'var(--cream3)' }}>ຍັງບໍ່ມີອໍເດີ</div>}
@@ -1156,9 +1305,38 @@ export default function StaffPage() {
               {salesDates.map(d => <option key={d} value={d}>{d}</option>)}
             </select>
 
-            <div className="rounded-2xl p-4 flex justify-between items-center mb-3" style={{ background: 'var(--brown)' }}>
-              <span className="text-sm font-bold" style={{ color: 'rgba(253,246,238,0.7)' }}>ຍອດລວມ</span>
-              <span className="font-serif text-2xl font-black" style={{ color: 'var(--cream)' }}>{salesTotal.toLocaleString()} ກີບ</span>
+            <div className="rounded-2xl p-4 mb-3" style={{ background: 'var(--brown)' }}>
+              <div className="flex justify-between items-center">
+                <span className="text-sm font-bold" style={{ color: 'rgba(253,246,238,0.7)' }}>ຍອດລວມ</span>
+                <span className="font-serif text-2xl font-black" style={{ color: 'var(--cream)' }}>{salesTotal.toLocaleString()} ກີບ</span>
+              </div>
+              {hasCosts && (!profitPin || profitUnlocked) && (
+                <div className="mt-2 pt-2 border-t border-[rgba(253,246,238,0.15)] flex flex-col gap-1">
+                  <div className="flex justify-between text-sm">
+                    <span style={{ color: 'rgba(253,246,238,0.6)' }}>ຕົ້ນທຶນ</span>
+                    <span className="font-black text-red-300">- {totalCost.toLocaleString()} ກີບ</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span style={{ color: 'rgba(253,246,238,0.6)' }}>ກຳໄລ</span>
+                    <span className={`font-black ${salesProfit >= 0 ? 'text-green-300' : 'text-red-300'}`}>{salesProfit.toLocaleString()} ກີບ</span>
+                  </div>
+                  <div className="flex justify-between text-xs mt-0.5">
+                    <span style={{ color: 'rgba(253,246,238,0.4)' }}>margin</span>
+                    <span style={{ color: 'rgba(253,246,238,0.6)' }}>{salesTotal > 0 ? Math.round(salesProfit / salesTotal * 100) : 0}%</span>
+                  </div>
+                  {profitUnlocked && <button onClick={() => setProfitUnlocked(false)} className="text-xs mt-1 text-left" style={{ color: 'rgba(253,246,238,0.3)' }}>🔒 ລັອກ</button>}
+                </div>
+              )}
+              {!hasCosts && (
+                <div className="mt-2 text-xs" style={{ color: 'rgba(253,246,238,0.4)' }}>ຕັ້ງຕົ້ນທຶນໃນ ⚙ ຕັ້ງຄ່າ ເພື່ອເບິ່ງກຳໄລ</div>
+              )}
+              {hasCosts && profitPin && !profitUnlocked && (
+                <button onClick={() => { setPinMode('profit'); setPinInput(''); setPinError('') }}
+                  className="mt-2 w-full py-2 rounded-xl text-xs font-black"
+                  style={{ background: 'rgba(253,246,238,0.1)', color: 'rgba(253,246,238,0.5)', border: '1px solid rgba(253,246,238,0.2)' }}>
+                  🔒 ກົດເພື່ອເບິ່ງຕົ້ນທຶນ/ກຳໄລ
+                </button>
+              )}
             </div>
 
             <div className="grid grid-cols-2 gap-3 mb-3">
@@ -1216,6 +1394,26 @@ export default function StaffPage() {
         </div>
       )}
 
+      {/* PIN Modal Overlay */}
+      {pinMode && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center" style={{ background: 'rgba(61,31,10,0.85)' }}>
+          <div className="w-full max-w-xs mx-4 rounded-3xl overflow-hidden shadow-2xl" style={{ background: 'var(--cream)' }}>
+            <PinPad
+              title={
+                pinMode === 'profit' ? '🔒 Profit' :
+                (pinMode === 'set-staff' || pinMode === 'set-profit') ? '🔑 ຕັ້ງລະຫັດ' :
+                '🗑 ລຶບລະຫັດ'
+              }
+              subtitle={pinModeSubtitle()}
+              onSubmit={handlePinModeSubmit}
+              pinInput={pinInput} setPinInput={setPinInput}
+              error={pinError} setError={setPinError}
+              onCancel={() => { setPinMode(null); setPinInput(''); setPinError(''); setPinStep(1); setPinNew('') }}
+            />
+          </div>
+        </div>
+      )}
+
       {/* Confirm Modal */}
       {confirmModal && (
         <div
@@ -1269,4 +1467,64 @@ export default function StaffPage() {
 
     </div>
   )
+}
+
+function PinPad({ title, subtitle, onSubmit, pinInput, setPinInput, error, setError, onCancel, fullScreen }) {
+  function press(digit) {
+    if (pinInput.length >= 6) return
+    setError('')
+    const next = pinInput + digit
+    setPinInput(next)
+    if (next.length === 6) setTimeout(() => onSubmit(next), 120)
+  }
+  function del() { setError(''); setPinInput(pinInput.slice(0, -1)) }
+
+  const inner = (
+    <div className="flex flex-col items-center py-10 px-6">
+      <div className="font-serif text-2xl font-black mb-1" style={{ color: 'var(--brown)' }}>{title}</div>
+      <div className="text-sm font-bold mb-7" style={{ color: 'var(--gray3)' }}>{subtitle}</div>
+      {/* 6 dots */}
+      <div className="flex gap-4 mb-4">
+        {[0,1,2,3,4,5].map(i => (
+          <div key={i} className="w-4 h-4 rounded-full border-2 transition-all"
+            style={{ borderColor: 'var(--brown)', background: i < pinInput.length ? 'var(--brown)' : 'transparent' }} />
+        ))}
+      </div>
+      <div className="h-6 mb-3 flex items-center justify-center">
+        {error && <span className="text-sm font-black text-red-600">{error}</span>}
+      </div>
+      {/* Keypad */}
+      <div className="grid grid-cols-3 gap-3">
+        {[1,2,3,4,5,6,7,8,9].map(n => (
+          <button key={n} onClick={() => press(String(n))}
+            className="w-20 h-16 rounded-2xl text-2xl font-black transition-opacity active:opacity-60"
+            style={{ background: 'var(--warm-white)', color: 'var(--brown)', border: '2px solid var(--cream3)' }}>
+            {n}
+          </button>
+        ))}
+        <button onClick={onCancel}
+          className="w-20 h-16 rounded-2xl text-xs font-black transition-opacity active:opacity-60"
+          style={{ background: 'var(--cream2)', color: 'var(--gray3)', border: '2px solid var(--cream3)' }}>
+          ຍົກເລີກ
+        </button>
+        <button onClick={() => press('0')}
+          className="w-20 h-16 rounded-2xl text-2xl font-black transition-opacity active:opacity-60"
+          style={{ background: 'var(--warm-white)', color: 'var(--brown)', border: '2px solid var(--cream3)' }}>
+          0
+        </button>
+        <button onClick={del}
+          className="w-20 h-16 rounded-2xl text-2xl font-black transition-opacity active:opacity-60"
+          style={{ background: 'var(--cream2)', color: 'var(--brown)', border: '2px solid var(--cream3)' }}>
+          ⌫
+        </button>
+      </div>
+    </div>
+  )
+
+  if (fullScreen) return (
+    <div className="min-h-dvh flex items-center justify-center" style={{ background: 'var(--cream)' }}>
+      {inner}
+    </div>
+  )
+  return inner
 }
