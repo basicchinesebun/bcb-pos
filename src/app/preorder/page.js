@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../../lib/supabase'
 import ContactSection from '../../components/ContactSection'
 import ClosedOverlay from '../../components/ClosedOverlay'
@@ -46,6 +46,11 @@ export default function PreOrderPage() {
   const [shopInfo, setShopInfo] = useState({ name: 'Basic Chinese Bun' })
   const [branches, setBranches] = useState([])
   const [loading, setLoading] = useState(true)
+  const [chatOpen, setChatOpen] = useState(false)
+  const [chatMessages, setChatMessages] = useState([])
+  const [chatInput, setChatInput] = useState('')
+  const [chatSending, setChatSending] = useState(false)
+  const chatBottomRef = useRef(null)
 
   useEffect(() => {
     if (!supabase) { setLoading(false); return }
@@ -79,6 +84,25 @@ export default function PreOrderPage() {
       .subscribe()
     return () => supabase.removeChannel(channel)
   }, [currentOrder?.id])
+
+  useEffect(() => {
+    if (!chatOpen || !currentOrder || !supabase) return
+    const c = typeof currentOrder.customer === 'string' ? JSON.parse(currentOrder.customer) : currentOrder.customer
+    const phone = c?.phone
+    if (!phone) return
+    supabase.from('messages').select('*').eq('phone', phone)
+      .order('created_at', { ascending: true })
+      .then(({ data }) => { if (data) setChatMessages(data) })
+    const ch = supabase.channel('chat-cust-' + phone)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `phone=eq.${phone}` },
+        payload => setChatMessages(prev => [...prev, payload.new]))
+      .subscribe()
+    return () => supabase.removeChannel(ch)
+  }, [chatOpen, currentOrder?.id])
+
+  useEffect(() => {
+    chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [chatMessages])
 
   function applyCfg(cfg) {
     setMenus(cfg.menus ? JSON.parse(cfg.menus) : [
@@ -251,6 +275,18 @@ export default function PreOrderPage() {
     } finally {
       setSubmitting(false)
     }
+  }
+
+  async function sendChatMsg() {
+    if (!chatInput.trim() || chatSending || !currentOrder || !supabase) return
+    const c = typeof currentOrder.customer === 'string' ? JSON.parse(currentOrder.customer) : currentOrder.customer
+    setChatSending(true)
+    await supabase.from('messages').insert({
+      phone: c.phone, name: c.name, qnum: currentOrder.qnum,
+      sender: 'customer', text: chatInput.trim(),
+    })
+    setChatInput('')
+    setChatSending(false)
   }
 
   async function searchHistory() {
@@ -736,6 +772,9 @@ export default function PreOrderPage() {
             <ContactSection />
           </div>
           <div className="p-4 border-t-2 border-[#e8d5c0] flex flex-col gap-2 flex-shrink-0" style={{ background: 'var(--warm-white)' }}>
+            <button className="btn-primary" onClick={() => setChatOpen(true)}>
+              💬 ຕິດຕໍ່ຮ້ານ
+            </button>
             <button className="btn-outline" onClick={() => {
               setSelected({})
               setBagPacks([{}])
@@ -743,12 +782,77 @@ export default function PreOrderPage() {
               setSlip(null)
               setSlipPreview(null)
               setCurrentOrder(null)
+              setChatMessages([])
               setStep(1)
             }}>
               + ອໍເດີໃໝ່
             </button>
           </div>
         </>
+      )}
+
+      {/* Chat Modal */}
+      {chatOpen && currentOrder && (
+        <div className="fixed inset-0 z-50 flex flex-col" style={{ background: 'var(--cream)' }}>
+          <div className="flex items-center gap-3 px-4 py-3 flex-shrink-0" style={{ background: 'var(--brown)' }}>
+            <button onClick={() => setChatOpen(false)} className="text-xl font-black" style={{ color: 'var(--cream)' }}>←</button>
+            <div>
+              <div className="font-black text-base" style={{ color: 'var(--cream)' }}>💬 ຕິດຕໍ່ຮ້ານ</div>
+              <div className="text-xs font-bold" style={{ color: 'rgba(253,246,238,0.6)' }}>
+                Order #{String(currentOrder.qnum).padStart(3, '0')}
+              </div>
+            </div>
+          </div>
+          <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3">
+            {chatMessages.length === 0 && (
+              <div className="text-center text-sm font-bold py-8" style={{ color: 'var(--gray3)' }}>
+                ສົ່ງຂໍ້ຄວາມຫາຮ້ານໄດ້ເລີຍ 👋
+              </div>
+            )}
+            {chatMessages.map(msg => (
+              <div key={msg.id} className={`flex ${msg.sender === 'customer' ? 'justify-end' : 'justify-start'}`}>
+                {msg.sender === 'staff' && (
+                  <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs mr-2 flex-shrink-0 self-end mb-1"
+                    style={{ background: 'var(--brown)', color: 'var(--cream)' }}>🥟</div>
+                )}
+                <div className="max-w-[75%]">
+                  <div className="px-4 py-2.5 rounded-2xl text-sm font-bold leading-snug"
+                    style={{
+                      background: msg.sender === 'customer' ? 'var(--brown)' : 'white',
+                      color: msg.sender === 'customer' ? 'var(--cream)' : 'var(--brown)',
+                      border: msg.sender === 'staff' ? '1.5px solid var(--cream3)' : 'none',
+                      borderBottomRightRadius: msg.sender === 'customer' ? 4 : undefined,
+                      borderBottomLeftRadius: msg.sender === 'staff' ? 4 : undefined,
+                    }}>
+                    {msg.text}
+                  </div>
+                  <div className="text-[10px] font-bold mt-1 px-1"
+                    style={{ color: 'var(--gray3)', textAlign: msg.sender === 'customer' ? 'right' : 'left' }}>
+                    {new Date(msg.created_at).toLocaleTimeString('lo-LA', { hour: '2-digit', minute: '2-digit' })}
+                  </div>
+                </div>
+              </div>
+            ))}
+            <div ref={chatBottomRef} />
+          </div>
+          <div className="p-3 flex gap-2 flex-shrink-0 border-t border-[#e8d5c0]" style={{ background: 'white' }}>
+            <input
+              value={chatInput}
+              onChange={e => setChatInput(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && !e.shiftKey && sendChatMsg()}
+              placeholder="ພິມຂໍ້ຄວາມ..."
+              className="input-field flex-1 py-2.5 text-sm"
+            />
+            <button onClick={sendChatMsg} disabled={chatSending || !chatInput.trim()}
+              className="px-5 py-2.5 rounded-xl font-black text-sm flex-shrink-0"
+              style={{
+                background: chatInput.trim() ? 'var(--brown)' : 'var(--cream3)',
+                color: chatInput.trim() ? 'var(--cream)' : 'var(--gray3)',
+              }}>
+              ສົ່ງ
+            </button>
+          </div>
+        </div>
       )}
 
       {/* ─── STEP 6: History ─── */}

@@ -56,6 +56,14 @@ export default function StaffPage() {
   const [isOnline, setIsOnline] = useState(true)
   const [liveStatus, setLiveStatus] = useState('connecting') // 'live' | 'connecting' | 'error'
   const [loading, setLoading] = useState(true)
+  const [chatConvos, setChatConvos] = useState([])
+  const [activeChatPhone, setActiveChatPhone] = useState(null)
+  const [chatMessages, setChatMessages] = useState([])
+  const [chatInput, setChatInput] = useState('')
+  const [chatSending, setChatSending] = useState(false)
+  const [unreadChat, setUnreadChat] = useState(0)
+  const chatBottomRef = useRef(null)
+  const activeChatPhoneRef = useRef(null)
   const voicesRef = useRef([])
 
   useEffect(() => {
@@ -102,6 +110,49 @@ export default function StaffPage() {
     }
   }, [])
 
+  // Chat subscription
+  useEffect(() => {
+    if (!supabase) return
+    loadChatConvos()
+    const ch = supabase.channel('staff-chat-msgs')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, payload => {
+        const msg = payload.new
+        const currentPhone = activeChatPhoneRef.current
+        if (msg.sender === 'customer') {
+          playChatSound()
+          if (currentPhone === msg.phone) {
+            setChatMessages(prev => [...prev, msg])
+            supabase.from('messages').update({ read_by_staff: true }).eq('id', msg.id)
+          } else {
+            setUnreadChat(prev => prev + 1)
+          }
+        } else if (msg.sender === 'staff' && currentPhone === msg.phone) {
+          setChatMessages(prev => [...prev, msg])
+        }
+        setChatConvos(prev => {
+          const idx = prev.findIndex(c => c.phone === msg.phone)
+          const newUnread = msg.sender === 'customer' && currentPhone !== msg.phone ? 1 : 0
+          if (idx >= 0) {
+            const updated = prev.map(c => c.phone === msg.phone
+              ? { ...c, lastMsg: msg.text, lastAt: msg.created_at, unread: c.unread + newUnread }
+              : c)
+            return [updated[idx], ...updated.filter((_, i) => i !== idx)]
+          }
+          return [{ phone: msg.phone, name: msg.name, lastMsg: msg.text, lastAt: msg.created_at, unread: newUnread }, ...prev]
+        })
+      })
+      .subscribe()
+    return () => supabase.removeChannel(ch)
+  }, [])
+
+  useEffect(() => {
+    activeChatPhoneRef.current = activeChatPhone
+  }, [activeChatPhone])
+
+  useEffect(() => {
+    chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [chatMessages])
+
   function showToast(msg, type = '') {
     const id = Date.now() + Math.random()
     setToast(prev => [...prev, { id, msg, type }])
@@ -121,6 +172,67 @@ export default function StaffPage() {
     u.lang = 'th-TH'
     u.rate = 0.85
     window.speechSynthesis.speak(u)
+  }
+
+  function playChatSound() {
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)()
+      const osc = ctx.createOscillator()
+      const gain = ctx.createGain()
+      osc.connect(gain); gain.connect(ctx.destination)
+      osc.frequency.setValueAtTime(880, ctx.currentTime)
+      osc.frequency.setValueAtTime(1100, ctx.currentTime + 0.08)
+      osc.frequency.setValueAtTime(880, ctx.currentTime + 0.16)
+      gain.gain.setValueAtTime(0.25, ctx.currentTime)
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5)
+      osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.5)
+    } catch (_) {}
+  }
+
+  async function loadChatConvos() {
+    if (!supabase) return
+    const { data } = await supabase.from('messages').select('*').order('created_at', { ascending: false })
+    if (!data) return
+    const map = {}
+    data.forEach(m => {
+      if (!map[m.phone]) map[m.phone] = { phone: m.phone, name: m.name, msgs: [] }
+      map[m.phone].msgs.push(m)
+    })
+    const convos = Object.values(map).map(c => ({
+      phone: c.phone, name: c.name,
+      lastMsg: c.msgs[0]?.text || '',
+      lastAt: c.msgs[0]?.created_at || '',
+      unread: c.msgs.filter(m => m.sender === 'customer' && !m.read_by_staff).length,
+    }))
+    setChatConvos(convos)
+    setUnreadChat(convos.reduce((s, c) => s + c.unread, 0))
+  }
+
+  async function openConvo(phone) {
+    setActiveChatPhone(phone)
+    if (!supabase) return
+    const { data } = await supabase.from('messages').select('*').eq('phone', phone)
+      .order('created_at', { ascending: true })
+    if (data) setChatMessages(data)
+    await supabase.from('messages').update({ read_by_staff: true })
+      .eq('phone', phone).eq('sender', 'customer').eq('read_by_staff', false)
+    setChatConvos(prev => prev.map(c => c.phone === phone ? { ...c, unread: 0 } : c))
+    setUnreadChat(prev => {
+      const convo = chatConvos.find(c => c.phone === phone)
+      return Math.max(0, prev - (convo?.unread || 0))
+    })
+  }
+
+  async function sendStaffMsg() {
+    if (!chatInput.trim() || chatSending || !activeChatPhone || !supabase) return
+    const convo = chatConvos.find(c => c.phone === activeChatPhone)
+    setChatSending(true)
+    await supabase.from('messages').insert({
+      phone: activeChatPhone, name: convo?.name || '',
+      sender: 'staff', text: chatInput.trim(),
+    })
+    setChatInput('')
+    setChatSending(false)
   }
 
   async function loadAll() {
@@ -1398,6 +1510,111 @@ export default function StaffPage() {
         </>
       )}
 
+      {/* ─── CHAT TAB ─── */}
+      {tab === 'chat' && (
+        <div className="flex flex-col" style={{ minHeight: 'calc(100dvh - 56px)' }}>
+          {!activeChatPhone ? (
+            // Conversation list
+            <div className="flex-1 overflow-y-auto">
+              <div className="px-4 py-3 font-black text-sm" style={{ color: 'var(--brown)', borderBottom: '1px solid var(--cream3)' }}>
+                💬 ຂໍ້ຄວາມຈາກລູກຄ້າ
+              </div>
+              {chatConvos.length === 0 && (
+                <div className="text-center py-16 text-sm font-bold" style={{ color: 'var(--cream3)' }}>
+                  ຍັງບໍ່ມີຂໍ້ຄວາມ
+                </div>
+              )}
+              {chatConvos.map(c => (
+                <button key={c.phone} onClick={() => openConvo(c.phone)}
+                  className="w-full flex items-center gap-3 px-4 py-3 text-left border-b border-[#f5ebe0]"
+                  style={{ background: c.unread > 0 ? 'rgba(61,31,10,0.04)' : 'transparent' }}>
+                  <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 font-black text-lg"
+                    style={{ background: 'var(--cream2)', color: 'var(--brown)' }}>
+                    {c.name?.[0]?.toUpperCase() || '?'}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-black text-sm truncate" style={{ color: 'var(--brown)' }}>{c.name}</span>
+                      <span className="text-[10px] font-bold flex-shrink-0" style={{ color: 'var(--gray3)' }}>
+                        {new Date(c.lastAt).toLocaleTimeString('lo-LA', { hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs font-bold truncate" style={{ color: 'var(--gray3)' }}>{c.phone}</span>
+                      {c.unread > 0 && (
+                        <span className="flex-shrink-0 bg-red-500 text-white text-[10px] font-black rounded-full w-5 h-5 flex items-center justify-center">{c.unread}</span>
+                      )}
+                    </div>
+                    <div className="text-xs truncate mt-0.5" style={{ color: 'var(--brown2)' }}>{c.lastMsg}</div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          ) : (
+            // Conversation messages
+            <div className="flex flex-col" style={{ height: 'calc(100dvh - 56px)' }}>
+              <div className="flex items-center gap-3 px-4 py-3 flex-shrink-0" style={{ background: 'var(--brown)' }}>
+                <button onClick={() => { setActiveChatPhone(null); setChatMessages([]) }}
+                  className="text-xl font-black" style={{ color: 'var(--cream)' }}>←</button>
+                <div className="flex-1 min-w-0">
+                  <div className="font-black text-sm truncate" style={{ color: 'var(--cream)' }}>
+                    {chatConvos.find(c => c.phone === activeChatPhone)?.name || activeChatPhone}
+                  </div>
+                  <div className="text-xs font-bold" style={{ color: 'rgba(253,246,238,0.6)' }}>{activeChatPhone}</div>
+                </div>
+              </div>
+              <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3">
+                {chatMessages.map(msg => (
+                  <div key={msg.id} className={`flex ${msg.sender === 'staff' ? 'justify-end' : 'justify-start'}`}>
+                    {msg.sender === 'customer' && (
+                      <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs mr-2 flex-shrink-0 self-end mb-1 font-black"
+                        style={{ background: 'var(--cream2)', color: 'var(--brown)' }}>
+                        {msg.name?.[0]?.toUpperCase() || '?'}
+                      </div>
+                    )}
+                    <div className="max-w-[75%]">
+                      {msg.qnum && msg.sender === 'customer' && (
+                        <div className="text-[10px] font-black mb-1 px-1" style={{ color: 'var(--gray3)' }}>
+                          Order #{String(msg.qnum).padStart(3, '0')}
+                        </div>
+                      )}
+                      <div className="px-4 py-2.5 rounded-2xl text-sm font-bold leading-snug"
+                        style={{
+                          background: msg.sender === 'staff' ? 'var(--brown)' : 'white',
+                          color: msg.sender === 'staff' ? 'var(--cream)' : 'var(--brown)',
+                          border: msg.sender === 'customer' ? '1.5px solid var(--cream3)' : 'none',
+                          borderBottomRightRadius: msg.sender === 'staff' ? 4 : undefined,
+                          borderBottomLeftRadius: msg.sender === 'customer' ? 4 : undefined,
+                        }}>
+                        {msg.text}
+                      </div>
+                      <div className="text-[10px] font-bold mt-1 px-1"
+                        style={{ color: 'var(--gray3)', textAlign: msg.sender === 'staff' ? 'right' : 'left' }}>
+                        {new Date(msg.created_at).toLocaleTimeString('lo-LA', { hour: '2-digit', minute: '2-digit' })}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                <div ref={chatBottomRef} />
+              </div>
+              <div className="p-3 flex gap-2 flex-shrink-0 border-t border-[#e8d5c0]" style={{ background: 'white' }}>
+                <input value={chatInput} onChange={e => setChatInput(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && !e.shiftKey && sendStaffMsg()}
+                  placeholder="ຕອບຂໍ້ຄວາມ..." className="input-field flex-1 py-2.5 text-sm" />
+                <button onClick={sendStaffMsg} disabled={chatSending || !chatInput.trim()}
+                  className="px-5 py-2.5 rounded-xl font-black text-sm flex-shrink-0"
+                  style={{
+                    background: chatInput.trim() ? 'var(--brown)' : 'var(--cream3)',
+                    color: chatInput.trim() ? 'var(--cream)' : 'var(--gray3)',
+                  }}>
+                  ສົ່ງ
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Bottom Nav */}
       <div className="fixed bottom-0 left-0 right-0 flex" style={{ background: 'var(--brown)', borderTop: '2px solid var(--brown2)' }}>
         {[['orders','📋','ອໍເດີ'],['sales','📊','ຍອດຂາຍ']].map(([t,icon,l]) => (
@@ -1405,6 +1622,17 @@ export default function StaffPage() {
             <span className="text-2xl">{icon}</span>{l}
           </button>
         ))}
+        <button onClick={() => setTab('chat')} className={`flex-1 flex flex-col items-center py-3 gap-1 border-none text-xs font-bold relative ${tab==='chat' ? 'text-[#fdf6ee]' : 'text-[rgba(253,246,238,0.45)]'}`} style={{ background: 'transparent' }}>
+          <span className="text-2xl relative inline-block">
+            💬
+            {unreadChat > 0 && (
+              <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[9px] font-black rounded-full w-4 h-4 flex items-center justify-center leading-none">
+                {unreadChat > 9 ? '9+' : unreadChat}
+              </span>
+            )}
+          </span>
+          ແຊດ
+        </button>
       </div>
 
       {/* Slip Modal */}
