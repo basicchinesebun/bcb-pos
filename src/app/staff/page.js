@@ -902,7 +902,7 @@ export default function StaffPage() {
               </details>
 
               {/* PIN Settings — standalone card */}
-              <div className="card flex flex-col gap-2">
+              <div className="card flex flex-col gap-2" style={{ borderLeft: '3px solid var(--brown)' }}>
                 <div className="text-xs font-black uppercase tracking-widest mb-1" style={{ color: 'var(--brown3)' }}>🔒 ລະຫັດຜ່ານ</div>
                 {[['staff', 'ລະຫັດ Staff', staffPin], ['profit', 'ລະຫັດ Profit', profitPin]].map(([type, label, pin]) => (
                   <div key={type} className="flex items-center justify-between py-1 border-b border-[#f5ebe0]">
@@ -921,7 +921,7 @@ export default function StaffPage() {
               </div>
 
               {/* Kitchen link — standalone card */}
-              <div className="card">
+              <div className="card" style={{ borderLeft: '3px solid var(--brown)' }}>
                 <div className="text-xs font-black uppercase tracking-widest mb-2" style={{ color: 'var(--brown3)' }}>🍳 ຈໍຄົວ</div>
                 <a href="/kitchen" target="_blank" rel="noopener noreferrer"
                   className="flex items-center justify-between px-3 py-2.5 rounded-xl font-black text-sm"
@@ -1401,6 +1401,7 @@ export default function StaffPage() {
             <span className="text-2xl">{icon}</span>{l}
           </button>
         ))}
+        <div className="flex items-end pb-3.5 pr-2 text-[9px] font-bold" style={{ color: 'rgba(253,246,238,0.2)' }}>v2.5</div>
       </div>
 
       {/* Slip Modal */}
