@@ -1401,7 +1401,6 @@ export default function StaffPage() {
             <span className="text-2xl">{icon}</span>{l}
           </button>
         ))}
-        <div className="flex items-end pb-3.5 pr-2 text-[9px] font-bold" style={{ color: 'rgba(253,246,238,0.2)' }}>v2.5</div>
       </div>
 
       {/* Slip Modal */}
