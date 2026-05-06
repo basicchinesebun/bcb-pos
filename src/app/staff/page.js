@@ -901,35 +901,39 @@ export default function StaffPage() {
                 </div>
               </details>
 
-              {/* PIN Settings — standalone card */}
-              <div className="card flex flex-col gap-2" style={{ borderLeft: '3px solid var(--brown)' }}>
-                <div className="text-xs font-black uppercase tracking-widest mb-1" style={{ color: 'var(--brown3)' }}>🔒 ລະຫັດຜ່ານ</div>
-                {[['staff', 'ລະຫັດ Staff', staffPin], ['profit', 'ລະຫັດ Profit', profitPin]].map(([type, label, pin]) => (
-                  <div key={type} className="flex items-center justify-between py-1 border-b border-[#f5ebe0]">
-                    <div>
-                      <span className="text-sm font-bold" style={{ color: 'var(--brown)' }}>{label}</span>
-                      <span className="ml-1.5 text-xs font-bold" style={{ color: pin ? '#16a34a' : 'var(--gray3)' }}>{pin ? '● ຕັ້ງແລ້ວ' : '○ ຍັງບໍ່ຕັ້ງ'}</span>
+              {/* PIN Settings */}
+              <details className="card">
+                <summary className="font-black text-xs tracking-widest uppercase cursor-pointer" style={{ color: 'var(--brown3)' }}>🔒 ລະຫັດຜ່ານ</summary>
+                <div className="mt-3 flex flex-col gap-2">
+                  {[['staff', 'ລະຫັດ Staff', staffPin], ['profit', 'ລະຫັດ Profit', profitPin]].map(([type, label, pin]) => (
+                    <div key={type} className="flex items-center justify-between py-1 border-b border-[#f5ebe0]">
+                      <div>
+                        <span className="text-sm font-bold" style={{ color: 'var(--brown)' }}>{label}</span>
+                        <span className="ml-1.5 text-xs font-bold" style={{ color: pin ? '#16a34a' : 'var(--gray3)' }}>{pin ? '● ຕັ້ງແລ້ວ' : '○ ຍັງບໍ່ຕັ້ງ'}</span>
+                      </div>
+                      <div className="flex gap-1.5">
+                        <button onClick={() => openPinSetting(type)} className="text-xs px-2.5 py-1.5 rounded-lg font-black" style={{ background: 'var(--cream2)', color: 'var(--brown2)', border: '1.5px solid var(--cream3)' }}>
+                          {pin ? '🔑 ປ່ຽນ' : '+ ຕັ້ງ'}
+                        </button>
+                        {pin && <button onClick={() => openRemovePin(type)} className="text-xs px-2.5 py-1.5 rounded-lg font-black" style={{ background: '#fef2f2', color: '#dc2626', border: '1.5px solid #fca5a5' }}>ລຶບ</button>}
+                      </div>
                     </div>
-                    <div className="flex gap-1.5">
-                      <button onClick={() => openPinSetting(type)} className="text-xs px-2.5 py-1.5 rounded-lg font-black" style={{ background: 'var(--cream2)', color: 'var(--brown2)', border: '1.5px solid var(--cream3)' }}>
-                        {pin ? '🔑 ປ່ຽນ' : '+ ຕັ້ງ'}
-                      </button>
-                      {pin && <button onClick={() => openRemovePin(type)} className="text-xs px-2.5 py-1.5 rounded-lg font-black" style={{ background: '#fef2f2', color: '#dc2626', border: '1.5px solid #fca5a5' }}>ລຶບ</button>}
-                    </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              </details>
 
-              {/* Kitchen link — standalone card */}
-              <div className="card" style={{ borderLeft: '3px solid var(--brown)' }}>
-                <div className="text-xs font-black uppercase tracking-widest mb-2" style={{ color: 'var(--brown3)' }}>🍳 ຈໍຄົວ</div>
-                <a href="/kitchen" target="_blank" rel="noopener noreferrer"
-                  className="flex items-center justify-between px-3 py-2.5 rounded-xl font-black text-sm"
-                  style={{ background: 'var(--cream2)', color: 'var(--brown)', border: '1.5px solid var(--cream3)' }}>
-                  <span>🍳 ເປີດ Kitchen Display</span>
-                  <span style={{ color: 'var(--gray3)' }}>↗</span>
-                </a>
-              </div>
+              {/* Kitchen link */}
+              <details className="card">
+                <summary className="font-black text-xs tracking-widest uppercase cursor-pointer" style={{ color: 'var(--brown3)' }}>🍳 ຈໍຄົວ</summary>
+                <div className="mt-3">
+                  <a href="/kitchen" target="_blank" rel="noopener noreferrer"
+                    className="flex items-center justify-between px-3 py-2.5 rounded-xl font-black text-sm"
+                    style={{ background: 'var(--cream2)', color: 'var(--brown)', border: '1.5px solid var(--cream3)' }}>
+                    <span>🍳 ເປີດ Kitchen Display</span>
+                    <span style={{ color: 'var(--gray3)' }}>↗</span>
+                  </a>
+                </div>
+              </details>
 
               {/* Menu Edit */}
               <details className="card">
