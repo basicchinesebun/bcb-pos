@@ -39,7 +39,7 @@ export default function StaffPage() {
   const [qrPreview, setQrPreview] = useState(null)
   const [logoPreview, setLogoPreview] = useState(null)
   const [shopInfo, setShopInfo] = useState({ name: 'Basic Chinese Bun', address: '', phone: '', footer: 'ຂອບໃຈທີ່ໃຊ້ບໍລິການ', logo: '' })
-  const [settings, setSettings] = useState({ soundOn: true, walkinOn: true, onlineOn: true, autoprintOn: false })
+  const [settings, setSettings] = useState({ soundOn: true, walkinOn: true, onlineOn: true, autoprintOn: false, pickupTimeStart: '15:00', pickupTimeEnd: '19:30' })
   const [branches, setBranches] = useState([
     { id: 'simeuang',  name: 'ສາຂາສີເມື່ອງ',  nameEn: 'Si Meuang Branch',  visible: true, schedule: 'ຈ · ພ · ສ (Mon / Wed / Fri)', mapUrl: '', facebookUrl: '', tiktokUrl: '', phone1: '', phone2: '', whatsapp: '' },
     { id: 'houayhong', name: 'ສາຂາຫວຍຫົງ', nameEn: 'Houay Hong Branch', visible: true, schedule: 'ຄ · ສກ · ອ (Tue / Thu / Sat)', mapUrl: '', facebookUrl: '', tiktokUrl: '', phone1: '', phone2: '', whatsapp: '' },
@@ -1072,6 +1072,25 @@ export default function StaffPage() {
                       </button>
                     </div>
                   ))}
+                  {/* Pickup time range */}
+                  <div className="border-t border-[#e8d5c0] pt-3 mt-1 flex flex-col gap-2">
+                    <div className="text-xs font-black uppercase tracking-widest" style={{ color: 'var(--brown3)' }}>🕐 ເວລາຮັບ Preorder</div>
+                    <div className="flex gap-2 items-center">
+                      <div className="flex-1">
+                        <div className="text-xs font-bold mb-1" style={{ color: 'var(--gray3)' }}>ເລີ່ມ</div>
+                        <input type="time" value={settings.pickupTimeStart || '15:00'}
+                          onChange={e => { const s = { ...settings, pickupTimeStart: e.target.value }; setSettings(s); saveConfig('settings', s) }}
+                          className="input-field text-sm py-2" />
+                      </div>
+                      <span className="font-black mt-4" style={{ color: 'var(--brown2)' }}>–</span>
+                      <div className="flex-1">
+                        <div className="text-xs font-bold mb-1" style={{ color: 'var(--gray3)' }}>ສິ້ນສຸດ</div>
+                        <input type="time" value={settings.pickupTimeEnd || '19:30'}
+                          onChange={e => { const s = { ...settings, pickupTimeEnd: e.target.value }; setSettings(s); saveConfig('settings', s) }}
+                          className="input-field text-sm py-2" />
+                      </div>
+                    </div>
+                  </div>
                   {/* PIN Settings */}
                   <div className="border-t border-[#e8d5c0] pt-3 mt-1 flex flex-col gap-2">
                     <div className="text-xs font-black uppercase tracking-widest" style={{ color: 'var(--brown3)' }}>🔒 ລະຫັດຜ່ານ</div>
