@@ -51,6 +51,8 @@ export default function PreOrderPage() {
   const [chatMessages, setChatMessages] = useState([])
   const [chatInput, setChatInput] = useState('')
   const [chatSending, setChatSending] = useState(false)
+  const [contactForm, setContactForm] = useState({ name: '', phone: '' })
+  const [contactFormOpen, setContactFormOpen] = useState(false)
   const chatBottomRef = useRef(null)
 
   useEffect(() => {
@@ -435,7 +437,13 @@ export default function PreOrderPage() {
           </div>
           <div className="p-3 border-t-2 border-[#e8d5c0] flex flex-col gap-2 flex-shrink-0" style={{ background: 'var(--warm-white)' }}>
             <button className="btn-primary" disabled={Object.keys(selected).length === 0} onClick={() => setStep(2)}>ຕໍ່ໄປ →</button>
-            <button className="btn-outline" onClick={() => { setHistPhone(''); setHistory([]); setStep(6) }}>📜 ດູປະຫວັດ</button>
+            <button className="btn-outline" onClick={() => { setContactForm({ name: '', phone: '' }); setContactFormOpen(true) }}>
+              💬 ຕິດຕໍ່ເຮົາ
+            </button>
+            <button className="text-xs font-black py-2" style={{ color: 'var(--gray3)', background: 'transparent', border: 'none' }}
+              onClick={() => { setHistPhone(''); setHistory([]); setStep(6) }}>
+              📜 ເບິ່ງປະຫວັດ Order
+            </button>
           </div>
         </>
       )}
@@ -826,6 +834,45 @@ export default function PreOrderPage() {
             </button>
           </div>
         </>
+      )}
+
+      {/* Contact Form Modal */}
+      {contactFormOpen && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ background: 'rgba(61,31,10,0.6)' }}
+          onClick={() => setContactFormOpen(false)}>
+          <div className="w-full max-w-sm rounded-t-3xl p-6 pb-10 flex flex-col gap-4"
+            style={{ background: 'var(--cream)' }} onClick={e => e.stopPropagation()}>
+            <div className="w-10 h-1 rounded-full mx-auto mb-1" style={{ background: 'var(--cream3)' }} />
+            <div className="font-serif font-black text-xl text-center" style={{ color: 'var(--brown)' }}>
+              💬 ຕິດຕໍ່ເຮົາ
+            </div>
+            <div className="text-sm font-bold text-center" style={{ color: 'var(--gray3)' }}>
+              ໃສ່ຂໍ້ມູນຂ້າງລຸ່ມ ເພື່ອ chat ກັບຮ້ານ
+            </div>
+            <input
+              value={contactForm.name}
+              onChange={e => setContactForm(p => ({ ...p, name: e.target.value }))}
+              placeholder="ຊື່ຂອງທ່ານ"
+              className="input-field"
+            />
+            <input
+              value={contactForm.phone}
+              onChange={e => setContactForm(p => ({ ...p, phone: e.target.value }))}
+              placeholder="ເບີໂທ (020 XXXX XXXX)"
+              type="tel"
+              className="input-field"
+            />
+            <button
+              disabled={!contactForm.name.trim() || !contactForm.phone.trim()}
+              onClick={() => {
+                setContactFormOpen(false)
+                openChat({ name: contactForm.name.trim(), phone: contactForm.phone.trim(), qnum: null })
+              }}
+              className="btn-primary py-3 text-base">
+              ເລີ່ມ Chat →
+            </button>
+          </div>
+        </div>
       )}
 
       {/* Chat Modal */}
