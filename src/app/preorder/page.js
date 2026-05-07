@@ -777,26 +777,27 @@ export default function PreOrderPage() {
             {/* Share / Copy row */}
             {(() => {
               const c = typeof currentOrder.customer === 'string' ? JSON.parse(currentOrder.customer) : currentOrder.customer
-              const orderText = `🥟 ${shopInfo.name}\nOrder #${String(currentOrder.qnum).padStart(3,'0')}\n👤 ${c.name}\n🕐 ${c.time}\n💰 ${currentOrder.total?.toLocaleString()} ກີບ\n\nກະລຸນານຳໜ້ານີ້ຕອນມາຮັບສິນຄ້າ`
+              const statusUrl = `${typeof window !== 'undefined' ? window.location.origin : ''}/status?id=${currentOrder.id}`
+              const orderText = `🥟 ${shopInfo.name}\nOrder #${String(currentOrder.qnum).padStart(3,'0')}\n👤 ${c.name}\n🕐 ${c.time}\n💰 ${currentOrder.total?.toLocaleString()} ກີບ\n\n🔗 ລິ້ງຕິດຕາມ Order:\n${statusUrl}`
               return (
                 <div className="flex gap-2 mt-3 px-4">
                   <button onClick={async () => {
                     if (navigator.share) {
-                      await navigator.share({ title: shopInfo.name, text: orderText })
+                      await navigator.share({ title: shopInfo.name, text: orderText, url: statusUrl })
                     } else {
-                      await navigator.clipboard.writeText(orderText)
-                      alert('ຄັດລອກແລ້ວ!')
+                      await navigator.clipboard.writeText(statusUrl)
+                      alert('ຄັດລອກລິ້ງແລ້ວ!')
                     }
                   }} className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl font-black text-sm"
                     style={{ background: 'var(--brown)', color: 'var(--cream)' }}>
-                    📤 ແຊ / ຄັດລອກ
+                    📤 ແຊລິ້ງ Order
                   </button>
                   <button onClick={async () => {
-                    await navigator.clipboard.writeText(orderText)
-                    alert('ຄັດລອກແລ້ວ! ວາງໃນ Line ຫລື WhatsApp ໄດ້ເລີຍ')
+                    await navigator.clipboard.writeText(statusUrl)
+                    alert('ຄັດລອກລິ້ງແລ້ວ! ສ່ງໃຫ້ໃຜກໍ່ໄດ້')
                   }} className="px-4 py-2.5 rounded-xl font-black text-sm"
                     style={{ background: 'var(--cream2)', color: 'var(--brown)', border: '1.5px solid var(--cream3)' }}>
-                    📋 ຄັດລອກ
+                    🔗 ລິ້ງ
                   </button>
                 </div>
               )
