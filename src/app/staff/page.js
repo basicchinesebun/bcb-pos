@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { supabase } from '../../lib/supabase'
 
-const EMOJIS = ['🥟','🍫','🍵','🧁','🍞','🥐','🍮']
+const EMOJIS = ['🥟','🍫','🍵','🧁','🍞','🥐','🍮','🍡','🧆','🫕']
 
 const STATUS_COLORS = {
   walkin: 'bg-blue-50 text-blue-700',
@@ -254,6 +254,9 @@ export default function StaffPage() {
     { lo: 'ເມນູ 5', en: 'Menu 5' },
     { lo: 'ເມນູ 6', en: 'Menu 6' },
     { lo: 'ເມນູ 7', en: 'Menu 7' },
+    { lo: 'ເມນູ 8', en: 'Menu 8' },
+    { lo: 'ເມນູ 9', en: 'Menu 9' },
+    { lo: 'ເມນູ 10', en: 'Menu 10' },
   ]
 
   async function loadConfig() {
@@ -399,6 +402,55 @@ export default function StaffPage() {
     await saveConfig('costs', newCosts)
     setCosts(newCosts)
     showToast('ບັນທຶກເມນູ ✅', 'green')
+  }
+
+  function readCurrentMenuInputs() {
+    const m = menus.map((mn, i) => ({ ...mn, lo: document.getElementById(`mn-${i}`)?.value || mn.lo }))
+    const p = menus.map((_, i) => parseInt(document.getElementById(`mp-${i}`)?.value || 0) || 0)
+    const c = menus.map((_, i) => parseInt(document.getElementById(`mc-${i}`)?.value || 0) || 0)
+    return { m, p, c }
+  }
+
+  async function addMenu() {
+    const { m, p, c } = readCurrentMenuInputs()
+    const n = m.length + 1
+    const newMenus = [...m, { lo: `ເມນູ ${n}`, en: `Menu ${n}` }]
+    const newPrices = [...p, 0]
+    const newCosts = [...c, 0]
+    setMenus(newMenus); setPrices(newPrices); setCosts(newCosts)
+    setStockTotal(prev => [...prev, 0])
+    setStockShop(prev => [...prev, 0])
+    setStockOnline(prev => [...prev, 0])
+    await Promise.all([
+      saveConfig('menus', newMenus), saveConfig('prices', newPrices), saveConfig('costs', newCosts),
+      saveConfig('stock_total', [...stockTotal, 0]),
+      saveConfig('stock_shop', [...stockShop, 0]),
+      saveConfig('stock_online', [...stockOnline, 0]),
+    ])
+    showToast('ເພີ່ມເມນູ ✅', 'green')
+  }
+
+  async function removeMenu(idx) {
+    if (menus.length <= 1) return
+    const { m, p, c } = readCurrentMenuInputs()
+    const newMenus = m.filter((_, i) => i !== idx)
+    const newPrices = p.filter((_, i) => i !== idx)
+    const newCosts = c.filter((_, i) => i !== idx)
+    const newST = stockTotal.filter((_, i) => i !== idx)
+    const newSS = stockShop.filter((_, i) => i !== idx)
+    const newSO = stockOnline.filter((_, i) => i !== idx)
+    setMenus(newMenus); setPrices(newPrices); setCosts(newCosts)
+    setStockTotal(newST); setStockShop(newSS); setStockOnline(newSO)
+    const newImgs = { ...images }; delete newImgs[idx]
+    const reindexed = {}
+    Object.entries(newImgs).forEach(([k, v]) => { const ki = +k; reindexed[ki > idx ? ki - 1 : ki] = v })
+    setImages(reindexed)
+    await Promise.all([
+      saveConfig('menus', newMenus), saveConfig('prices', newPrices), saveConfig('costs', newCosts),
+      saveConfig('stock_total', newST), saveConfig('stock_shop', newSS), saveConfig('stock_online', newSO),
+      saveConfig('menu_images', reindexed),
+    ])
+    showToast('ລຶບເມນູ ✅', 'green')
   }
 
   async function uploadMenuImg(e, i) {
@@ -1053,26 +1105,34 @@ export default function StaffPage() {
                 <div className="mt-3">
                   {menus.map((m, i) => (
                     <div key={i} className="flex gap-2 items-center py-2 border-b border-[#f5ebe0]">
-                      <span className="text-xs font-black w-4" style={{ color: 'var(--cream3)' }}>{i+1}</span>
-                      <div className="flex-1 flex flex-col gap-1">
+                      <span className="text-xs font-black w-4 flex-shrink-0" style={{ color: 'var(--cream3)' }}>{i+1}</span>
+                      <div className="flex-1 flex flex-col gap-1 min-w-0">
                         <input id={`mn-${i}`} defaultValue={m.lo} className="input-field text-xs py-2" />
                         <div className="flex gap-1">
                           <input id={`mp-${i}`} defaultValue={prices[i] || ''} type="text" inputMode="numeric" placeholder="ລາຄາ" className="input-field text-xs py-2 flex-1" />
                           <input id={`mc-${i}`} defaultValue={costs[i] || ''} type="text" inputMode="numeric" placeholder="ຕົ້ນທຶນ" className="input-field text-xs py-2 flex-1" style={{ borderColor: '#fbbf24' }} />
                         </div>
                       </div>
-                      <div className="flex flex-col items-center gap-1">
+                      <div className="flex flex-col items-center gap-1 flex-shrink-0">
                         <label className="w-10 h-10 rounded-lg border-2 border-dashed border-[#e8d5c0] flex items-center justify-center cursor-pointer overflow-hidden relative">
                           {imgPreviews[i]
                             ? <><img src={imgPreviews[i]} className="w-full h-full object-cover" /><span className="absolute inset-0 flex items-center justify-center text-xs font-black text-white bg-black/40">...</span></>
                             : images[i] ? <img src={images[i]} className="w-full h-full object-cover" /> : <span className="text-xl">{EMOJIS[i]||'🍱'}</span>}
                           <input type="file" accept="image/*" className="hidden" onChange={e => uploadMenuImg(e, i)} />
                         </label>
-                        {images[i] && !imgPreviews[i] && <button onClick={() => removeMenuImg(i)} className="text-xs text-red-500">✕</button>}
+                        {images[i] && !imgPreviews[i]
+                          ? <button onClick={() => removeMenuImg(i)} className="text-[10px] text-red-500 font-black">✕ຮູບ</button>
+                          : <button onClick={() => showConfirm(`ລຶບເມນູ "${m.lo}"?`, () => removeMenu(i))} className="text-[10px] font-black" style={{ color: 'var(--cream3)' }}>🗑</button>}
                       </div>
                     </div>
                   ))}
-                  <button onClick={saveMenus} className="btn-primary mt-3 text-sm py-3">💾 ບັນທຶກ</button>
+                  <div className="flex gap-2 mt-3">
+                    <button onClick={saveMenus} className="btn-primary flex-1 text-sm py-3">💾 ບັນທຶກ</button>
+                    <button onClick={addMenu} className="px-4 py-3 rounded-xl font-black text-sm flex-shrink-0"
+                      style={{ background: 'var(--cream2)', color: 'var(--brown)', border: '1.5px solid var(--cream3)' }}>
+                      + ເພີ່ມ
+                    </button>
+                  </div>
                 </div>
               </details>
 
