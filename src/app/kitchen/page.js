@@ -109,7 +109,7 @@ export default function KitchenPage() {
           <div className="mb-4">
             <div className="text-xs font-black tracking-widest uppercase mb-2" style={{ color: '#92400e' }}>⏳ ລໍຖ້າຢືນຢັນ</div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-              {pending.map(o => <OrderCard key={o.id} o={o} onDone={markDone} onCancel={markCancel} menus={menus} images={images} dimmed />)}
+              {pending.map(o => <OrderCard key={o.id} o={o} onDone={markDone} onCancel={markCancel} menus={menus} images={images} />)}
             </div>
           </div>
         )}
@@ -141,7 +141,7 @@ function parseBagLabel(bagLabel) {
   }).filter(b => b.items.length > 0)
 }
 
-function OrderCard({ o, onDone, onCancel, menus, images, dimmed }) {
+function OrderCard({ o, onDone, onCancel, menus, images }) {
   const [slipOpen, setSlipOpen] = useState(false)
   const items = typeof o.items === 'string' ? JSON.parse(o.items) : o.items || []
   const cust = o.customer ? (typeof o.customer === 'string' ? JSON.parse(o.customer) : o.customer) : null
@@ -160,19 +160,19 @@ function OrderCard({ o, onDone, onCancel, menus, images, dimmed }) {
   return (
     <>
       <div className="rounded-2xl overflow-hidden flex flex-col"
-        style={{ background: 'var(--warm-white)', border: `2px solid ${isUrgent ? '#ef4444' : dimmed ? 'var(--cream3)' : 'var(--brown)'}`, opacity: dimmed ? 0.7 : 1 }}>
+        style={{ background: 'var(--warm-white)', border: `2px solid ${isUrgent ? '#ef4444' : 'var(--brown)'}` }}>
 
         {/* Queue number header */}
-        <div className="flex items-center justify-between px-4 py-3" style={{ background: dimmed ? 'var(--cream2)' : 'var(--brown)' }}>
-          <div className="font-serif text-4xl font-black" style={{ color: dimmed ? 'var(--brown)' : 'var(--cream)' }}>
+        <div className="flex items-center justify-between px-4 py-3" style={{ background: 'var(--brown)' }}>
+          <div className="font-serif text-4xl font-black" style={{ color: 'var(--cream)' }}>
             #{String(o.qnum).padStart(4, '0')}
           </div>
           <div className="text-right">
-            <div className="text-xs font-bold" style={{ color: dimmed ? 'var(--gray3)' : 'rgba(253,246,238,0.7)' }}>{time}</div>
-            <div className="text-xs font-black mt-0.5" style={{ color: isUrgent ? '#ef4444' : dimmed ? 'var(--gray3)' : 'rgba(253,246,238,0.6)' }}>
+            <div className="text-xs font-bold" style={{ color: 'rgba(253,246,238,0.7)' }}>{time}</div>
+            <div className="text-xs font-black mt-0.5" style={{ color: isUrgent ? '#ef4444' : 'rgba(253,246,238,0.6)' }}>
               {mins} ນາທີ{isUrgent ? ' ⚠' : ''}
             </div>
-            <div className="text-xs mt-0.5 font-bold" style={{ color: dimmed ? 'var(--brown3)' : 'rgba(253,246,238,0.8)' }}>
+            <div className="text-xs mt-0.5 font-bold" style={{ color: 'rgba(253,246,238,0.8)' }}>
               {o.type === 'online' ? '🌐 Online' : '🏪 Walk-in'}
             </div>
           </div>
