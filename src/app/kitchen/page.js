@@ -99,10 +99,35 @@ export default function KitchenPage() {
         </div>
       </div>
 
-      {/* Horizontal scroll area */}
-      <div className="flex-1 overflow-hidden">
+      {/* ── Mobile: vertical scroll (original layout) ── */}
+      <div className="md:hidden flex-1 overflow-y-auto p-3">
+        {confirmed.length === 0 && pending.length === 0 && (
+          <div className="flex items-center justify-center h-64 text-xl font-black" style={{ color: 'var(--cream3)' }}>
+            ຍັງບໍ່ມີອໍເດີ
+          </div>
+        )}
+        {pending.length > 0 && (
+          <div className="mb-4">
+            <div className="text-xs font-black tracking-widest uppercase mb-2" style={{ color: '#92400e' }}>⏳ ລໍຖ້າຢືນຢັນ</div>
+            <div className="flex flex-col gap-3">
+              {pending.map(o => <OrderCard key={o.id} o={o} {...sharedProps} />)}
+            </div>
+          </div>
+        )}
+        {confirmed.length > 0 && (
+          <div>
+            <div className="text-xs font-black tracking-widest uppercase mb-2" style={{ color: '#16a34a' }}>🔥 ກຳລັງເຮັດ</div>
+            <div className="flex flex-col gap-3">
+              {confirmed.map(o => <OrderCard key={o.id} o={o} {...sharedProps} />)}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* ── Tablet/Desktop: horizontal swipe ── */}
+      <div className="hidden md:flex flex-1 overflow-hidden">
         {confirmed.length === 0 && pending.length === 0 ? (
-          <div className="h-full flex items-center justify-center text-xl font-black" style={{ color: 'var(--cream3)' }}>
+          <div className="flex-1 flex items-center justify-center text-xl font-black" style={{ color: 'var(--cream3)' }}>
             ຍັງບໍ່ມີອໍເດີ
           </div>
         ) : (
@@ -142,7 +167,7 @@ export default function KitchenPage() {
               </div>
             ))}
 
-            {/* trailing spacer so last card snap-aligns cleanly */}
+            {/* trailing spacer */}
             <div className="flex-shrink-0" style={{ width: 12 }} />
           </div>
         )}
