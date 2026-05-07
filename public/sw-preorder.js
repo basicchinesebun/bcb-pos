@@ -1,5 +1,5 @@
-const CACHE_NAME = 'bcb-preorder-v3';
-const URLS_TO_CACHE = ['/preorder', '/icon-preorder-192.png'];
+const CACHE_NAME = 'bcb-preorder-v6';
+const URLS_TO_CACHE = ['/icon-preorder-192.png'];
 
 self.addEventListener('install', event => {
   event.waitUntil(
@@ -19,6 +19,7 @@ self.addEventListener('activate', event => {
 
 self.addEventListener('fetch', event => {
   if (!event.request.url.startsWith(self.location.origin)) return;
+  if (event.request.mode === 'navigate') return;
   event.respondWith(
     caches.match(event.request).then(cached => cached || fetch(event.request))
   );

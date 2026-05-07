@@ -8,9 +8,9 @@ import ClosedOverlay from '../../components/ClosedOverlay'
 const EMOJIS = ['🥟','🍫','🍵','🧁','🍞','🥐','🍮']
 
 const QUICK_BAGS = [
-  { id: 'single',  icon: '🛍',     label: 'ຖຸງດຽວ',       desc: 'ທຸກຢ່າງໃນ 1 ຖຸງ' },
-  { id: 'bytype',  icon: '🛍🛍',   label: 'ແຍກຕາມເມນູ',   desc: 'ແຕ່ລະເມນູ 1 ຖຸງ' },
-  { id: 'each',    icon: '🛍🛍🛍', label: 'ແຍກທຸກກ້ອນ',   desc: '1 ກ້ອນ 1 ຖຸງ' },
+  { id: 'single',  icon: '🛍',     label: 'ຖົງດຽວ',       desc: 'ທຸກຢ່າງໃນ 1 ຖົງ' },
+  { id: 'bytype',  icon: '🛍🛍',   label: 'ແຍກຕາມເມນູ',   desc: 'ແຕ່ລະເມນູ 1 ຖົງ' },
+  { id: 'each',    icon: '🛍🛍🛍', label: 'ແຍກທຸກກ້ອນ',   desc: '1 ກ້ອນ 1 ຖົງ' },
 ]
 
 export default function OrderPage() {
@@ -161,7 +161,7 @@ export default function OrderPage() {
         sub: (prices[+i] || 0) * qty,
       }))
       const packingLabel = bagPacks
-        .map((b, i) => { const t = bagText(b); return t ? `ຖຸງ ${i + 1}: ${t}` : null })
+        .map((b, i) => { const t = bagText(b); return t ? `ຖົງ ${i + 1}: ${t}` : null })
         .filter(Boolean)
         .join(' | ')
 
@@ -231,7 +231,7 @@ export default function OrderPage() {
   const totalPacked = bagPacks.reduce((s, bag) => s + Object.values(bag).reduce((ss, v) => ss + v, 0), 0)
 
   const bagLabel = bagPacks
-    .map((b, i) => { const t = bagText(b); return t ? `ຖຸງ ${i + 1}: ${t}` : null })
+    .map((b, i) => { const t = bagText(b); return t ? `ຖົງ ${i + 1}: ${t}` : null })
     .filter(Boolean)
     .join(' / ')
   const selectedItems = Object.entries(selected).map(([i, qty]) => ({
@@ -241,8 +241,15 @@ export default function OrderPage() {
   }))
 
   if (loading) return (
-    <div className="min-h-screen flex items-center justify-center" style={{ background: 'var(--cream)' }}>
-      <div className="text-sm font-bold" style={{ color: 'var(--brown)' }}>ກຳລັງໂຫຼດ...</div>
+    <div className="min-h-dvh flex flex-col items-center justify-center" style={{ background: '#3d1f0a' }}>
+      <div className="flex flex-col items-center gap-6">
+        <div className="w-16 h-16 rounded-full border-4 animate-spin"
+          style={{ borderColor: 'rgba(253,246,238,0.15)', borderTopColor: '#fdf6ee' }} />
+        <div className="text-center">
+          <div className="font-serif text-xl font-black" style={{ color: '#fdf6ee' }}>🥟 Basic Chinese Bun</div>
+          <div className="text-sm font-bold mt-2" style={{ color: 'rgba(253,246,238,0.5)' }}>ກຳລັງໂຫຼດ...</div>
+        </div>
+      </div>
     </div>
   )
 
@@ -350,6 +357,11 @@ export default function OrderPage() {
                       <div className="text-sm font-black mt-1" style={{ color: 'var(--brown2)' }}>
                         {isOut ? 'ໝົດ' : `${(prices[i] || 0).toLocaleString()} ກີບ`}
                       </div>
+                      {!isOut && (
+                        <div className="text-xs mt-0.5 font-bold" style={{ color: s <= 5 ? '#dc2626' : 'var(--gray3)' }}>
+                          ເຫຼືອ {s} ກ້ອນ{s <= 5 ? ' ⚠' : ''}
+                        </div>
+                      )}
                     </div>
 
                     {/* Qty row */}
@@ -367,6 +379,16 @@ export default function OrderPage() {
           </div>
 
           <div className="p-4 border-t-2 border-[#e8d5c0]" style={{ background: 'var(--warm-white)' }}>
+            {totalItems > 0 && (
+              <div className="flex items-center justify-between mb-3 px-1">
+                <span className="text-sm font-black" style={{ color: 'var(--brown)' }}>
+                  🛍 {totalItems} ກ້ອນ
+                </span>
+                <span className="text-sm font-black" style={{ color: 'var(--brown)' }}>
+                  {totalPrice.toLocaleString()} ກີບ
+                </span>
+              </div>
+            )}
             <button
               className="btn-primary"
               disabled={totalItems === 0}
@@ -466,7 +488,7 @@ export default function OrderPage() {
                         {n + 1}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <div className="font-black text-base" style={{ color: 'var(--brown)' }}>ຖຸງທີ {n + 1}</div>
+                        <div className="font-black text-base" style={{ color: 'var(--brown)' }}>ຖົງທີ {n + 1}</div>
                         {filled ? (
                           <div className="flex flex-wrap gap-1.5 mt-1.5">
                             {Object.entries(bag).filter(([, qty]) => qty > 0).map(([idx, qty]) => (
@@ -539,7 +561,7 @@ export default function OrderPage() {
                 onClick={() => setBagPacks(prev => [...prev, {}])}
                 className="flex items-center gap-2 px-6 py-3 rounded-2xl font-black text-base active:scale-95 transition-all"
                 style={{ background: 'var(--brown)', color: 'var(--cream)', boxShadow: '0 4px 12px rgba(61,31,10,0.25)' }}>
-                ➕ ເພີ່ມຖຸງ
+                ➕ ເພີ່ມຖົງ
               </button>
             </div>
           </div>
@@ -549,7 +571,7 @@ export default function OrderPage() {
             style={{ background: 'var(--warm-white)', flexShrink: 0 }}>
             {bagPacks.every(b => !Object.keys(b).length) && (
               <div className="text-center text-sm font-bold mb-1" style={{ color: 'var(--gray3)' }}>
-                ເລືອກດ່ວນ ຫຼື ໃສ່ຢ່າງໜ້ອຍ 1 ຖຸງ
+                ເລືອກດ່ວນ ຫຼື ໃສ່ຢ່າງໜ້ອຍ 1 ຖົງ
               </div>
             )}
             <button
@@ -651,7 +673,7 @@ export default function OrderPage() {
               <div className="text-center py-6 px-4" style={{ background: 'var(--warm-white)' }}>
                 <div className="text-xs font-black tracking-widest uppercase mb-1" style={{ color: 'var(--gray3)' }}>ເລກຄິວ · QUEUE</div>
                 <div className="font-serif font-black leading-none mb-4" style={{ fontSize: 80, color: 'var(--brown)' }}>
-                  {String(qnum).padStart(3, '0')}
+                  {String(qnum).padStart(4, '0')}
                 </div>
                 <div className="rounded-xl p-3 text-sm font-bold text-left leading-loose" style={{ background: 'var(--cream2)', color: 'var(--brown2)' }}>
                   {selectedItems.map((it, i) => (

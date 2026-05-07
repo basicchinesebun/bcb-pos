@@ -104,7 +104,7 @@ export default function StaffPage() {
   function announce(qnum) {
     if (!settings.soundOn) return
     window.speechSynthesis.cancel()
-    const u = new SpeechSynthesisUtterance(`หมายเลข ${String(qnum).padStart(3, '0')} รับสินค้าได้เลยค่ะ`)
+    const u = new SpeechSynthesisUtterance(`หมายเลข ${String(qnum).padStart(4, '0')} รับสินค้าได้เลยค่ะ`)
     const v = voicesRef.current.find(v => v.lang === 'th-TH') || voicesRef.current[0]
     if (v) u.voice = v
     u.lang = 'th-TH'
@@ -195,7 +195,7 @@ export default function StaffPage() {
     setOrders(prev => prev.map(ord => ord.id === o.id ? { ...ord, done: true, done_at: doneAt } : ord))
     await supabase.from('orders').update({ done: true, done_at: doneAt }).eq('id', o.id)
     announce(o.qnum)
-    showToast(`✅ ຄິວ ${String(o.qnum).padStart(3,'0')} Done`, 'green')
+    showToast(`✅ ຄິວ ${String(o.qnum).padStart(4,'0')} Done`, 'green')
     if (settings.autoprintOn) {
       setTimeout(() => smartPrint(o), 300)
     }
@@ -207,7 +207,7 @@ export default function StaffPage() {
     setOrders(prev => prev.map(ord => ord.id === o.id ? { ...ord, status: 'confirmed', done: true, done_at: doneAt } : ord))
     await supabase.from('orders').update({ status: 'confirmed', done: true, done_at: doneAt }).eq('id', o.id)
     announce(o.qnum)
-    showToast(`✅ ຢືນຢັນ #${String(o.qnum).padStart(3,'0')}`, 'green')
+    showToast(`✅ ຢືນຢັນ #${String(o.qnum).padStart(4,'0')}`, 'green')
     if (settings.autoprintOn) setTimeout(() => smartPrint(o), 300)
   }
 
@@ -489,7 +489,7 @@ export default function StaffPage() {
     if (shopInfo.phone) write('Tel: ' + shopInfo.phone, { align: 1 })
     line('=')
     write('QUEUE', { align: 1 })
-    write(String(o.qnum).padStart(3, '0'), { align: 1, big: true, bold: true })
+    write(String(o.qnum).padStart(4, '0'), { align: 1, big: true, bold: true })
     write(new Date(o.created_at).toLocaleString('lo-LA'), { align: 1 })
     line()
     const items = typeof o.items === 'string' ? JSON.parse(o.items) : o.items || []
@@ -589,7 +589,7 @@ export default function StaffPage() {
         ${shopInfo.phone ? `<div class="sub">Tel: ${shopInfo.phone}</div>` : ''}
         <hr class="div">
         <div class="qlbl">ເລກຄິວ · QUEUE</div>
-        <div class="qnum">${String(o.qnum).padStart(3,'0')}</div>
+        <div class="qnum">${String(o.qnum).padStart(4,'0')}</div>
         <div class="sub">${new Date(o.created_at).toLocaleString('lo-LA')}</div>
         <hr class="div">
         ${itemsHtml}
@@ -918,7 +918,7 @@ export default function StaffPage() {
                       <div className="p-3">
                         <div className="flex justify-between items-start mb-2">
                           <div className="font-serif text-2xl font-black" style={{ color: 'var(--brown)' }}>
-                            #{String(o.qnum).padStart(3,'0')}
+                            #{String(o.qnum).padStart(4,'0')}
                           </div>
                           <div className="text-right">
                             <div className="text-xs font-bold" style={{ color: 'var(--gray3)' }}>{time}</div>
@@ -1041,7 +1041,7 @@ export default function StaffPage() {
                                 return n
                               })}
                             >
-                              <span className="font-black text-sm w-10 flex-shrink-0" style={{ color: 'var(--brown)' }}>#{String(o.qnum).padStart(3,'0')}</span>
+                              <span className="font-black text-sm w-10 flex-shrink-0" style={{ color: 'var(--brown)' }}>#{String(o.qnum).padStart(4,'0')}</span>
                               <span className="text-xs flex-shrink-0" style={{ color: 'var(--gray3)' }}>{time}</span>
                               <span className={`tag text-xs flex-shrink-0 ${o.type === 'online' ? 'bg-orange-50 text-orange-700' : 'bg-blue-50 text-blue-700'}`}>{o.type === 'online' ? '🌐' : '🏪'}</span>
                               {o.done && <span className="tag bg-green-50 text-green-700 text-xs flex-shrink-0">✓ Done</span>}

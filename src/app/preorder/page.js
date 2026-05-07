@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../../lib/supabase'
 import ContactSection from '../../components/ContactSection'
 import ClosedOverlay from '../../components/ClosedOverlay'
@@ -8,9 +8,9 @@ import ClosedOverlay from '../../components/ClosedOverlay'
 const EMOJIS = ['🥟','🍫','🍵','🧁','🍞','🥐','🍮']
 
 const QUICK_BAGS = [
-  { id: 'single',  icon: '🛍',     label: 'ຖຸງດຽວ',       desc: 'ທຸກຢ່າງໃນ 1 ຖຸງ' },
-  { id: 'bytype',  icon: '🛍🛍',   label: 'ແຍກຕາມເມນູ',   desc: 'ແຕ່ລະເມນູ 1 ຖຸງ' },
-  { id: 'each',    icon: '🛍🛍🛍', label: 'ແຍກທຸກກ້ອນ',   desc: '1 ກ້ອນ 1 ຖຸງ' },
+  { id: 'single',  icon: '🛍',     label: 'ຖົງດຽວ',       desc: 'ທຸກຢ່າງໃນ 1 ຖົງ' },
+  { id: 'bytype',  icon: '🛍🛍',   label: 'ແຍກຕາມເມນູ',   desc: 'ແຕ່ລະເມນູ 1 ຖົງ' },
+  { id: 'each',    icon: '🛍🛍🛍', label: 'ແຍກທຸກກ້ອນ',   desc: '1 ກ້ອນ 1 ຖົງ' },
 ]
 
 const STATUS_MAP = {
@@ -21,7 +21,7 @@ const STATUS_MAP = {
 }
 
 // Step labels: 1=Menu, 2=Bag, 3=Info, 4=Payment, 5=Status
-const STEPS = ['ເລືອກເມນູ', 'ຖຸງ', 'ຂໍ້ມູນ', 'ຊຳລະ', 'ສະຖານະ']
+const STEPS = ['ເລືອກເມນູ', 'ຖົງ', 'ຂໍ້ມູນ', 'ຊຳລະ', 'ສະຖານະ']
 
 export default function PreOrderPage() {
   const [step, setStep] = useState(1)
@@ -46,6 +46,14 @@ export default function PreOrderPage() {
   const [shopInfo, setShopInfo] = useState({ name: 'Basic Chinese Bun' })
   const [branches, setBranches] = useState([])
   const [loading, setLoading] = useState(true)
+  const [chatOpen, setChatOpen] = useState(false)
+  const [chatCustomer, setChatCustomer] = useState(null) // { name, phone, qnum }
+  const [chatMessages, setChatMessages] = useState([])
+  const [chatInput, setChatInput] = useState('')
+  const [chatSending, setChatSending] = useState(false)
+  const [contactForm, setContactForm] = useState({ name: '', phone: '' })
+  const [contactFormOpen, setContactFormOpen] = useState(false)
+  const chatBottomRef = useRef(null)
 
   useEffect(() => {
     if (!supabase) { setLoading(false); return }
@@ -79,6 +87,29 @@ export default function PreOrderPage() {
       .subscribe()
     return () => supabase.removeChannel(channel)
   }, [currentOrder?.id])
+
+  function openChat(customer) {
+    setChatCustomer(customer)
+    setChatMessages([])
+    setChatOpen(true)
+  }
+
+  useEffect(() => {
+    if (!chatOpen || !chatCustomer?.phone || !supabase) return
+    const phone = chatCustomer.phone
+    supabase.from('messages').select('*').eq('phone', phone)
+      .order('created_at', { ascending: true })
+      .then(({ data }) => { if (data) setChatMessages(data) })
+    const ch = supabase.channel('chat-cust-' + phone)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `phone=eq.${phone}` },
+        payload => setChatMessages(prev => [...prev, payload.new]))
+      .subscribe()
+    return () => supabase.removeChannel(ch)
+  }, [chatOpen, chatCustomer?.phone])
+
+  useEffect(() => {
+    chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [chatMessages])
 
   function applyCfg(cfg) {
     setMenus(cfg.menus ? JSON.parse(cfg.menus) : [
@@ -219,7 +250,7 @@ export default function PreOrderPage() {
       }))
 
       const packingLabel = bagPacks
-        .map((b, i) => { const t = bagText(b); return t ? `ຖຸງ ${i + 1}: ${t}` : null })
+        .map((b, i) => { const t = bagText(b); return t ? `ຖົງ ${i + 1}: ${t}` : null })
         .filter(Boolean)
         .join(' | ')
 
@@ -253,6 +284,17 @@ export default function PreOrderPage() {
     }
   }
 
+  async function sendChatMsg() {
+    if (!chatInput.trim() || chatSending || !chatCustomer?.phone || !chatCustomer?.name || !supabase) return
+    setChatSending(true)
+    await supabase.from('messages').insert({
+      phone: chatCustomer.phone, name: chatCustomer.name, qnum: chatCustomer.qnum || null,
+      sender: 'customer', text: chatInput.trim(),
+    })
+    setChatInput('')
+    setChatSending(false)
+  }
+
   async function searchHistory() {
     if (!histPhone || histPhone.length < 6) return
     const { data } = await supabase
@@ -271,8 +313,15 @@ export default function PreOrderPage() {
   const statusInfo = STATUS_MAP[currentOrder?.status] || STATUS_MAP.pending
 
   if (loading) return (
-    <div className="min-h-screen flex items-center justify-center" style={{ background: 'var(--cream)' }}>
-      <div className="text-sm font-bold" style={{ color: 'var(--brown)' }}>ກຳລັງໂຫຼດ...</div>
+    <div className="min-h-dvh flex flex-col items-center justify-center" style={{ background: '#3d1f0a' }}>
+      <div className="flex flex-col items-center gap-6">
+        <div className="w-16 h-16 rounded-full border-4 animate-spin"
+          style={{ borderColor: 'rgba(253,246,238,0.15)', borderTopColor: '#fdf6ee' }} />
+        <div className="text-center">
+          <div className="font-serif text-xl font-black" style={{ color: '#fdf6ee' }}>🥟 Basic Chinese Bun</div>
+          <div className="text-sm font-bold mt-2" style={{ color: 'rgba(253,246,238,0.5)' }}>ກຳລັງໂຫຼດ...</div>
+        </div>
+      </div>
     </div>
   )
 
@@ -368,6 +417,11 @@ export default function PreOrderPage() {
                       <div className="text-xs font-bold mt-0.5" style={{ color: 'var(--brown2)' }}>
                         {isOut ? 'ໝົດ' : `${(prices[i] || 0).toLocaleString()}`}
                       </div>
+                      {!isOut && (
+                        <div className="text-xs mt-0.5 font-bold" style={{ color: s <= 5 ? '#dc2626' : 'var(--gray3)' }}>
+                          ເຫຼືອ {s}{s <= 5 ? ' ⚠' : ''}
+                        </div>
+                      )}
                     </div>
                     {isSel && (
                       <div className="flex items-center justify-between px-1.5 py-1 border-t border-[#e8d5c0]" style={{ background: 'var(--cream2)' }} onClick={e => e.stopPropagation()}>
@@ -383,7 +437,13 @@ export default function PreOrderPage() {
           </div>
           <div className="p-3 border-t-2 border-[#e8d5c0] flex flex-col gap-2 flex-shrink-0" style={{ background: 'var(--warm-white)' }}>
             <button className="btn-primary" disabled={Object.keys(selected).length === 0} onClick={() => setStep(2)}>ຕໍ່ໄປ →</button>
-            <button className="btn-outline" onClick={() => { setHistPhone(''); setHistory([]); setStep(6) }}>📜 ດູປະຫວັດ</button>
+            <button className="btn-outline" onClick={() => { setContactForm({ name: '', phone: '' }); setContactFormOpen(true) }}>
+              💬 ຕິດຕໍ່ເຮົາ
+            </button>
+            <button className="text-xs font-black py-2" style={{ color: 'var(--gray3)', background: 'transparent', border: 'none' }}
+              onClick={() => { setHistPhone(''); setHistory([]); setStep(6) }}>
+              📜 ເບິ່ງປະຫວັດ Order
+            </button>
           </div>
         </>
       )}
@@ -471,7 +531,7 @@ export default function PreOrderPage() {
                         {n + 1}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <div className="font-black text-base" style={{ color: 'var(--brown)' }}>ຖຸງທີ {n + 1}</div>
+                        <div className="font-black text-base" style={{ color: 'var(--brown)' }}>ຖົງທີ {n + 1}</div>
                         {filled ? (
                           <div className="flex flex-wrap gap-1.5 mt-1.5">
                             {Object.entries(bag).filter(([, qty]) => qty > 0).map(([idx, qty]) => (
@@ -542,7 +602,7 @@ export default function PreOrderPage() {
                 onClick={() => setBagPacks(prev => [...prev, {}])}
                 className="flex items-center gap-2 px-6 py-3 rounded-2xl font-black text-base active:scale-95 transition-all"
                 style={{ background: 'var(--brown)', color: 'var(--cream)', boxShadow: '0 4px 12px rgba(61,31,10,0.25)' }}>
-                ➕ ເພີ່ມຖຸງ
+                ➕ ເພີ່ມຖົງ
               </button>
             </div>
           </div>
@@ -551,7 +611,7 @@ export default function PreOrderPage() {
             style={{ background: 'var(--warm-white)' }}>
             {bagPacks.every(b => !Object.keys(b).length) && (
               <div className="text-center text-sm font-bold mb-1" style={{ color: 'var(--gray3)' }}>
-                ເລືອກດ່ວນ ຫຼື ໃສ່ຢ່າງໜ້ອຍ 1 ຖຸງ
+                ເລືອກດ່ວນ ຫຼື ໃສ່ຢ່າງໜ້ອຍ 1 ຖົງ
               </div>
             )}
             <button
@@ -701,7 +761,7 @@ export default function PreOrderPage() {
               <div className="text-center py-6 px-4" style={{ background: 'var(--warm-white)' }}>
                 <div className="text-xs font-black tracking-widest uppercase mb-1" style={{ color: 'var(--gray3)' }}>ເລກຄິວ · QUEUE</div>
                 <div className="font-serif font-black leading-none mb-3" style={{ fontSize: 72, color: 'var(--brown)' }}>
-                  {String(currentOrder.qnum).padStart(3, '0')}
+                  {String(currentOrder.qnum).padStart(4, '0')}
                 </div>
                 <span className={`tag text-sm font-black px-4 py-2 rounded-full ${statusInfo.cls}`}>
                   {statusInfo.label}
@@ -721,9 +781,45 @@ export default function PreOrderPage() {
                 ກະລຸນາສະແດງໜ້ານີ້ຕອນມາຮັບ
               </div>
             </div>
+
+            {/* Share / Copy row */}
+            {(() => {
+              const c = typeof currentOrder.customer === 'string' ? JSON.parse(currentOrder.customer) : currentOrder.customer
+              const statusUrl = `${typeof window !== 'undefined' ? window.location.origin : ''}/status?id=${currentOrder.id}`
+              const orderText = `🥟 ${shopInfo.name}\nOrder #${String(currentOrder.qnum).padStart(4,'0')}\n👤 ${c.name}\n🕐 ${c.time}\n💰 ${currentOrder.total?.toLocaleString()} ກີບ\n\n🔗 ລິ້ງຕິດຕາມ Order:\n${statusUrl}`
+              return (
+                <div className="flex gap-2 mt-3 px-4">
+                  <button onClick={async () => {
+                    if (navigator.share) {
+                      await navigator.share({ title: shopInfo.name, text: orderText, url: statusUrl })
+                    } else {
+                      await navigator.clipboard.writeText(statusUrl)
+                      alert('ຄັດລອກລິ້ງແລ້ວ!')
+                    }
+                  }} className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl font-black text-sm"
+                    style={{ background: 'var(--brown)', color: 'var(--cream)' }}>
+                    📤 ແຊລິ້ງ Order
+                  </button>
+                  <button onClick={async () => {
+                    await navigator.clipboard.writeText(statusUrl)
+                    alert('ຄັດລອກລິ້ງແລ້ວ! ສ່ງໃຫ້ໃຜກໍ່ໄດ້')
+                  }} className="px-4 py-2.5 rounded-xl font-black text-sm"
+                    style={{ background: 'var(--cream2)', color: 'var(--brown)', border: '1.5px solid var(--cream3)' }}>
+                    🔗 ລິ້ງ
+                  </button>
+                </div>
+              )
+            })()}
+
             <ContactSection />
           </div>
           <div className="p-4 border-t-2 border-[#e8d5c0] flex flex-col gap-2 flex-shrink-0" style={{ background: 'var(--warm-white)' }}>
+            <button className="btn-primary" onClick={() => {
+              const c = typeof currentOrder.customer === 'string' ? JSON.parse(currentOrder.customer) : currentOrder.customer
+              openChat({ name: c.name, phone: c.phone, qnum: currentOrder.qnum })
+            }}>
+              💬 ຕິດຕໍ່ຮ້ານ
+            </button>
             <button className="btn-outline" onClick={() => {
               setSelected({})
               setBagPacks([{}])
@@ -731,12 +827,124 @@ export default function PreOrderPage() {
               setSlip(null)
               setSlipPreview(null)
               setCurrentOrder(null)
+              setChatMessages([])
               setStep(1)
             }}>
               + ອໍເດີໃໝ່
             </button>
           </div>
         </>
+      )}
+
+      {/* Contact Form Modal */}
+      {contactFormOpen && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ background: 'rgba(61,31,10,0.6)' }}
+          onClick={() => setContactFormOpen(false)}>
+          <div className="w-full max-w-sm rounded-t-3xl p-6 pb-10 flex flex-col gap-4"
+            style={{ background: 'var(--cream)' }} onClick={e => e.stopPropagation()}>
+            <div className="w-10 h-1 rounded-full mx-auto mb-1" style={{ background: 'var(--cream3)' }} />
+            <div className="font-serif font-black text-xl text-center" style={{ color: 'var(--brown)' }}>
+              💬 ຕິດຕໍ່ເຮົາ
+            </div>
+            <div className="text-sm font-bold text-center" style={{ color: 'var(--gray3)' }}>
+              ໃສ່ຂໍ້ມູນຂ້າງລຸ່ມ ເພື່ອ chat ກັບຮ້ານ
+            </div>
+            <input
+              value={contactForm.name}
+              onChange={e => setContactForm(p => ({ ...p, name: e.target.value }))}
+              placeholder="ຊື່ຂອງທ່ານ"
+              className="input-field"
+            />
+            <input
+              value={contactForm.phone}
+              onChange={e => setContactForm(p => ({ ...p, phone: e.target.value }))}
+              placeholder="ເບີໂທ (020 XXXX XXXX)"
+              type="tel"
+              className="input-field"
+            />
+            <button
+              disabled={!contactForm.name.trim() || !contactForm.phone.trim()}
+              onClick={() => {
+                setContactFormOpen(false)
+                openChat({ name: contactForm.name.trim(), phone: contactForm.phone.trim(), qnum: null })
+              }}
+              className="btn-primary py-3 text-base">
+              ເລີ່ມ Chat →
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Chat Modal */}
+      {chatOpen && chatCustomer && (
+        <div className="fixed inset-0 z-50 flex flex-col" style={{ background: 'var(--cream)' }}>
+          <div className="flex items-center gap-3 px-4 py-3 flex-shrink-0" style={{ background: 'var(--brown)' }}>
+            <button onClick={() => setChatOpen(false)} className="text-xl font-black" style={{ color: 'var(--cream)' }}>←</button>
+            <div>
+              <div className="font-black text-base" style={{ color: 'var(--cream)' }}>💬 ຕິດຕໍ່ຮ້ານ</div>
+              <div className="text-xs font-bold" style={{ color: 'rgba(253,246,238,0.6)' }}>
+                {chatCustomer.qnum ? `Order #${String(chatCustomer.qnum).padStart(4, '0')}` : chatCustomer.phone}
+              </div>
+            </div>
+          </div>
+          {!chatCustomer.name && (
+            <div className="px-4 pt-3 flex gap-2 flex-shrink-0">
+              <input value={chatCustomer.name}
+                onChange={e => setChatCustomer(prev => ({ ...prev, name: e.target.value }))}
+                placeholder="ຊື່ຂອງທ່ານ..."
+                className="input-field flex-1 py-2 text-sm" />
+            </div>
+          )}
+          <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3">
+            {chatMessages.length === 0 && (
+              <div className="text-center text-sm font-bold py-8" style={{ color: 'var(--gray3)' }}>
+                ສົ່ງຂໍ້ຄວາມຫາຮ້ານໄດ້ເລີຍ 👋
+              </div>
+            )}
+            {chatMessages.map(msg => (
+              <div key={msg.id} className={`flex ${msg.sender === 'customer' ? 'justify-end' : 'justify-start'}`}>
+                {msg.sender === 'staff' && (
+                  <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs mr-2 flex-shrink-0 self-end mb-1"
+                    style={{ background: 'var(--brown)', color: 'var(--cream)' }}>🥟</div>
+                )}
+                <div className="max-w-[75%]">
+                  <div className="px-4 py-2.5 rounded-2xl text-sm font-bold leading-snug"
+                    style={{
+                      background: msg.sender === 'customer' ? 'var(--brown)' : 'white',
+                      color: msg.sender === 'customer' ? 'var(--cream)' : 'var(--brown)',
+                      border: msg.sender === 'staff' ? '1.5px solid var(--cream3)' : 'none',
+                      borderBottomRightRadius: msg.sender === 'customer' ? 4 : undefined,
+                      borderBottomLeftRadius: msg.sender === 'staff' ? 4 : undefined,
+                    }}>
+                    {msg.text}
+                  </div>
+                  <div className="text-[10px] font-bold mt-1 px-1"
+                    style={{ color: 'var(--gray3)', textAlign: msg.sender === 'customer' ? 'right' : 'left' }}>
+                    {new Date(msg.created_at).toLocaleTimeString('lo-LA', { hour: '2-digit', minute: '2-digit' })}
+                  </div>
+                </div>
+              </div>
+            ))}
+            <div ref={chatBottomRef} />
+          </div>
+          <div className="p-3 flex gap-2 flex-shrink-0 border-t border-[#e8d5c0]" style={{ background: 'white' }}>
+            <input
+              value={chatInput}
+              onChange={e => setChatInput(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && !e.shiftKey && sendChatMsg()}
+              placeholder="ພິມຂໍ້ຄວາມ..."
+              className="input-field flex-1 py-2.5 text-sm"
+            />
+            <button onClick={sendChatMsg} disabled={chatSending || !chatInput.trim()}
+              className="px-5 py-2.5 rounded-xl font-black text-sm flex-shrink-0"
+              style={{
+                background: chatInput.trim() ? 'var(--brown)' : 'var(--cream3)',
+                color: chatInput.trim() ? 'var(--cream)' : 'var(--gray3)',
+              }}>
+              ສົ່ງ
+            </button>
+          </div>
+        </div>
       )}
 
       {/* ─── STEP 6: History ─── */}
@@ -765,19 +973,32 @@ export default function PreOrderPage() {
                 return (
                   <div key={o.id} className="card mb-3">
                     <div className="flex justify-between items-center mb-2">
-                      <span className="font-serif text-xl font-black" style={{ color: 'var(--brown)' }}>#{String(o.qnum).padStart(3,'0')}</span>
+                      <span className="font-serif text-xl font-black" style={{ color: 'var(--brown)' }}>#{String(o.qnum).padStart(4,'0')}</span>
                       <span className={`tag ${statusI.cls}`}>{statusI.label}</span>
                     </div>
                     <div className="text-sm font-bold" style={{ color: 'var(--gray3)' }}>{c.time}</div>
                     <div className="text-sm font-bold mt-1" style={{ color: 'var(--brown2)' }}>
                       {(typeof o.items === 'string' ? JSON.parse(o.items) : o.items || []).map(it => `${it.name} × ${it.qty}`).join(', ')}
                     </div>
-                    <div className="text-sm font-black mt-1" style={{ color: 'var(--brown)' }}>{o.total?.toLocaleString()} ກີບ</div>
+                    <div className="flex items-center justify-between mt-2">
+                      <span className="text-sm font-black" style={{ color: 'var(--brown)' }}>{o.total?.toLocaleString()} ກີບ</span>
+                      <button onClick={() => openChat({ name: c.name, phone: c.phone, qnum: o.qnum })}
+                        className="text-xs px-3 py-1.5 rounded-lg font-black"
+                        style={{ background: 'var(--brown)', color: 'var(--cream)' }}>
+                        💬 ຕິດຕໍ່
+                      </button>
+                    </div>
                   </div>
                 )
               })}
               {history.length === 0 && histPhone.length >= 6 && (
                 <div className="text-center py-8 font-bold" style={{ color: 'var(--cream3)' }}>ບໍ່ພົບອໍເດີ</div>
+              )}
+              {history.length === 0 && histPhone.length >= 6 && (
+                <button onClick={() => openChat({ name: '', phone: histPhone, qnum: null })}
+                  className="btn-primary mt-2">
+                  💬 ຕິດຕໍ່ຮ້ານ (ໂດຍບໍ່ມີ Order)
+                </button>
               )}
             </div>
           </div>

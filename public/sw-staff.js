@@ -1,5 +1,5 @@
-const CACHE_NAME = 'bcb-staff-v3';
-const URLS_TO_CACHE = ['/staff', '/icon-staff-192.png'];
+const CACHE_NAME = 'bcb-staff-v6';
+const URLS_TO_CACHE = ['/icon-staff-192.png'];
 
 self.addEventListener('install', event => {
   event.waitUntil(
@@ -19,6 +19,9 @@ self.addEventListener('activate', event => {
 
 self.addEventListener('fetch', event => {
   if (!event.request.url.startsWith(self.location.origin)) return;
+  // Navigation requests (HTML pages): don't intercept, let browser fetch normally
+  if (event.request.mode === 'navigate') return;
+  // Static assets: cache first
   event.respondWith(
     caches.match(event.request).then(cached => cached || fetch(event.request))
   );

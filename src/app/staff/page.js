@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { supabase } from '../../lib/supabase'
 
-const EMOJIS = ['🥟','🍫','🍵','🧁','🍞','🥐','🍮']
+const EMOJIS = ['🥟','🍫','🍵','🧁','🍞','🥐','🍮','🍡','🧆','🫕']
 
 const STATUS_COLORS = {
   walkin: 'bg-blue-50 text-blue-700',
@@ -56,6 +56,14 @@ export default function StaffPage() {
   const [isOnline, setIsOnline] = useState(true)
   const [liveStatus, setLiveStatus] = useState('connecting') // 'live' | 'connecting' | 'error'
   const [loading, setLoading] = useState(true)
+  const [chatConvos, setChatConvos] = useState([])
+  const [activeChatPhone, setActiveChatPhone] = useState(null)
+  const [chatMessages, setChatMessages] = useState([])
+  const [chatInput, setChatInput] = useState('')
+  const [chatSending, setChatSending] = useState(false)
+  const [unreadChat, setUnreadChat] = useState(0)
+  const chatBottomRef = useRef(null)
+  const activeChatPhoneRef = useRef(null)
   const voicesRef = useRef([])
 
   useEffect(() => {
@@ -102,6 +110,49 @@ export default function StaffPage() {
     }
   }, [])
 
+  // Chat subscription
+  useEffect(() => {
+    if (!supabase) return
+    loadChatConvos()
+    const ch = supabase.channel('staff-chat-msgs')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, payload => {
+        const msg = payload.new
+        const currentPhone = activeChatPhoneRef.current
+        if (msg.sender === 'customer') {
+          playChatSound()
+          if (currentPhone === msg.phone) {
+            setChatMessages(prev => [...prev, msg])
+            supabase.from('messages').update({ read_by_staff: true }).eq('id', msg.id)
+          } else {
+            setUnreadChat(prev => prev + 1)
+          }
+        } else if (msg.sender === 'staff' && currentPhone === msg.phone) {
+          setChatMessages(prev => [...prev, msg])
+        }
+        setChatConvos(prev => {
+          const idx = prev.findIndex(c => c.phone === msg.phone)
+          const newUnread = msg.sender === 'customer' && currentPhone !== msg.phone ? 1 : 0
+          if (idx >= 0) {
+            const updated = prev.map(c => c.phone === msg.phone
+              ? { ...c, lastMsg: msg.text, lastAt: msg.created_at, unread: c.unread + newUnread }
+              : c)
+            return [updated[idx], ...updated.filter((_, i) => i !== idx)]
+          }
+          return [{ phone: msg.phone, name: msg.name, lastMsg: msg.text, lastAt: msg.created_at, unread: newUnread }, ...prev]
+        })
+      })
+      .subscribe()
+    return () => supabase.removeChannel(ch)
+  }, [])
+
+  useEffect(() => {
+    activeChatPhoneRef.current = activeChatPhone
+  }, [activeChatPhone])
+
+  useEffect(() => {
+    chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [chatMessages])
+
   function showToast(msg, type = '') {
     const id = Date.now() + Math.random()
     setToast(prev => [...prev, { id, msg, type }])
@@ -115,12 +166,73 @@ export default function StaffPage() {
   function announce(qnum) {
     if (!settings.soundOn) return
     window.speechSynthesis.cancel()
-    const u = new SpeechSynthesisUtterance(`หมายเลข ${String(qnum).padStart(3, '0')} รับสินค้าได้เลยค่ะ`)
+    const u = new SpeechSynthesisUtterance(`หมายเลข ${String(qnum).padStart(4, '0')} รับสินค้าได้เลยค่ะ`)
     const v = voicesRef.current.find(v => v.lang === 'th-TH') || voicesRef.current[0]
     if (v) u.voice = v
     u.lang = 'th-TH'
     u.rate = 0.85
     window.speechSynthesis.speak(u)
+  }
+
+  function playChatSound() {
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)()
+      const osc = ctx.createOscillator()
+      const gain = ctx.createGain()
+      osc.connect(gain); gain.connect(ctx.destination)
+      osc.frequency.setValueAtTime(880, ctx.currentTime)
+      osc.frequency.setValueAtTime(1100, ctx.currentTime + 0.08)
+      osc.frequency.setValueAtTime(880, ctx.currentTime + 0.16)
+      gain.gain.setValueAtTime(0.25, ctx.currentTime)
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5)
+      osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.5)
+    } catch (_) {}
+  }
+
+  async function loadChatConvos() {
+    if (!supabase) return
+    const { data } = await supabase.from('messages').select('*').order('created_at', { ascending: false })
+    if (!data) return
+    const map = {}
+    data.forEach(m => {
+      if (!map[m.phone]) map[m.phone] = { phone: m.phone, name: m.name, msgs: [] }
+      map[m.phone].msgs.push(m)
+    })
+    const convos = Object.values(map).map(c => ({
+      phone: c.phone, name: c.name,
+      lastMsg: c.msgs[0]?.text || '',
+      lastAt: c.msgs[0]?.created_at || '',
+      unread: c.msgs.filter(m => m.sender === 'customer' && !m.read_by_staff).length,
+    }))
+    setChatConvos(convos)
+    setUnreadChat(convos.reduce((s, c) => s + c.unread, 0))
+  }
+
+  async function openConvo(phone) {
+    setActiveChatPhone(phone)
+    if (!supabase) return
+    const { data } = await supabase.from('messages').select('*').eq('phone', phone)
+      .order('created_at', { ascending: true })
+    if (data) setChatMessages(data)
+    await supabase.from('messages').update({ read_by_staff: true })
+      .eq('phone', phone).eq('sender', 'customer').eq('read_by_staff', false)
+    setChatConvos(prev => prev.map(c => c.phone === phone ? { ...c, unread: 0 } : c))
+    setUnreadChat(prev => {
+      const convo = chatConvos.find(c => c.phone === phone)
+      return Math.max(0, prev - (convo?.unread || 0))
+    })
+  }
+
+  async function sendStaffMsg() {
+    if (!chatInput.trim() || chatSending || !activeChatPhone || !supabase) return
+    const convo = chatConvos.find(c => c.phone === activeChatPhone)
+    setChatSending(true)
+    await supabase.from('messages').insert({
+      phone: activeChatPhone, name: convo?.name || '',
+      sender: 'staff', text: chatInput.trim(),
+    })
+    setChatInput('')
+    setChatSending(false)
   }
 
   async function loadAll() {
@@ -142,6 +254,9 @@ export default function StaffPage() {
     { lo: 'ເມນູ 5', en: 'Menu 5' },
     { lo: 'ເມນູ 6', en: 'Menu 6' },
     { lo: 'ເມນູ 7', en: 'Menu 7' },
+    { lo: 'ເມນູ 8', en: 'Menu 8' },
+    { lo: 'ເມນູ 9', en: 'Menu 9' },
+    { lo: 'ເມນູ 10', en: 'Menu 10' },
   ]
 
   async function loadConfig() {
@@ -226,7 +341,7 @@ export default function StaffPage() {
     setOrders(prev => prev.map(ord => ord.id === o.id ? { ...ord, done: true, done_at: doneAt } : ord))
     await supabase.from('orders').update({ done: true, done_at: doneAt }).eq('id', o.id)
     announce(o.qnum)
-    showToast(`✅ ຄິວ ${String(o.qnum).padStart(3,'0')} Done`, 'green')
+    showToast(`✅ ຄິວ ${String(o.qnum).padStart(4,'0')} Done`, 'green')
     if (settings.autoprintOn) {
       setTimeout(() => smartPrint(o), 300)
     }
@@ -238,7 +353,7 @@ export default function StaffPage() {
     setOrders(prev => prev.map(ord => ord.id === o.id ? { ...ord, status: 'confirmed', done: true, done_at: doneAt } : ord))
     await supabase.from('orders').update({ status: 'confirmed', done: true, done_at: doneAt }).eq('id', o.id)
     announce(o.qnum)
-    showToast(`✅ ຢືນຢັນ #${String(o.qnum).padStart(3,'0')}`, 'green')
+    showToast(`✅ ຢືນຢັນ #${String(o.qnum).padStart(4,'0')}`, 'green')
     if (settings.autoprintOn) setTimeout(() => smartPrint(o), 300)
   }
 
@@ -287,6 +402,55 @@ export default function StaffPage() {
     await saveConfig('costs', newCosts)
     setCosts(newCosts)
     showToast('ບັນທຶກເມນູ ✅', 'green')
+  }
+
+  function readCurrentMenuInputs() {
+    const m = menus.map((mn, i) => ({ ...mn, lo: document.getElementById(`mn-${i}`)?.value || mn.lo }))
+    const p = menus.map((_, i) => parseInt(document.getElementById(`mp-${i}`)?.value || 0) || 0)
+    const c = menus.map((_, i) => parseInt(document.getElementById(`mc-${i}`)?.value || 0) || 0)
+    return { m, p, c }
+  }
+
+  async function addMenu() {
+    const { m, p, c } = readCurrentMenuInputs()
+    const n = m.length + 1
+    const newMenus = [...m, { lo: `ເມນູ ${n}`, en: `Menu ${n}` }]
+    const newPrices = [...p, 0]
+    const newCosts = [...c, 0]
+    setMenus(newMenus); setPrices(newPrices); setCosts(newCosts)
+    setStockTotal(prev => [...prev, 0])
+    setStockShop(prev => [...prev, 0])
+    setStockOnline(prev => [...prev, 0])
+    await Promise.all([
+      saveConfig('menus', newMenus), saveConfig('prices', newPrices), saveConfig('costs', newCosts),
+      saveConfig('stock_total', [...stockTotal, 0]),
+      saveConfig('stock_shop', [...stockShop, 0]),
+      saveConfig('stock_online', [...stockOnline, 0]),
+    ])
+    showToast('ເພີ່ມເມນູ ✅', 'green')
+  }
+
+  async function removeMenu(idx) {
+    if (menus.length <= 1) return
+    const { m, p, c } = readCurrentMenuInputs()
+    const newMenus = m.filter((_, i) => i !== idx)
+    const newPrices = p.filter((_, i) => i !== idx)
+    const newCosts = c.filter((_, i) => i !== idx)
+    const newST = stockTotal.filter((_, i) => i !== idx)
+    const newSS = stockShop.filter((_, i) => i !== idx)
+    const newSO = stockOnline.filter((_, i) => i !== idx)
+    setMenus(newMenus); setPrices(newPrices); setCosts(newCosts)
+    setStockTotal(newST); setStockShop(newSS); setStockOnline(newSO)
+    const newImgs = { ...images }; delete newImgs[idx]
+    const reindexed = {}
+    Object.entries(newImgs).forEach(([k, v]) => { const ki = +k; reindexed[ki > idx ? ki - 1 : ki] = v })
+    setImages(reindexed)
+    await Promise.all([
+      saveConfig('menus', newMenus), saveConfig('prices', newPrices), saveConfig('costs', newCosts),
+      saveConfig('stock_total', newST), saveConfig('stock_shop', newSS), saveConfig('stock_online', newSO),
+      saveConfig('menu_images', reindexed),
+    ])
+    showToast('ລຶບເມນູ ✅', 'green')
   }
 
   async function uploadMenuImg(e, i) {
@@ -579,7 +743,7 @@ export default function StaffPage() {
     if (shopInfo.phone) write('Tel: ' + shopInfo.phone, { align: 1 })
     line('=')
     write('QUEUE', { align: 1 })
-    write(String(o.qnum).padStart(3, '0'), { align: 1, big: true, bold: true })
+    write(String(o.qnum).padStart(4, '0'), { align: 1, big: true, bold: true })
     write(new Date(o.created_at).toLocaleString('lo-LA'), { align: 1 })
     line()
     const items = typeof o.items === 'string' ? JSON.parse(o.items) : o.items || []
@@ -739,7 +903,7 @@ export default function StaffPage() {
         ${shopInfo.phone ? `<div class="sub">Tel: ${shopInfo.phone}</div>` : ''}
         <hr class="div">
         <div class="qlbl">ເລກຄິວ · QUEUE</div>
-        <div class="qnum">${String(o.qnum).padStart(3,'0')}</div>
+        <div class="qnum">${String(o.qnum).padStart(4,'0')}</div>
         <div class="sub">${new Date(o.created_at).toLocaleString('lo-LA')}</div>
         <hr class="div">
         ${itemsHtml}
@@ -781,8 +945,15 @@ export default function StaffPage() {
   if (!salesDates.includes(salesDate)) salesDates.unshift(salesDate)
 
   if (loading) return (
-    <div className="min-h-screen flex items-center justify-center" style={{ background: 'var(--cream)' }}>
-      <div className="text-sm font-bold" style={{ color: 'var(--brown)' }}>ກຳລັງໂຫຼດ...</div>
+    <div className="min-h-dvh flex flex-col items-center justify-center" style={{ background: '#3d1f0a' }}>
+      <div className="flex flex-col items-center gap-6">
+        <div className="w-16 h-16 rounded-full border-4 animate-spin"
+          style={{ borderColor: 'rgba(253,246,238,0.15)', borderTopColor: '#fdf6ee' }} />
+        <div className="text-center">
+          <div className="font-serif text-xl font-black" style={{ color: '#fdf6ee' }}>🥟 Basic Chinese Bun</div>
+          <div className="text-sm font-bold mt-2" style={{ color: 'rgba(253,246,238,0.5)' }}>ກຳລັງໂຫຼດ...</div>
+        </div>
+      </div>
     </div>
   )
 
@@ -912,32 +1083,74 @@ export default function StaffPage() {
                 </div>
               </details>
 
+              {/* PIN Settings */}
+              <details className="card">
+                <summary className="font-black text-xs tracking-widest uppercase cursor-pointer" style={{ color: 'var(--brown3)' }}>🔒 ລະຫັດຜ່ານ</summary>
+                <div className="mt-3 flex flex-col gap-2">
+                  {[['staff', 'ລະຫັດ Staff', staffPin], ['profit', 'ລະຫັດ Profit', profitPin]].map(([type, label, pin]) => (
+                    <div key={type} className="flex items-center justify-between py-1 border-b border-[#f5ebe0]">
+                      <div>
+                        <span className="text-sm font-bold" style={{ color: 'var(--brown)' }}>{label}</span>
+                        <span className="ml-1.5 text-xs font-bold" style={{ color: pin ? '#16a34a' : 'var(--gray3)' }}>{pin ? '● ຕັ້ງແລ້ວ' : '○ ຍັງບໍ່ຕັ້ງ'}</span>
+                      </div>
+                      <div className="flex gap-1.5">
+                        <button onClick={() => openPinSetting(type)} className="text-xs px-2.5 py-1.5 rounded-lg font-black" style={{ background: 'var(--cream2)', color: 'var(--brown2)', border: '1.5px solid var(--cream3)' }}>
+                          {pin ? '🔑 ປ່ຽນ' : '+ ຕັ້ງ'}
+                        </button>
+                        {pin && <button onClick={() => openRemovePin(type)} className="text-xs px-2.5 py-1.5 rounded-lg font-black" style={{ background: '#fef2f2', color: '#dc2626', border: '1.5px solid #fca5a5' }}>ລຶບ</button>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </details>
+
+              {/* Kitchen link */}
+              <details className="card">
+                <summary className="font-black text-xs tracking-widest uppercase cursor-pointer" style={{ color: 'var(--brown3)' }}>🍳 ຈໍຄົວ</summary>
+                <div className="mt-3">
+                  <a href="/kitchen" target="_blank" rel="noopener noreferrer"
+                    className="flex items-center justify-between px-3 py-2.5 rounded-xl font-black text-sm"
+                    style={{ background: 'var(--cream2)', color: 'var(--brown)', border: '1.5px solid var(--cream3)' }}>
+                    <span>🍳 ເປີດ Kitchen Display</span>
+                    <span style={{ color: 'var(--gray3)' }}>↗</span>
+                  </a>
+                </div>
+              </details>
+
               {/* Menu Edit */}
               <details className="card">
                 <summary className="font-black text-xs tracking-widest uppercase cursor-pointer" style={{ color: 'var(--brown3)' }}>🍱 ເມນູ & ລາຄາ</summary>
                 <div className="mt-3">
                   {menus.map((m, i) => (
                     <div key={i} className="flex gap-2 items-center py-2 border-b border-[#f5ebe0]">
-                      <span className="text-xs font-black w-4" style={{ color: 'var(--cream3)' }}>{i+1}</span>
-                      <div className="flex-1 flex flex-col gap-1">
+                      <span className="text-xs font-black w-4 flex-shrink-0" style={{ color: 'var(--cream3)' }}>{i+1}</span>
+                      <div className="flex-1 flex flex-col gap-1 min-w-0">
                         <input id={`mn-${i}`} defaultValue={m.lo} className="input-field text-xs py-2" />
                         <div className="flex gap-1">
                           <input id={`mp-${i}`} defaultValue={prices[i] || ''} type="text" inputMode="numeric" placeholder="ລາຄາ" className="input-field text-xs py-2 flex-1" />
                           <input id={`mc-${i}`} defaultValue={costs[i] || ''} type="text" inputMode="numeric" placeholder="ຕົ້ນທຶນ" className="input-field text-xs py-2 flex-1" style={{ borderColor: '#fbbf24' }} />
                         </div>
                       </div>
-                      <div className="flex flex-col items-center gap-1">
+                      <div className="flex flex-col items-center gap-1 flex-shrink-0">
                         <label className="w-10 h-10 rounded-lg border-2 border-dashed border-[#e8d5c0] flex items-center justify-center cursor-pointer overflow-hidden relative">
                           {imgPreviews[i]
                             ? <><img src={imgPreviews[i]} className="w-full h-full object-cover" /><span className="absolute inset-0 flex items-center justify-center text-xs font-black text-white bg-black/40">...</span></>
                             : images[i] ? <img src={images[i]} className="w-full h-full object-cover" /> : <span className="text-xl">{EMOJIS[i]||'🍱'}</span>}
                           <input type="file" accept="image/*" className="hidden" onChange={e => uploadMenuImg(e, i)} />
                         </label>
-                        {images[i] && !imgPreviews[i] && <button onClick={() => removeMenuImg(i)} className="text-xs text-red-500">✕</button>}
+                        {images[i] && !imgPreviews[i]
+                          ? <button onClick={() => removeMenuImg(i)} className="text-[10px] text-red-500 font-black">✕ຮູບ</button>
+                          : <button onClick={() => showConfirm(`ລຶບເມນູ "${m.lo}"?`, () => removeMenu(i))} className="text-[10px] font-black" style={{ color: 'var(--cream3)' }}>🗑</button>}
                       </div>
                     </div>
                   ))}
-                  <button onClick={saveMenus} className="btn-primary mt-3 text-sm py-3">💾 ບັນທຶກ</button>
+                  <div className="flex gap-2 mt-3">
+                    <button onClick={saveMenus} className="btn-primary flex-1 text-sm py-3">💾 ບັນທຶກ</button>
+                    <button onClick={addMenu} className="px-4 py-3 rounded-xl font-black text-sm flex-shrink-0"
+                      style={{ background: 'var(--cream2)', color: 'var(--brown)', border: '1.5px solid var(--cream3)' }}>
+                      + ເພີ່ມ
+                    </button>
+                  </div>
                 </div>
               </details>
 
@@ -1127,7 +1340,7 @@ export default function StaffPage() {
                       <div className="p-3">
                         <div className="flex justify-between items-start mb-2">
                           <div className="font-serif text-2xl font-black" style={{ color: 'var(--brown)' }}>
-                            #{String(o.qnum).padStart(3,'0')}
+                            #{String(o.qnum).padStart(4,'0')}
                           </div>
                           <div className="text-right">
                             <div className="text-xs font-bold" style={{ color: 'var(--gray3)' }}>{time}</div>
@@ -1250,7 +1463,7 @@ export default function StaffPage() {
                                 return n
                               })}
                             >
-                              <span className="font-black text-sm w-10 flex-shrink-0" style={{ color: 'var(--brown)' }}>#{String(o.qnum).padStart(3,'0')}</span>
+                              <span className="font-black text-sm w-10 flex-shrink-0" style={{ color: 'var(--brown)' }}>#{String(o.qnum).padStart(4,'0')}</span>
                               <span className="text-xs flex-shrink-0" style={{ color: 'var(--gray3)' }}>{time}</span>
                               <span className={`tag text-xs flex-shrink-0 ${o.type === 'online' ? 'bg-orange-50 text-orange-700' : 'bg-blue-50 text-blue-700'}`}>{o.type === 'online' ? '🌐' : '🏪'}</span>
                               {o.done && <span className="tag bg-green-50 text-green-700 text-xs flex-shrink-0">✓ Done</span>}
@@ -1375,6 +1588,111 @@ export default function StaffPage() {
         </>
       )}
 
+      {/* ─── CHAT TAB ─── */}
+      {tab === 'chat' && (
+        <div className="flex flex-col" style={{ minHeight: 'calc(100dvh - 56px)' }}>
+          {!activeChatPhone ? (
+            // Conversation list
+            <div className="flex-1 overflow-y-auto">
+              <div className="px-4 py-3 font-black text-sm" style={{ color: 'var(--brown)', borderBottom: '1px solid var(--cream3)' }}>
+                💬 ຂໍ້ຄວາມຈາກລູກຄ້າ
+              </div>
+              {chatConvos.length === 0 && (
+                <div className="text-center py-16 text-sm font-bold" style={{ color: 'var(--cream3)' }}>
+                  ຍັງບໍ່ມີຂໍ້ຄວາມ
+                </div>
+              )}
+              {chatConvos.map(c => (
+                <button key={c.phone} onClick={() => openConvo(c.phone)}
+                  className="w-full flex items-center gap-3 px-4 py-3 text-left border-b border-[#f5ebe0]"
+                  style={{ background: c.unread > 0 ? 'rgba(61,31,10,0.04)' : 'transparent' }}>
+                  <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 font-black text-lg"
+                    style={{ background: 'var(--cream2)', color: 'var(--brown)' }}>
+                    {c.name?.[0]?.toUpperCase() || '?'}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-black text-sm truncate" style={{ color: 'var(--brown)' }}>{c.name}</span>
+                      <span className="text-[10px] font-bold flex-shrink-0" style={{ color: 'var(--gray3)' }}>
+                        {new Date(c.lastAt).toLocaleTimeString('lo-LA', { hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs font-bold truncate" style={{ color: 'var(--gray3)' }}>{c.phone}</span>
+                      {c.unread > 0 && (
+                        <span className="flex-shrink-0 bg-red-500 text-white text-[10px] font-black rounded-full w-5 h-5 flex items-center justify-center">{c.unread}</span>
+                      )}
+                    </div>
+                    <div className="text-xs truncate mt-0.5" style={{ color: 'var(--brown2)' }}>{c.lastMsg}</div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          ) : (
+            // Conversation messages
+            <div className="flex flex-col" style={{ height: 'calc(100dvh - 56px)' }}>
+              <div className="flex items-center gap-3 px-4 py-3 flex-shrink-0" style={{ background: 'var(--brown)' }}>
+                <button onClick={() => { setActiveChatPhone(null); setChatMessages([]) }}
+                  className="text-xl font-black" style={{ color: 'var(--cream)' }}>←</button>
+                <div className="flex-1 min-w-0">
+                  <div className="font-black text-sm truncate" style={{ color: 'var(--cream)' }}>
+                    {chatConvos.find(c => c.phone === activeChatPhone)?.name || activeChatPhone}
+                  </div>
+                  <div className="text-xs font-bold" style={{ color: 'rgba(253,246,238,0.6)' }}>{activeChatPhone}</div>
+                </div>
+              </div>
+              <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3">
+                {chatMessages.map(msg => (
+                  <div key={msg.id} className={`flex ${msg.sender === 'staff' ? 'justify-end' : 'justify-start'}`}>
+                    {msg.sender === 'customer' && (
+                      <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs mr-2 flex-shrink-0 self-end mb-1 font-black"
+                        style={{ background: 'var(--cream2)', color: 'var(--brown)' }}>
+                        {msg.name?.[0]?.toUpperCase() || '?'}
+                      </div>
+                    )}
+                    <div className="max-w-[75%]">
+                      {msg.qnum && msg.sender === 'customer' && (
+                        <div className="text-[10px] font-black mb-1 px-1" style={{ color: 'var(--gray3)' }}>
+                          Order #{String(msg.qnum).padStart(4, '0')}
+                        </div>
+                      )}
+                      <div className="px-4 py-2.5 rounded-2xl text-sm font-bold leading-snug"
+                        style={{
+                          background: msg.sender === 'staff' ? 'var(--brown)' : 'white',
+                          color: msg.sender === 'staff' ? 'var(--cream)' : 'var(--brown)',
+                          border: msg.sender === 'customer' ? '1.5px solid var(--cream3)' : 'none',
+                          borderBottomRightRadius: msg.sender === 'staff' ? 4 : undefined,
+                          borderBottomLeftRadius: msg.sender === 'customer' ? 4 : undefined,
+                        }}>
+                        {msg.text}
+                      </div>
+                      <div className="text-[10px] font-bold mt-1 px-1"
+                        style={{ color: 'var(--gray3)', textAlign: msg.sender === 'staff' ? 'right' : 'left' }}>
+                        {new Date(msg.created_at).toLocaleTimeString('lo-LA', { hour: '2-digit', minute: '2-digit' })}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                <div ref={chatBottomRef} />
+              </div>
+              <div className="p-3 flex gap-2 flex-shrink-0 border-t border-[#e8d5c0]" style={{ background: 'white' }}>
+                <input value={chatInput} onChange={e => setChatInput(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && !e.shiftKey && sendStaffMsg()}
+                  placeholder="ຕອບຂໍ້ຄວາມ..." className="input-field flex-1 py-2.5 text-sm" />
+                <button onClick={sendStaffMsg} disabled={chatSending || !chatInput.trim()}
+                  className="px-5 py-2.5 rounded-xl font-black text-sm flex-shrink-0"
+                  style={{
+                    background: chatInput.trim() ? 'var(--brown)' : 'var(--cream3)',
+                    color: chatInput.trim() ? 'var(--cream)' : 'var(--gray3)',
+                  }}>
+                  ສົ່ງ
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Bottom Nav */}
       <div className="fixed bottom-0 left-0 right-0 flex" style={{ background: 'var(--brown)', borderTop: '2px solid var(--brown2)' }}>
         {[['orders','📋','ອໍເດີ'],['sales','📊','ຍອດຂາຍ']].map(([t,icon,l]) => (
@@ -1382,6 +1700,17 @@ export default function StaffPage() {
             <span className="text-2xl">{icon}</span>{l}
           </button>
         ))}
+        <button onClick={() => setTab('chat')} className={`flex-1 flex flex-col items-center py-3 gap-1 border-none text-xs font-bold relative ${tab==='chat' ? 'text-[#fdf6ee]' : 'text-[rgba(253,246,238,0.45)]'}`} style={{ background: 'transparent' }}>
+          <span className="text-2xl relative inline-block">
+            💬
+            {unreadChat > 0 && (
+              <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[9px] font-black rounded-full w-4 h-4 flex items-center justify-center leading-none">
+                {unreadChat > 9 ? '9+' : unreadChat}
+              </span>
+            )}
+          </span>
+          ແຊດ
+        </button>
       </div>
 
       {/* Slip Modal */}
