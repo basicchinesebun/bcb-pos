@@ -367,6 +367,13 @@ export default function StaffPage() {
     if (settings.autoprintOn) setTimeout(() => smartPrint(o), 300)
   }
 
+  async function confirmWalkin(o) {
+    setOrders(prev => prev.map(ord => ord.id === o.id ? { ...ord, status: 'confirmed' } : ord))
+    await supabase.from('orders').update({ status: 'confirmed' }).eq('id', o.id)
+    showToast(`🍳 ສົ່ງຄົວ #${String(o.qnum).padStart(4,'0')}`, 'green')
+    if (settings.autoprintOn) setTimeout(() => smartPrint(o), 300)
+  }
+
   function rejectOrder(o) {
     showConfirm('ຢືນຢັນການຍົກເລີກອໍເດີນີ້ບໍ?', async () => {
       // Optimistic update — vanish from active list immediately
@@ -1400,7 +1407,7 @@ export default function StaffPage() {
                             {o.cancelled && <span className="tag bg-red-50 text-red-700 text-xs ml-1">✕ ຍົກເລີກ</span>}
                             {o.status === 'rejected' && <span className="tag bg-red-50 text-red-700 text-xs ml-1">✕ ປະຕິເສດ</span>}
                             {o.status === 'confirmed' && !o.done && <span className="tag bg-green-50 text-green-700 text-xs ml-1">✓ ຢືນຢັນ</span>}
-                            {o.type === 'online' && o.status === 'pending' && !o.cancelled && <span className="tag bg-yellow-50 text-yellow-700 text-xs ml-1">⏳ ລໍຖ້າ</span>}
+                            {o.status === 'pending' && !o.cancelled && <span className="tag bg-yellow-50 text-yellow-700 text-xs ml-1">⏳ ລໍຖ້າ</span>}
                           </div>
                         </div>
 
@@ -1463,6 +1470,11 @@ export default function StaffPage() {
                             <button onClick={() => undoOrder(o.id, 'cancelled')} className="flex-1 py-2 rounded-xl text-sm font-black border-2 border-[#e8d5c0]" style={{ color: 'var(--gray3)' }}>↩ ຄືນ</button>
                           ) : o.done ? (
                             <button onClick={() => undoOrder(o.id, 'done')} className="flex-1 py-2 rounded-xl text-sm font-black border-2 border-[#e8d5c0]" style={{ color: 'var(--gray3)' }}>↩ ຍົກເລີກ Done</button>
+                          ) : o.type === 'walkin' && o.status === 'pending' ? (
+                            <>
+                              <button onClick={() => confirmWalkin(o)} className="flex-1 py-3 rounded-xl text-sm font-black text-white bg-green-700">🍳 ສົ່ງຄົວ</button>
+                              <button onClick={() => cancelOrder(o)} className="py-3 px-4 rounded-xl text-sm font-black border-2 border-red-400 text-red-600">✕</button>
+                            </>
                           ) : o.type === 'online' && o.status === 'pending' ? (
                             <>
                               <button onClick={() => confirmOrder(o)} className="flex-1 py-3 rounded-xl text-sm font-black text-white bg-green-700">✓ ຢືນຢັນ</button>

@@ -51,7 +51,7 @@ export default function KitchenPage() {
     setOrders(prev => prev.filter(x => x.id !== o.id))
   }
 
-  const allConfirmed = orders.filter(o => o.type === 'walkin' || o.status === 'confirmed')
+  const allConfirmed = orders.filter(o => o.status === 'confirmed')
   const allPending = orders.filter(o => o.type === 'online' && o.status === 'pending')
 
   function applyFilter(list) {
