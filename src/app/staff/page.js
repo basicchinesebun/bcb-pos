@@ -1091,6 +1091,26 @@ export default function StaffPage() {
                       </div>
                     </div>
                   </div>
+                  {/* Queue reset */}
+                  <div className="border-t border-[#e8d5c0] pt-3 mt-1 flex flex-col gap-2">
+                    <div className="text-xs font-black uppercase tracking-widest" style={{ color: 'var(--brown3)' }}>🔢 ເລກຄິວ</div>
+                    <div className="flex items-center justify-between py-1">
+                      <div>
+                        <div className="text-sm font-bold" style={{ color: 'var(--brown)' }}>ລີເຊັດຄິວເປັນ 0001</div>
+                        <div className="text-xs font-bold mt-0.5" style={{ color: 'var(--gray3)' }}>ຕັ້ງໃໝ່ທຸກມື້ຕອນເປີດຮ້ານ</div>
+                      </div>
+                      <button
+                        onClick={async () => {
+                          if (!confirm('ລີເຊັດເລກຄິວເປັນ 0001 ແທ້ບໍ?')) return
+                          await saveConfig('next_queue', '0')
+                          showToast('ລີເຊັດຄິວແລ້ວ ✅', 'green')
+                        }}
+                        className="text-xs px-3 py-2 rounded-xl font-black flex-shrink-0"
+                        style={{ background: '#fef2f2', color: '#dc2626', border: '1.5px solid #fca5a5' }}>
+                        ລີເຊັດ
+                      </button>
+                    </div>
+                  </div>
                   {/* PIN Settings */}
                   <div className="border-t border-[#e8d5c0] pt-3 mt-1 flex flex-col gap-2">
                     <div className="text-xs font-black uppercase tracking-widest" style={{ color: 'var(--brown3)' }}>🔒 ລະຫັດຜ່ານ</div>

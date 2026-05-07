@@ -10,6 +10,7 @@ export default function KitchenPage() {
   const [menus, setMenus] = useState([])
   const [images, setImages] = useState({})
   const [liveStatus, setLiveStatus] = useState('connecting')
+  const [filter, setFilter] = useState('all')
 
   useEffect(() => {
     if (!supabase) return
@@ -50,21 +51,50 @@ export default function KitchenPage() {
     setOrders(prev => prev.filter(x => x.id !== o.id))
   }
 
-  const confirmed = orders.filter(o => o.type === 'walkin' || o.status === 'confirmed')
-  const pending = orders.filter(o => o.type === 'online' && o.status === 'pending')
+  const allConfirmed = orders.filter(o => o.type === 'walkin' || o.status === 'confirmed')
+  const allPending = orders.filter(o => o.type === 'online' && o.status === 'pending')
+
+  function applyFilter(list) {
+    if (filter === 'all') return list
+    return list.filter(o => o.type === filter)
+  }
+
+  const confirmed = applyFilter(allConfirmed)
+  const pending = applyFilter(allPending)
+
+  const TABS = [
+    { key: 'all', label: 'ທັງໝົດ' },
+    { key: 'online', label: '🌐 Online' },
+    { key: 'walkin', label: '🏪 Walk-in' },
+  ]
 
   return (
     <div className="min-h-dvh flex flex-col" style={{ background: 'var(--cream)' }}>
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3" style={{ background: 'var(--brown)' }}>
-        <div>
-          <div className="font-serif text-lg font-black" style={{ color: 'var(--cream)' }}>🍳 Kitchen Display</div>
-          <div className="text-xs" style={{ color: 'rgba(253,246,238,0.6)' }}>{shopInfo.name}</div>
+      <div style={{ background: 'var(--brown)' }}>
+        <div className="flex items-center justify-between px-4 py-3">
+          <div>
+            <div className="font-serif text-lg font-black" style={{ color: 'var(--cream)' }}>🍳 Kitchen Display</div>
+            <div className="text-xs" style={{ color: 'rgba(253,246,238,0.6)' }}>{shopInfo.name}</div>
+          </div>
+          <div className="flex items-center gap-1.5 text-xs px-2 py-1 rounded-full"
+            style={{ background: liveStatus === 'live' ? 'rgba(34,197,94,0.2)' : 'rgba(234,179,8,0.2)', color: liveStatus === 'live' ? '#16a34a' : '#92400e' }}>
+            <div className="w-1.5 h-1.5 rounded-full" style={{ background: liveStatus === 'live' ? '#22c55e' : '#f59e0b' }} />
+            {liveStatus === 'live' ? 'LIVE' : '...'}
+          </div>
         </div>
-        <div className="flex items-center gap-1.5 text-xs px-2 py-1 rounded-full"
-          style={{ background: liveStatus === 'live' ? 'rgba(34,197,94,0.2)' : 'rgba(234,179,8,0.2)', color: liveStatus === 'live' ? '#16a34a' : '#92400e' }}>
-          <div className="w-1.5 h-1.5 rounded-full" style={{ background: liveStatus === 'live' ? '#22c55e' : '#f59e0b' }} />
-          {liveStatus === 'live' ? 'LIVE' : '...'}
+        {/* Filter tabs */}
+        <div className="flex px-4 pb-2 gap-2">
+          {TABS.map(t => (
+            <button key={t.key} onClick={() => setFilter(t.key)}
+              className="px-3 py-1 rounded-full text-xs font-black transition-colors"
+              style={{
+                background: filter === t.key ? 'var(--cream)' : 'rgba(253,246,238,0.15)',
+                color: filter === t.key ? 'var(--brown)' : 'rgba(253,246,238,0.8)',
+              }}>
+              {t.label}
+            </button>
+          ))}
         </div>
       </div>
 
@@ -112,6 +142,7 @@ function parseBagLabel(bagLabel) {
 }
 
 function OrderCard({ o, onDone, onCancel, menus, images, dimmed }) {
+  const [slipOpen, setSlipOpen] = useState(false)
   const items = typeof o.items === 'string' ? JSON.parse(o.items) : o.items || []
   const cust = o.customer ? (typeof o.customer === 'string' ? JSON.parse(o.customer) : o.customer) : null
   const time = new Date(o.created_at).toLocaleTimeString('lo-LA', { hour: '2-digit', minute: '2-digit' })
@@ -127,102 +158,134 @@ function OrderCard({ o, onDone, onCancel, menus, images, dimmed }) {
   }
 
   return (
-    <div className="rounded-2xl overflow-hidden flex flex-col"
-      style={{ background: 'var(--warm-white)', border: `2px solid ${isUrgent ? '#ef4444' : dimmed ? 'var(--cream3)' : 'var(--brown)'}`, opacity: dimmed ? 0.7 : 1 }}>
+    <>
+      <div className="rounded-2xl overflow-hidden flex flex-col"
+        style={{ background: 'var(--warm-white)', border: `2px solid ${isUrgent ? '#ef4444' : dimmed ? 'var(--cream3)' : 'var(--brown)'}`, opacity: dimmed ? 0.7 : 1 }}>
 
-      {/* Queue number header */}
-      <div className="flex items-center justify-between px-4 py-3" style={{ background: dimmed ? 'var(--cream2)' : 'var(--brown)' }}>
-        <div className="font-serif text-4xl font-black" style={{ color: dimmed ? 'var(--brown)' : 'var(--cream)' }}>
-          #{String(o.qnum).padStart(4, '0')}
-        </div>
-        <div className="text-right">
-          <div className="text-xs font-bold" style={{ color: dimmed ? 'var(--gray3)' : 'rgba(253,246,238,0.7)' }}>{time}</div>
-          <div className="text-xs font-black mt-0.5" style={{ color: isUrgent ? '#ef4444' : dimmed ? 'var(--gray3)' : 'rgba(253,246,238,0.6)' }}>
-            {mins} ນາທີ{isUrgent ? ' ⚠' : ''}
+        {/* Queue number header */}
+        <div className="flex items-center justify-between px-4 py-3" style={{ background: dimmed ? 'var(--cream2)' : 'var(--brown)' }}>
+          <div className="font-serif text-4xl font-black" style={{ color: dimmed ? 'var(--brown)' : 'var(--cream)' }}>
+            #{String(o.qnum).padStart(4, '0')}
           </div>
-          <div className="text-xs mt-0.5 font-bold" style={{ color: dimmed ? 'var(--brown3)' : 'rgba(253,246,238,0.8)' }}>
-            {o.type === 'online' ? '🌐 Online' : '🏪 Walk-in'}
+          <div className="text-right">
+            <div className="text-xs font-bold" style={{ color: dimmed ? 'var(--gray3)' : 'rgba(253,246,238,0.7)' }}>{time}</div>
+            <div className="text-xs font-black mt-0.5" style={{ color: isUrgent ? '#ef4444' : dimmed ? 'var(--gray3)' : 'rgba(253,246,238,0.6)' }}>
+              {mins} ນາທີ{isUrgent ? ' ⚠' : ''}
+            </div>
+            <div className="text-xs mt-0.5 font-bold" style={{ color: dimmed ? 'var(--brown3)' : 'rgba(253,246,238,0.8)' }}>
+              {o.type === 'online' ? '🌐 Online' : '🏪 Walk-in'}
+            </div>
           </div>
         </div>
-      </div>
 
-      <div className="flex-1 p-3 flex flex-col gap-3">
+        <div className="flex-1 p-3 flex flex-col gap-3">
 
-        {/* ── Items summary (always shown) ── */}
-        <div className="flex flex-col gap-1">
-          {items.map((it, i) => {
-            const { img, emoji, idx } = getItemImage(it.name)
-            return (
-              <div key={i} className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-lg overflow-hidden flex-shrink-0 flex items-center justify-center"
-                  style={{ background: 'var(--cream2)' }}>
-                  {img
-                    ? <img src={img} className="w-full h-full object-cover" alt={it.name} />
-                    : <span className="text-lg">{emoji}</span>}
+          {/* ── Items summary (always shown) ── */}
+          <div className="flex flex-col gap-1">
+            {items.map((it, i) => {
+              const { img, emoji, idx } = getItemImage(it.name)
+              return (
+                <div key={i} className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-lg overflow-hidden flex-shrink-0 flex items-center justify-center"
+                    style={{ background: 'var(--cream2)' }}>
+                    {img
+                      ? <img src={img} className="w-full h-full object-cover" alt={it.name} />
+                      : <span className="text-lg">{emoji}</span>}
+                  </div>
+                  <span className="font-black text-base flex-1" style={{ color: 'var(--brown)' }}>{it.name}</span>
+                  <span className="font-black text-2xl" style={{ color: 'var(--brown2)' }}>×{it.qty}</span>
                 </div>
-                <span className="font-black text-base flex-1" style={{ color: 'var(--brown)' }}>{it.name}</span>
-                <span className="font-black text-2xl" style={{ color: 'var(--brown2)' }}>×{it.qty}</span>
+              )
+            })}
+          </div>
+
+          {/* ── Total price ── */}
+          {o.total > 0 && (
+            <div className="flex justify-between items-center pt-2 border-t" style={{ borderColor: 'var(--cream3)' }}>
+              <span className="text-sm font-black" style={{ color: 'var(--brown3)' }}>ລວມ</span>
+              <span className="text-lg font-black" style={{ color: 'var(--brown)' }}>{o.total.toLocaleString()} ກີບ</span>
+            </div>
+          )}
+
+          {/* ── Payment slip (online orders) ── */}
+          {o.slip_url && (
+            <button onClick={() => setSlipOpen(true)}
+              className="flex items-center gap-2 rounded-xl overflow-hidden w-full text-left"
+              style={{ border: '2px solid var(--cream3)', background: 'var(--cream2)' }}>
+              <img src={o.slip_url} className="w-16 h-16 object-cover flex-shrink-0" alt="slip" />
+              <div className="px-2 flex-1">
+                <div className="text-xs font-black" style={{ color: 'var(--brown)' }}>🧾 ສລິບໂອນເງິນ</div>
+                <div className="text-xs font-bold mt-0.5" style={{ color: 'var(--gray3)' }}>ກົດເພື່ອຂະຫຍາຍ</div>
               </div>
-            )
-          })}
+            </button>
+          )}
+
+          {/* ── Bag breakdown (big display) ── */}
+          {hasBags && (
+            <div className="flex flex-col gap-2 pt-2 border-t" style={{ borderColor: 'var(--cream3)' }}>
+              <div className="text-xs font-black tracking-widest uppercase" style={{ color: 'var(--brown3)' }}>🛍 ແຍກຖົງ</div>
+              {bags.map((bag, bi) => (
+                <div key={bi} className="rounded-xl overflow-hidden" style={{ border: '2px solid var(--cream3)' }}>
+                  <div className="px-3 py-2 font-black text-sm" style={{ background: 'var(--brown)', color: 'var(--cream)' }}>
+                    🛍 {bag.header}
+                  </div>
+                  <div className="p-2 flex flex-col gap-2">
+                    {bag.items.map((it, ii) => {
+                      const { img, emoji } = getItemImage(it.name)
+                      return (
+                        <div key={ii} className="flex items-center gap-3">
+                          <div className="rounded-xl overflow-hidden flex-shrink-0 flex items-center justify-center"
+                            style={{ width: 64, height: 64, background: 'var(--cream2)' }}>
+                            {img
+                              ? <img src={img} className="w-full h-full object-cover" alt={it.name} />
+                              : <span style={{ fontSize: 32 }}>{emoji}</span>}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="font-black leading-tight" style={{ fontSize: 18, color: 'var(--brown)' }}>{it.name}</div>
+                          </div>
+                          <div className="font-black flex-shrink-0" style={{ fontSize: 40, color: 'var(--brown)', lineHeight: 1 }}>
+                            {it.qty}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Customer info */}
+          {cust && (
+            <div className="pt-2 border-t text-xs font-bold leading-5" style={{ borderColor: 'var(--cream3)', color: 'var(--gray3)' }}>
+              👤 {cust.name}{cust.phone ? ` · 📞 ${cust.phone}` : ''}{cust.time ? ` · ⏰ ${cust.time}` : (cust.date ? ` · 📅 ${cust.date}` : '')}
+            </div>
+          )}
         </div>
 
-        {/* ── Bag breakdown (big display) ── */}
-        {hasBags && (
-          <div className="flex flex-col gap-2 pt-2 border-t" style={{ borderColor: 'var(--cream3)' }}>
-            <div className="text-xs font-black tracking-widest uppercase" style={{ color: 'var(--brown3)' }}>🛍 ແຍກຖົງ</div>
-            {bags.map((bag, bi) => (
-              <div key={bi} className="rounded-xl overflow-hidden" style={{ border: '2px solid var(--cream3)' }}>
-                {/* Bag label */}
-                <div className="px-3 py-2 font-black text-sm" style={{ background: 'var(--brown)', color: 'var(--cream)' }}>
-                  🛍 {bag.header}
-                </div>
-                {/* Bag items with images */}
-                <div className="p-2 flex flex-col gap-2">
-                  {bag.items.map((it, ii) => {
-                    const { img, emoji } = getItemImage(it.name)
-                    return (
-                      <div key={ii} className="flex items-center gap-3">
-                        {/* Image */}
-                        <div className="rounded-xl overflow-hidden flex-shrink-0 flex items-center justify-center"
-                          style={{ width: 64, height: 64, background: 'var(--cream2)' }}>
-                          {img
-                            ? <img src={img} className="w-full h-full object-cover" alt={it.name} />
-                            : <span style={{ fontSize: 32 }}>{emoji}</span>}
-                        </div>
-                        {/* Name + qty */}
-                        <div className="flex-1 min-w-0">
-                          <div className="font-black leading-tight" style={{ fontSize: 18, color: 'var(--brown)' }}>{it.name}</div>
-                        </div>
-                        <div className="font-black flex-shrink-0" style={{ fontSize: 40, color: 'var(--brown)', lineHeight: 1 }}>
-                          {it.qty}
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* Customer info */}
-        {cust && (
-          <div className="pt-2 border-t text-xs font-bold leading-5" style={{ borderColor: 'var(--cream3)', color: 'var(--gray3)' }}>
-            👤 {cust.name} · 📅 {cust.date} {cust.time}
-          </div>
-        )}
+        {/* Buttons */}
+        <div className="grid grid-cols-2 gap-2 p-3 border-t" style={{ borderColor: 'var(--cream3)' }}>
+          <button onClick={() => onCancel(o)} className="py-3 rounded-xl text-sm font-black bg-red-50 text-red-600" style={{ border: '1.5px solid #fca5a5' }}>
+            ✕ ຍົກເລີກ
+          </button>
+          <button onClick={() => onDone(o)} className="py-3 rounded-xl text-sm font-black bg-green-50 text-green-700" style={{ border: '1.5px solid #86efac' }}>
+            ✓ ສຳເລັດ
+          </button>
+        </div>
       </div>
 
-      {/* Buttons */}
-      <div className="grid grid-cols-2 gap-2 p-3 border-t" style={{ borderColor: 'var(--cream3)' }}>
-        <button onClick={() => onCancel(o)} className="py-3 rounded-xl text-sm font-black bg-red-50 text-red-600" style={{ border: '1.5px solid #fca5a5' }}>
-          ✕ ຍົກເລີກ
-        </button>
-        <button onClick={() => onDone(o)} className="py-3 rounded-xl text-sm font-black bg-green-50 text-green-700" style={{ border: '1.5px solid #86efac' }}>
-          ✓ ສຳເລັດ
-        </button>
-      </div>
-    </div>
+      {/* Slip full-screen viewer */}
+      {slipOpen && (
+        <div className="fixed inset-0 z-50 flex flex-col" style={{ background: 'rgba(0,0,0,0.9)' }} onClick={() => setSlipOpen(false)}>
+          <div className="flex items-center gap-3 px-4 py-3 flex-shrink-0">
+            <button className="text-white text-xl font-black">← ປິດ</button>
+            <span className="text-white text-sm font-black">🧾 ສລິບ #{String(o.qnum).padStart(4,'0')}</span>
+          </div>
+          <div className="flex-1 flex items-center justify-center p-4">
+            <img src={o.slip_url} className="max-w-full max-h-full object-contain rounded-xl" alt="payment slip" />
+          </div>
+        </div>
+      )}
+    </>
   )
 }
