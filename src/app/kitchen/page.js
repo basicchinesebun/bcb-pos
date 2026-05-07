@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 
 const EMOJIS = ['🥟','🍫','🍵','🧁','🍞','🥐','🍮']
+const CARD_W = 'min(360px, calc(100vw - 24px))'
 
 export default function KitchenPage() {
   const [orders, setOrders] = useState([])
@@ -51,27 +52,27 @@ export default function KitchenPage() {
     setOrders(prev => prev.filter(x => x.id !== o.id))
   }
 
-  const allConfirmed = orders.filter(o => o.status === 'confirmed')
-  const allPending = orders.filter(o => o.type === 'online' && o.status === 'pending')
-
   function applyFilter(list) {
     if (filter === 'all') return list
     return list.filter(o => o.type === filter)
   }
 
-  const confirmed = applyFilter(allConfirmed)
-  const pending = applyFilter(allPending)
+  const confirmed = applyFilter(orders.filter(o => o.status === 'confirmed'))
+  const pending   = applyFilter(orders.filter(o => o.type === 'online' && o.status === 'pending'))
 
   const TABS = [
-    { key: 'all', label: 'ທັງໝົດ' },
+    { key: 'all',    label: 'ທັງໝົດ' },
     { key: 'online', label: '🌐 Online' },
     { key: 'walkin', label: '🏪 Walk-in' },
   ]
 
+  const sharedProps = { onDone: markDone, onCancel: markCancel, menus, images }
+
   return (
     <div className="min-h-dvh flex flex-col" style={{ background: 'var(--cream)' }}>
+
       {/* Header */}
-      <div style={{ background: 'var(--brown)' }}>
+      <div style={{ background: 'var(--brown)', flexShrink: 0 }}>
         <div className="flex items-center justify-between px-4 py-3">
           <div>
             <div className="font-serif text-lg font-black" style={{ color: 'var(--cream)' }}>🍳 Kitchen Display</div>
@@ -98,28 +99,51 @@ export default function KitchenPage() {
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-3">
-        {confirmed.length === 0 && pending.length === 0 && (
-          <div className="flex items-center justify-center h-64 text-xl font-black" style={{ color: 'var(--cream3)' }}>
+      {/* Horizontal scroll area */}
+      <div className="flex-1 overflow-hidden">
+        {confirmed.length === 0 && pending.length === 0 ? (
+          <div className="h-full flex items-center justify-center text-xl font-black" style={{ color: 'var(--cream3)' }}>
             ຍັງບໍ່ມີອໍເດີ
           </div>
-        )}
+        ) : (
+          <div className="h-full flex gap-3 px-3 py-3"
+            style={{ overflowX: 'auto', overflowY: 'hidden', scrollSnapType: 'x mandatory', WebkitOverflowScrolling: 'touch' }}>
 
-        {pending.length > 0 && (
-          <div className="mb-4">
-            <div className="text-xs font-black tracking-widest uppercase mb-2" style={{ color: '#92400e' }}>⏳ ລໍຖ້າຢືນຢັນ</div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-              {pending.map(o => <OrderCard key={o.id} o={o} onDone={markDone} onCancel={markCancel} menus={menus} images={images} />)}
-            </div>
-          </div>
-        )}
+            {/* ── Pending section ── */}
+            {pending.map((o, i) => (
+              <div key={o.id} className="flex-shrink-0 flex flex-col"
+                style={{ width: CARD_W, scrollSnapAlign: 'start', overflowY: 'auto', height: '100%' }}>
+                {i === 0 && (
+                  <div className="text-xs font-black tracking-widest uppercase mb-2 flex-shrink-0" style={{ color: '#92400e' }}>
+                    ⏳ ລໍຖ້າຢືນຢັນ
+                  </div>
+                )}
+                <OrderCard o={o} {...sharedProps} />
+              </div>
+            ))}
 
-        {confirmed.length > 0 && (
-          <div>
-            <div className="text-xs font-black tracking-widest uppercase mb-2" style={{ color: '#16a34a' }}>🔥 ກຳລັງເຮັດ</div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-              {confirmed.map(o => <OrderCard key={o.id} o={o} onDone={markDone} onCancel={markCancel} menus={menus} images={images} />)}
-            </div>
+            {/* ── Divider between sections ── */}
+            {pending.length > 0 && confirmed.length > 0 && (
+              <div className="flex-shrink-0 self-stretch flex items-center justify-center" style={{ width: 28 }}>
+                <div className="h-full w-px" style={{ background: 'var(--cream3)' }} />
+              </div>
+            )}
+
+            {/* ── Confirmed section ── */}
+            {confirmed.map((o, i) => (
+              <div key={o.id} className="flex-shrink-0 flex flex-col"
+                style={{ width: CARD_W, scrollSnapAlign: 'start', overflowY: 'auto', height: '100%' }}>
+                {i === 0 && (
+                  <div className="text-xs font-black tracking-widest uppercase mb-2 flex-shrink-0" style={{ color: '#16a34a' }}>
+                    🔥 ກຳລັງເຮັດ
+                  </div>
+                )}
+                <OrderCard o={o} {...sharedProps} />
+              </div>
+            ))}
+
+            {/* trailing spacer so last card snap-aligns cleanly */}
+            <div className="flex-shrink-0" style={{ width: 12 }} />
           </div>
         )}
       </div>
@@ -127,11 +151,13 @@ export default function KitchenPage() {
   )
 }
 
+/* ─────────────────────────── helpers ─────────────────────────── */
+
 function parseBagLabel(bagLabel) {
   if (!bagLabel) return []
   return bagLabel.split(' | ').map(part => {
     const colonIdx = part.indexOf(': ')
-    const header = colonIdx >= 0 ? part.slice(0, colonIdx) : part
+    const header   = colonIdx >= 0 ? part.slice(0, colonIdx) : part
     const contents = colonIdx >= 0 ? part.slice(colonIdx + 2) : ''
     const itemList = contents.split(', ').map(s => {
       const m = s.match(/^(.+)\s×(\d+)$/)
@@ -144,26 +170,25 @@ function parseBagLabel(bagLabel) {
 function OrderCard({ o, onDone, onCancel, menus, images }) {
   const [slipOpen, setSlipOpen] = useState(false)
   const items = typeof o.items === 'string' ? JSON.parse(o.items) : o.items || []
-  const cust = o.customer ? (typeof o.customer === 'string' ? JSON.parse(o.customer) : o.customer) : null
-  const time = new Date(o.created_at).toLocaleTimeString('lo-LA', { hour: '2-digit', minute: '2-digit' })
-  const mins = Math.floor((Date.now() - new Date(o.created_at)) / 60000)
+  const cust  = o.customer ? (typeof o.customer === 'string' ? JSON.parse(o.customer) : o.customer) : null
+  const time  = new Date(o.created_at).toLocaleTimeString('lo-LA', { hour: '2-digit', minute: '2-digit' })
+  const mins  = Math.floor((Date.now() - new Date(o.created_at)) / 60000)
   const isUrgent = mins >= 10
-  const bags = parseBagLabel(o.bag_label)
-  const hasBags = bags.length > 0
+  const bags  = parseBagLabel(o.bag_label)
 
   function getItemImage(name) {
     const idx = menus.findIndex(m => (m.lo || m) === name)
-    if (idx >= 0 && images[idx]) return { img: images[idx], emoji: EMOJIS[idx] || '🍱', idx }
-    return { img: null, emoji: '🍱', idx }
+    if (idx >= 0 && images[idx]) return { img: images[idx], emoji: EMOJIS[idx] || '🍱' }
+    return { img: null, emoji: '🍱' }
   }
 
   return (
     <>
-      <div className="rounded-2xl overflow-hidden flex flex-col"
+      <div className="rounded-2xl overflow-hidden flex flex-col flex-shrink-0"
         style={{ background: 'var(--warm-white)', border: `2px solid ${isUrgent ? '#ef4444' : 'var(--brown)'}` }}>
 
         {/* Queue number header */}
-        <div className="flex items-center justify-between px-4 py-3" style={{ background: 'var(--brown)' }}>
+        <div className="flex items-center justify-between px-4 py-3 flex-shrink-0" style={{ background: 'var(--brown)' }}>
           <div className="font-serif text-4xl font-black" style={{ color: 'var(--cream)' }}>
             #{String(o.qnum).padStart(4, '0')}
           </div>
@@ -180,17 +205,16 @@ function OrderCard({ o, onDone, onCancel, menus, images }) {
 
         <div className="flex-1 p-3 flex flex-col gap-3">
 
-          {/* ── Items summary (always shown) ── */}
+          {/* Items summary */}
           <div className="flex flex-col gap-1">
             {items.map((it, i) => {
-              const { img, emoji, idx } = getItemImage(it.name)
+              const { img, emoji } = getItemImage(it.name)
               return (
                 <div key={i} className="flex items-center gap-2">
                   <div className="w-8 h-8 rounded-lg overflow-hidden flex-shrink-0 flex items-center justify-center"
                     style={{ background: 'var(--cream2)' }}>
-                    {img
-                      ? <img src={img} className="w-full h-full object-cover" alt={it.name} />
-                      : <span className="text-lg">{emoji}</span>}
+                    {img ? <img src={img} className="w-full h-full object-cover" alt={it.name} />
+                         : <span className="text-lg">{emoji}</span>}
                   </div>
                   <span className="font-black text-base flex-1" style={{ color: 'var(--brown)' }}>{it.name}</span>
                   <span className="font-black text-2xl" style={{ color: 'var(--brown2)' }}>×{it.qty}</span>
@@ -199,7 +223,7 @@ function OrderCard({ o, onDone, onCancel, menus, images }) {
             })}
           </div>
 
-          {/* ── Total price ── */}
+          {/* Total price */}
           {o.total > 0 && (
             <div className="flex justify-between items-center pt-2 border-t" style={{ borderColor: 'var(--cream3)' }}>
               <span className="text-sm font-black" style={{ color: 'var(--brown3)' }}>ລວມ</span>
@@ -207,7 +231,7 @@ function OrderCard({ o, onDone, onCancel, menus, images }) {
             </div>
           )}
 
-          {/* ── Payment slip (online orders) ── */}
+          {/* Payment slip */}
           {o.slip_url && (
             <button onClick={() => setSlipOpen(true)}
               className="flex items-center gap-2 rounded-xl overflow-hidden w-full text-left"
@@ -220,8 +244,8 @@ function OrderCard({ o, onDone, onCancel, menus, images }) {
             </button>
           )}
 
-          {/* ── Bag breakdown (big display) ── */}
-          {hasBags && (
+          {/* Bag breakdown */}
+          {bags.length > 0 && (
             <div className="flex flex-col gap-2 pt-2 border-t" style={{ borderColor: 'var(--cream3)' }}>
               <div className="text-xs font-black tracking-widest uppercase" style={{ color: 'var(--brown3)' }}>🛍 ແຍກຖົງ</div>
               {bags.map((bag, bi) => (
@@ -236,9 +260,8 @@ function OrderCard({ o, onDone, onCancel, menus, images }) {
                         <div key={ii} className="flex items-center gap-3">
                           <div className="rounded-xl overflow-hidden flex-shrink-0 flex items-center justify-center"
                             style={{ width: 64, height: 64, background: 'var(--cream2)' }}>
-                            {img
-                              ? <img src={img} className="w-full h-full object-cover" alt={it.name} />
-                              : <span style={{ fontSize: 32 }}>{emoji}</span>}
+                            {img ? <img src={img} className="w-full h-full object-cover" alt={it.name} />
+                                 : <span style={{ fontSize: 32 }}>{emoji}</span>}
                           </div>
                           <div className="flex-1 min-w-0">
                             <div className="font-black leading-tight" style={{ fontSize: 18, color: 'var(--brown)' }}>{it.name}</div>
@@ -264,7 +287,7 @@ function OrderCard({ o, onDone, onCancel, menus, images }) {
         </div>
 
         {/* Buttons */}
-        <div className="grid grid-cols-2 gap-2 p-3 border-t" style={{ borderColor: 'var(--cream3)' }}>
+        <div className="grid grid-cols-2 gap-2 p-3 border-t flex-shrink-0" style={{ borderColor: 'var(--cream3)' }}>
           <button onClick={() => onCancel(o)} className="py-3 rounded-xl text-sm font-black bg-red-50 text-red-600" style={{ border: '1.5px solid #fca5a5' }}>
             ✕ ຍົກເລີກ
           </button>
