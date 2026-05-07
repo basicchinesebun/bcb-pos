@@ -451,8 +451,11 @@ export default function PreOrderPage() {
           </div>
           <div className="p-3 border-t-2 border-[#e8d5c0] flex flex-col gap-2 flex-shrink-0" style={{ background: 'var(--warm-white)' }}>
             <button className="btn-primary" disabled={Object.keys(selected).length === 0} onClick={() => setStep(2)}>ຕໍ່ໄປ →</button>
-            <button className="btn-outline" onClick={() => { setContactForm({ name: '', phone: '' }); setContactFormOpen(true) }}>
-              💬 ຕິດຕໍ່ເຮົາ
+            <button className="btn-outline flex items-center justify-center gap-2" onClick={() => { setContactForm({ name: '', phone: '' }); setContactFormOpen(true) }}>
+              <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5 flex-shrink-0">
+                <path d="M12 2C6.477 2 2 6.145 2 11.243c0 2.906 1.404 5.503 3.601 7.23V22l3.324-1.827A11.13 11.13 0 0012 20.485c5.523 0 10-4.144 10-9.242C22 6.145 17.523 2 12 2zm1.088 12.45l-2.55-2.72-4.976 2.72 5.473-5.81 2.612 2.72 4.913-2.72-5.472 5.81z"/>
+              </svg>
+              ຕິດຕໍ່ເຮົາ
             </button>
             <button className="text-xs font-black py-2" style={{ color: 'var(--gray3)', background: 'transparent', border: 'none' }}
               onClick={() => { setHistPhone(''); setHistory([]); setStep(6) }}>
