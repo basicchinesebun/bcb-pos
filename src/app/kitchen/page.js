@@ -133,7 +133,7 @@ function OrderCard({ o, onDone, onCancel, menus, images, dimmed }) {
       {/* Queue number header */}
       <div className="flex items-center justify-between px-4 py-3" style={{ background: dimmed ? 'var(--cream2)' : 'var(--brown)' }}>
         <div className="font-serif text-4xl font-black" style={{ color: dimmed ? 'var(--brown)' : 'var(--cream)' }}>
-          #{String(o.qnum).padStart(3, '0')}
+          #{String(o.qnum).padStart(4, '0')}
         </div>
         <div className="text-right">
           <div className="text-xs font-bold" style={{ color: dimmed ? 'var(--gray3)' : 'rgba(253,246,238,0.7)' }}>{time}</div>

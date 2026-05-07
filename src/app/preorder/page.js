@@ -761,7 +761,7 @@ export default function PreOrderPage() {
               <div className="text-center py-6 px-4" style={{ background: 'var(--warm-white)' }}>
                 <div className="text-xs font-black tracking-widest uppercase mb-1" style={{ color: 'var(--gray3)' }}>ເລກຄິວ · QUEUE</div>
                 <div className="font-serif font-black leading-none mb-3" style={{ fontSize: 72, color: 'var(--brown)' }}>
-                  {String(currentOrder.qnum).padStart(3, '0')}
+                  {String(currentOrder.qnum).padStart(4, '0')}
                 </div>
                 <span className={`tag text-sm font-black px-4 py-2 rounded-full ${statusInfo.cls}`}>
                   {statusInfo.label}
@@ -786,7 +786,7 @@ export default function PreOrderPage() {
             {(() => {
               const c = typeof currentOrder.customer === 'string' ? JSON.parse(currentOrder.customer) : currentOrder.customer
               const statusUrl = `${typeof window !== 'undefined' ? window.location.origin : ''}/status?id=${currentOrder.id}`
-              const orderText = `🥟 ${shopInfo.name}\nOrder #${String(currentOrder.qnum).padStart(3,'0')}\n👤 ${c.name}\n🕐 ${c.time}\n💰 ${currentOrder.total?.toLocaleString()} ກີບ\n\n🔗 ລິ້ງຕິດຕາມ Order:\n${statusUrl}`
+              const orderText = `🥟 ${shopInfo.name}\nOrder #${String(currentOrder.qnum).padStart(4,'0')}\n👤 ${c.name}\n🕐 ${c.time}\n💰 ${currentOrder.total?.toLocaleString()} ກີບ\n\n🔗 ລິ້ງຕິດຕາມ Order:\n${statusUrl}`
               return (
                 <div className="flex gap-2 mt-3 px-4">
                   <button onClick={async () => {
@@ -883,7 +883,7 @@ export default function PreOrderPage() {
             <div>
               <div className="font-black text-base" style={{ color: 'var(--cream)' }}>💬 ຕິດຕໍ່ຮ້ານ</div>
               <div className="text-xs font-bold" style={{ color: 'rgba(253,246,238,0.6)' }}>
-                {chatCustomer.qnum ? `Order #${String(chatCustomer.qnum).padStart(3, '0')}` : chatCustomer.phone}
+                {chatCustomer.qnum ? `Order #${String(chatCustomer.qnum).padStart(4, '0')}` : chatCustomer.phone}
               </div>
             </div>
           </div>
@@ -973,7 +973,7 @@ export default function PreOrderPage() {
                 return (
                   <div key={o.id} className="card mb-3">
                     <div className="flex justify-between items-center mb-2">
-                      <span className="font-serif text-xl font-black" style={{ color: 'var(--brown)' }}>#{String(o.qnum).padStart(3,'0')}</span>
+                      <span className="font-serif text-xl font-black" style={{ color: 'var(--brown)' }}>#{String(o.qnum).padStart(4,'0')}</span>
                       <span className={`tag ${statusI.cls}`}>{statusI.label}</span>
                     </div>
                     <div className="text-sm font-bold" style={{ color: 'var(--gray3)' }}>{c.time}</div>

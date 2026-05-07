@@ -109,7 +109,7 @@ function StatusContent() {
         <div className="card text-center py-6">
           <div className="text-xs font-black tracking-widest uppercase mb-2" style={{ color: 'var(--gray3)' }}>ເລກຄິວ · QUEUE</div>
           <div className="font-serif font-black leading-none mb-3" style={{ fontSize: 80, color: 'var(--brown)' }}>
-            {String(order.qnum).padStart(3, '0')}
+            {String(order.qnum).padStart(4, '0')}
           </div>
           <span className={`inline-block px-5 py-2 rounded-full text-sm font-black ${statusInfo.cls}`}>
             {statusInfo.label}
@@ -143,7 +143,7 @@ function StatusContent() {
         <button onClick={async () => {
           const url = window.location.href
           if (navigator.share) {
-            await navigator.share({ title: `Order #${String(order.qnum).padStart(3,'0')} – ${shopInfo.name}`, url })
+            await navigator.share({ title: `Order #${String(order.qnum).padStart(4,'0')} – ${shopInfo.name}`, url })
           } else {
             await navigator.clipboard.writeText(url)
             alert('ຄັດລອກລິ້ງແລ້ວ!')
@@ -173,7 +173,7 @@ function StatusContent() {
             <button onClick={() => setChatOpen(false)} className="text-xl font-black" style={{ color: 'var(--cream)' }}>←</button>
             <div>
               <div className="font-black text-base" style={{ color: 'var(--cream)' }}>💬 ຕິດຕໍ່ຮ້ານ</div>
-              <div className="text-xs font-bold" style={{ color: 'rgba(253,246,238,0.6)' }}>Order #{String(order.qnum).padStart(3, '0')}</div>
+              <div className="text-xs font-bold" style={{ color: 'rgba(253,246,238,0.6)' }}>Order #{String(order.qnum).padStart(4, '0')}</div>
             </div>
           </div>
           <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3">

@@ -673,7 +673,7 @@ export default function OrderPage() {
               <div className="text-center py-6 px-4" style={{ background: 'var(--warm-white)' }}>
                 <div className="text-xs font-black tracking-widest uppercase mb-1" style={{ color: 'var(--gray3)' }}>ເລກຄິວ · QUEUE</div>
                 <div className="font-serif font-black leading-none mb-4" style={{ fontSize: 80, color: 'var(--brown)' }}>
-                  {String(qnum).padStart(3, '0')}
+                  {String(qnum).padStart(4, '0')}
                 </div>
                 <div className="rounded-xl p-3 text-sm font-bold text-left leading-loose" style={{ background: 'var(--cream2)', color: 'var(--brown2)' }}>
                   {selectedItems.map((it, i) => (
