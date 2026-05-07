@@ -21,6 +21,7 @@ function StatusContent() {
   const [chatMessages, setChatMessages] = useState([])
   const [chatInput, setChatInput] = useState('')
   const [chatSending, setChatSending] = useState(false)
+  const [chatVH, setChatVH] = useState(null)
   const chatBottomRef = useRef(null)
 
   useEffect(() => {
@@ -59,6 +60,15 @@ function StatusContent() {
   useEffect(() => {
     chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [chatMessages])
+
+  // iOS Safari keyboard: track visualViewport height so chat overlay resizes with keyboard
+  useEffect(() => {
+    if (!chatOpen) { setChatVH(null); return }
+    function update() { setChatVH((window.visualViewport?.height ?? window.innerHeight) + 'px') }
+    update()
+    window.visualViewport?.addEventListener('resize', update)
+    return () => window.visualViewport?.removeEventListener('resize', update)
+  }, [chatOpen])
 
   function customer() {
     if (!order?.customer) return null
@@ -168,7 +178,7 @@ function StatusContent() {
 
       {/* Chat full-screen overlay */}
       {chatOpen && (
-        <div className="fixed inset-0 z-50 flex flex-col" style={{ background: 'var(--cream)' }}>
+        <div className="fixed inset-x-0 bottom-0 z-50 flex flex-col" style={{ background: 'var(--cream)', height: chatVH ?? '100dvh' }}>
           <div className="flex items-center gap-3 px-4 py-3 flex-shrink-0" style={{ background: 'var(--brown)' }}>
             <button onClick={() => setChatOpen(false)} className="text-xl font-black" style={{ color: 'var(--cream)' }}>←</button>
             <div>

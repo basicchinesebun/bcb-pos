@@ -47,6 +47,7 @@ export default function PreOrderPage() {
   const [branches, setBranches] = useState([])
   const [loading, setLoading] = useState(true)
   const [chatOpen, setChatOpen] = useState(false)
+  const [chatVH, setChatVH] = useState(null)
   const [chatCustomer, setChatCustomer] = useState(null) // { name, phone, qnum }
   const [chatMessages, setChatMessages] = useState([])
   const [chatInput, setChatInput] = useState('')
@@ -110,6 +111,15 @@ export default function PreOrderPage() {
   useEffect(() => {
     chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [chatMessages])
+
+  // iOS Safari keyboard: track visualViewport height so chat overlay resizes with keyboard
+  useEffect(() => {
+    if (!chatOpen) { setChatVH(null); return }
+    function update() { setChatVH((window.visualViewport?.height ?? window.innerHeight) + 'px') }
+    update()
+    window.visualViewport?.addEventListener('resize', update)
+    return () => window.visualViewport?.removeEventListener('resize', update)
+  }, [chatOpen])
 
   function applyCfg(cfg) {
     setMenus(cfg.menus ? JSON.parse(cfg.menus) : [
@@ -877,7 +887,7 @@ export default function PreOrderPage() {
 
       {/* Chat Modal */}
       {chatOpen && chatCustomer && (
-        <div className="fixed inset-0 z-50 flex flex-col" style={{ background: 'var(--cream)' }}>
+        <div className="fixed inset-x-0 bottom-0 z-50 flex flex-col" style={{ background: 'var(--cream)', height: chatVH ?? '100dvh' }}>
           <div className="flex items-center gap-3 px-4 py-3 flex-shrink-0" style={{ background: 'var(--brown)' }}>
             <button onClick={() => setChatOpen(false)} className="text-xl font-black" style={{ color: 'var(--cream)' }}>←</button>
             <div>

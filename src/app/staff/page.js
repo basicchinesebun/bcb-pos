@@ -62,6 +62,7 @@ export default function StaffPage() {
   const [chatInput, setChatInput] = useState('')
   const [chatSending, setChatSending] = useState(false)
   const [unreadChat, setUnreadChat] = useState(0)
+  const [chatVH, setChatVH] = useState(null)
   const chatBottomRef = useRef(null)
   const activeChatPhoneRef = useRef(null)
   const voicesRef = useRef([])
@@ -152,6 +153,15 @@ export default function StaffPage() {
   useEffect(() => {
     chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [chatMessages])
+
+  // iOS Safari keyboard: track visualViewport so chat input stays above keyboard
+  useEffect(() => {
+    if (tab !== 'chat' || !activeChatPhone) { setChatVH(null); return }
+    function update() { setChatVH((window.visualViewport?.height ?? window.innerHeight) - 56 + 'px') }
+    update()
+    window.visualViewport?.addEventListener('resize', update)
+    return () => window.visualViewport?.removeEventListener('resize', update)
+  }, [tab, activeChatPhone])
 
   function showToast(msg, type = '') {
     const id = Date.now() + Math.random()
@@ -1630,7 +1640,7 @@ export default function StaffPage() {
             </div>
           ) : (
             // Conversation messages
-            <div className="flex flex-col" style={{ height: 'calc(100dvh - 56px)' }}>
+            <div className="flex flex-col" style={{ height: chatVH ?? 'calc(100dvh - 56px)' }}>
               <div className="flex items-center gap-3 px-4 py-3 flex-shrink-0" style={{ background: 'var(--brown)' }}>
                 <button onClick={() => { setActiveChatPhone(null); setChatMessages([]) }}
                   className="text-xl font-black" style={{ color: 'var(--cream)' }}>←</button>
