@@ -1479,7 +1479,8 @@ export default function StaffPage() {
                               {o.done && <span className="tag bg-green-50 text-green-700 text-xs flex-shrink-0">✓ Done</span>}
                               {o.cancelled && <span className="tag bg-red-50 text-red-700 text-xs flex-shrink-0">✕ ຍົກເລີກ</span>}
                               {o.status === 'rejected' && <span className="tag bg-red-50 text-red-700 text-xs flex-shrink-0">✕ ປະຕິເສດ</span>}
-                              <span className="ml-auto text-xs font-black flex-shrink-0" style={{ color: 'var(--brown)' }}>{(o.total||0).toLocaleString()}</span>
+                              {cust?.name && <span className="text-xs font-bold truncate flex-1 min-w-0" style={{ color: 'var(--brown2)' }}>{cust.name}{cust.phone ? ` · ${cust.phone}` : ''}</span>}
+                              <span className={`text-xs font-black flex-shrink-0 ${cust?.name ? '' : 'ml-auto'}`} style={{ color: 'var(--brown)' }}>{(o.total||0).toLocaleString()}</span>
                               <span className="text-xs flex-shrink-0" style={{ color: 'var(--gray3)' }}>{isExp ? '▲' : '▼'}</span>
                             </div>
                             {isExp && (
