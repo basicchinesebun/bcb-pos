@@ -1150,7 +1150,7 @@ export default function StaffPage() {
                         </label>
                         {images[i] && !imgPreviews[i]
                           ? <button onClick={() => removeMenuImg(i)} className="text-[10px] text-red-500 font-black">✕ຮູບ</button>
-                          : <button onClick={() => showConfirm(`ລຶບເມນູ "${m.lo}"?`, () => removeMenu(i))} className="text-[10px] font-black" style={{ color: 'var(--cream3)' }}>🗑</button>}
+                          : <button onClick={() => showConfirm(`ລຶບເມນູ "${m.lo}"?`, () => removeMenu(i))} className="text-[10px] font-black text-red-400">🗑</button>}
                       </div>
                     </div>
                   ))}
