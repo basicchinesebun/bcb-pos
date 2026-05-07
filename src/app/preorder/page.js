@@ -773,6 +773,35 @@ export default function PreOrderPage() {
                 ກະລຸນາສະແດງໜ້ານີ້ຕອນມາຮັບ
               </div>
             </div>
+
+            {/* Share / Copy row */}
+            {(() => {
+              const c = typeof currentOrder.customer === 'string' ? JSON.parse(currentOrder.customer) : currentOrder.customer
+              const orderText = `🥟 ${shopInfo.name}\nOrder #${String(currentOrder.qnum).padStart(3,'0')}\n👤 ${c.name}\n🕐 ${c.time}\n💰 ${currentOrder.total?.toLocaleString()} ກີບ\n\nກະລຸນານຳໜ້ານີ້ຕອນມາຮັບສິນຄ້າ`
+              return (
+                <div className="flex gap-2 mt-3 px-4">
+                  <button onClick={async () => {
+                    if (navigator.share) {
+                      await navigator.share({ title: shopInfo.name, text: orderText })
+                    } else {
+                      await navigator.clipboard.writeText(orderText)
+                      alert('ຄັດລອກແລ້ວ!')
+                    }
+                  }} className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl font-black text-sm"
+                    style={{ background: 'var(--brown)', color: 'var(--cream)' }}>
+                    📤 ແຊ / ຄັດລອກ
+                  </button>
+                  <button onClick={async () => {
+                    await navigator.clipboard.writeText(orderText)
+                    alert('ຄັດລອກແລ້ວ! ວາງໃນ Line ຫລື WhatsApp ໄດ້ເລີຍ')
+                  }} className="px-4 py-2.5 rounded-xl font-black text-sm"
+                    style={{ background: 'var(--cream2)', color: 'var(--brown)', border: '1.5px solid var(--cream3)' }}>
+                    📋 ຄັດລອກ
+                  </button>
+                </div>
+              )
+            })()}
+
             <ContactSection />
           </div>
           <div className="p-4 border-t-2 border-[#e8d5c0] flex flex-col gap-2 flex-shrink-0" style={{ background: 'var(--warm-white)' }}>
