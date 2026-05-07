@@ -47,6 +47,7 @@ export default function PreOrderPage() {
   const [branches, setBranches] = useState([])
   const [loading, setLoading] = useState(true)
   const [chatOpen, setChatOpen] = useState(false)
+  const [chatCustomer, setChatCustomer] = useState(null) // { name, phone, qnum }
   const [chatMessages, setChatMessages] = useState([])
   const [chatInput, setChatInput] = useState('')
   const [chatSending, setChatSending] = useState(false)
@@ -85,11 +86,15 @@ export default function PreOrderPage() {
     return () => supabase.removeChannel(channel)
   }, [currentOrder?.id])
 
+  function openChat(customer) {
+    setChatCustomer(customer)
+    setChatMessages([])
+    setChatOpen(true)
+  }
+
   useEffect(() => {
-    if (!chatOpen || !currentOrder || !supabase) return
-    const c = typeof currentOrder.customer === 'string' ? JSON.parse(currentOrder.customer) : currentOrder.customer
-    const phone = c?.phone
-    if (!phone) return
+    if (!chatOpen || !chatCustomer?.phone || !supabase) return
+    const phone = chatCustomer.phone
     supabase.from('messages').select('*').eq('phone', phone)
       .order('created_at', { ascending: true })
       .then(({ data }) => { if (data) setChatMessages(data) })
@@ -98,7 +103,7 @@ export default function PreOrderPage() {
         payload => setChatMessages(prev => [...prev, payload.new]))
       .subscribe()
     return () => supabase.removeChannel(ch)
-  }, [chatOpen, currentOrder?.id])
+  }, [chatOpen, chatCustomer?.phone])
 
   useEffect(() => {
     chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -278,11 +283,10 @@ export default function PreOrderPage() {
   }
 
   async function sendChatMsg() {
-    if (!chatInput.trim() || chatSending || !currentOrder || !supabase) return
-    const c = typeof currentOrder.customer === 'string' ? JSON.parse(currentOrder.customer) : currentOrder.customer
+    if (!chatInput.trim() || chatSending || !chatCustomer?.phone || !chatCustomer?.name || !supabase) return
     setChatSending(true)
     await supabase.from('messages').insert({
-      phone: c.phone, name: c.name, qnum: currentOrder.qnum,
+      phone: chatCustomer.phone, name: chatCustomer.name, qnum: chatCustomer.qnum || null,
       sender: 'customer', text: chatInput.trim(),
     })
     setChatInput('')
@@ -772,7 +776,10 @@ export default function PreOrderPage() {
             <ContactSection />
           </div>
           <div className="p-4 border-t-2 border-[#e8d5c0] flex flex-col gap-2 flex-shrink-0" style={{ background: 'var(--warm-white)' }}>
-            <button className="btn-primary" onClick={() => setChatOpen(true)}>
+            <button className="btn-primary" onClick={() => {
+              const c = typeof currentOrder.customer === 'string' ? JSON.parse(currentOrder.customer) : currentOrder.customer
+              openChat({ name: c.name, phone: c.phone, qnum: currentOrder.qnum })
+            }}>
               💬 ຕິດຕໍ່ຮ້ານ
             </button>
             <button className="btn-outline" onClick={() => {
@@ -792,17 +799,25 @@ export default function PreOrderPage() {
       )}
 
       {/* Chat Modal */}
-      {chatOpen && currentOrder && (
+      {chatOpen && chatCustomer && (
         <div className="fixed inset-0 z-50 flex flex-col" style={{ background: 'var(--cream)' }}>
           <div className="flex items-center gap-3 px-4 py-3 flex-shrink-0" style={{ background: 'var(--brown)' }}>
             <button onClick={() => setChatOpen(false)} className="text-xl font-black" style={{ color: 'var(--cream)' }}>←</button>
             <div>
               <div className="font-black text-base" style={{ color: 'var(--cream)' }}>💬 ຕິດຕໍ່ຮ້ານ</div>
               <div className="text-xs font-bold" style={{ color: 'rgba(253,246,238,0.6)' }}>
-                Order #{String(currentOrder.qnum).padStart(3, '0')}
+                {chatCustomer.qnum ? `Order #${String(chatCustomer.qnum).padStart(3, '0')}` : chatCustomer.phone}
               </div>
             </div>
           </div>
+          {!chatCustomer.name && (
+            <div className="px-4 pt-3 flex gap-2 flex-shrink-0">
+              <input value={chatCustomer.name}
+                onChange={e => setChatCustomer(prev => ({ ...prev, name: e.target.value }))}
+                placeholder="ຊື່ຂອງທ່ານ..."
+                className="input-field flex-1 py-2 text-sm" />
+            </div>
+          )}
           <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3">
             {chatMessages.length === 0 && (
               <div className="text-center text-sm font-bold py-8" style={{ color: 'var(--gray3)' }}>
@@ -888,12 +903,25 @@ export default function PreOrderPage() {
                     <div className="text-sm font-bold mt-1" style={{ color: 'var(--brown2)' }}>
                       {(typeof o.items === 'string' ? JSON.parse(o.items) : o.items || []).map(it => `${it.name} × ${it.qty}`).join(', ')}
                     </div>
-                    <div className="text-sm font-black mt-1" style={{ color: 'var(--brown)' }}>{o.total?.toLocaleString()} ກີບ</div>
+                    <div className="flex items-center justify-between mt-2">
+                      <span className="text-sm font-black" style={{ color: 'var(--brown)' }}>{o.total?.toLocaleString()} ກີບ</span>
+                      <button onClick={() => openChat({ name: c.name, phone: c.phone, qnum: o.qnum })}
+                        className="text-xs px-3 py-1.5 rounded-lg font-black"
+                        style={{ background: 'var(--brown)', color: 'var(--cream)' }}>
+                        💬 ຕິດຕໍ່
+                      </button>
+                    </div>
                   </div>
                 )
               })}
               {history.length === 0 && histPhone.length >= 6 && (
                 <div className="text-center py-8 font-bold" style={{ color: 'var(--cream3)' }}>ບໍ່ພົບອໍເດີ</div>
+              )}
+              {history.length === 0 && histPhone.length >= 6 && (
+                <button onClick={() => openChat({ name: '', phone: histPhone, qnum: null })}
+                  className="btn-primary mt-2">
+                  💬 ຕິດຕໍ່ຮ້ານ (ໂດຍບໍ່ມີ Order)
+                </button>
               )}
             </div>
           </div>
