@@ -7,6 +7,7 @@ const PWA_CONFIG = {
   '/order':    { manifest: '/manifest-order.json',    sw: '/sw-order.js',    icon: '/icon-order-192.png' },
   '/preorder': { manifest: '/manifest-preorder.json', sw: '/sw-preorder.js', icon: '/icon-preorder-192.png' },
   '/staff':    { manifest: '/manifest-staff.json',    sw: '/sw-staff.js',    icon: '/icon-staff-192.png' },
+  '/kitchen':  { manifest: '/manifest-kitchen.json',  sw: '/sw-kitchen.js',  icon: '/icon-kitchen-192.png' },
 }
 
 function setOrCreate(rel, attrs) {
