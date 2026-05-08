@@ -33,6 +33,7 @@ export default function OrderPage() {
   const [shopInfo, setShopInfo] = useState({ name: 'Basic Chinese Bun' })
   const [branches, setBranches] = useState([])
   const [loading, setLoading] = useState(true)
+  const [bagMode, setBagMode] = useState('items')
 
   // Load shop data
   useEffect(() => {
@@ -101,8 +102,18 @@ export default function OrderPage() {
     }
   }
 
-  const totalItems = Object.values(selected).reduce((s, q) => s + q, 0)
-  const totalPrice = Object.entries(selected).reduce((s, [i, q]) => s + (prices[+i] || 0) * q, 0)
+  // In bags mode, derive selected totals from bagPacks
+  const effectiveSelected = bagMode === 'bags'
+    ? bagPacks.reduce((acc, bag) => {
+        Object.entries(bag).forEach(([idx, qty]) => {
+          if (qty > 0) acc[idx] = (acc[idx] || 0) + qty
+        })
+        return acc
+      }, {})
+    : selected
+
+  const totalItems = Object.values(effectiveSelected).reduce((s, q) => s + q, 0)
+  const totalPrice = Object.entries(effectiveSelected).reduce((s, [i, q]) => s + (prices[+i] || 0) * q, 0)
 
   function selectMenu(i) {
     if ((stock[i] || 0) === 0) return
@@ -131,15 +142,33 @@ export default function OrderPage() {
   }
 
   function addItemToBag(n, idx) {
-    const itemOrdered = selected[idx] || 0
-    const itemPackedTotal = bagPacks.reduce((s, b) => s + (b[idx] || 0), 0)
-    if (itemPackedTotal >= itemOrdered) {
-      showPackToast('ຄົບແລ້ວ · Order limit reached')
-      return
+    if (bagMode === 'bags') {
+      const totalPackedForItem = bagPacks.reduce((s, b) => s + (b[+idx] || 0), 0)
+      if (totalPackedForItem >= (stock[+idx] || 0)) {
+        showPackToast('ໝົດ · Out of stock')
+        return
+      }
+    } else {
+      const itemOrdered = selected[idx] || 0
+      const itemPackedTotal = bagPacks.reduce((s, b) => s + (b[idx] || 0), 0)
+      if (itemPackedTotal >= itemOrdered) {
+        showPackToast('ຄົບແລ້ວ · Order limit reached')
+        return
+      }
     }
     setBagPacks(prev => {
       const a = prev.map(b => ({ ...b }))
       a[n] = { ...a[n], [idx]: (a[n][idx] || 0) + 1 }
+      return a
+    })
+  }
+
+  function removeItemFromBag(n, idx) {
+    setBagPacks(prev => {
+      const a = prev.map(b => ({ ...b }))
+      const cur = a[n][idx] || 0
+      if (cur <= 1) delete a[n][idx]
+      else a[n][idx] = cur - 1
       return a
     })
   }
@@ -153,7 +182,7 @@ export default function OrderPage() {
       if (qErr) throw qErr
       const nextQ = qnumData
 
-      const items = Object.entries(selected).map(([i, qty]) => ({
+      const items = Object.entries(effectiveSelected).map(([i, qty]) => ({
         menuIdx: +i,
         name: menus[+i]?.lo || '',
         qty,
@@ -180,7 +209,7 @@ export default function OrderPage() {
 
       // Decrement stock
       const newStock = [...stock]
-      Object.entries(selected).forEach(([i, qty]) => {
+      Object.entries(effectiveSelected).forEach(([i, qty]) => {
         newStock[+i] = Math.max(0, (newStock[+i] || 0) - qty)
       })
       await supabase.from('shop_config').upsert({ key: 'stock_shop', value: JSON.stringify(newStock) })
@@ -234,7 +263,7 @@ export default function OrderPage() {
     .map((b, i) => { const t = bagText(b); return t ? `ຖົງ ${i + 1}: ${t}` : null })
     .filter(Boolean)
     .join(' / ')
-  const selectedItems = Object.entries(selected).map(([i, qty]) => ({
+  const selectedItems = Object.entries(effectiveSelected).map(([i, qty]) => ({
     name: menus[+i]?.lo || '',
     qty,
     sub: (prices[+i] || 0) * qty,
@@ -301,85 +330,116 @@ export default function OrderPage() {
           </div>
 
           <div className="flex-1 overflow-y-auto p-4">
-            <div className="text-center text-xs font-black tracking-widest uppercase mb-4" style={{ color: 'var(--gray3)' }}>
-              ແຕະເພື່ອເລືອກ · Tap to select
+            {/* Mode toggle */}
+            <div className="flex gap-1.5 mb-4 rounded-2xl p-1.5" style={{ background: 'var(--cream2)', border: '2px solid #e8d5c0' }}>
+              {[
+                { id: 'items', label: '🛒 ເລືອກເມນູກ່ອນ' },
+                { id: 'bags', label: '🛍 ຈັດຖົງກ່ອນ' },
+              ].map(m => (
+                <button key={m.id}
+                  onClick={() => { setBagMode(m.id); if (m.id === 'bags') { setSelected({}); setBagPacks([{}]) } }}
+                  className="flex-1 py-2 rounded-xl text-xs font-black transition-all"
+                  style={{
+                    background: bagMode === m.id ? 'var(--brown)' : 'transparent',
+                    color: bagMode === m.id ? 'var(--cream)' : 'var(--gray3)',
+                  }}>
+                  {m.label}
+                </button>
+              ))}
             </div>
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-              {menus.map((m, i) => {
-                const qty = selected[i] || 0
-                const s = stock[i] || 0
-                const isOut = s === 0
-                const isSel = qty > 0
-                const img = images[i]
-                const isLastLoneMobile = menus.length % 2 === 1 && i === menus.length - 1
-                const isLastLoneMd = menus.length % 3 === 1 && i === menus.length - 1
-                let loneClass = ''
-                if (isLastLoneMobile) loneClass += ' col-span-2 w-1/2 mx-auto'
-                if (isLastLoneMobile || isLastLoneMd) loneClass += ' md:col-span-1 md:w-full md:mx-0'
-                if (isLastLoneMd) loneClass += ' md:col-start-2'
-                if (isLastLoneMobile || isLastLoneMd) loneClass += ' lg:col-start-auto'
-                return (
-                  <div
-                    key={i}
-                    onClick={() => selectMenu(i)}
-                    className={`rounded-2xl overflow-hidden cursor-pointer border-2 transition-all relative ${
-                      isOut ? 'opacity-50 cursor-not-allowed border-[#e8d5c0]' :
-                      isSel ? 'border-[#3d1f0a] shadow-[0_0_0_2px_#3d1f0a]' : 'border-[#e8d5c0]'
-                    }${loneClass}`}
-                    style={{ background: 'var(--warm-white)' }}
-                  >
-                    {/* Image */}
-                    <div className="aspect-square relative overflow-hidden" style={{ background: 'var(--cream2)' }}>
-                      {img ? (
-                        <img src={img} alt={m.lo} className="w-full h-full object-cover" />
-                      ) : (
-                        <div className="absolute inset-0 flex items-center justify-center text-4xl">
-                          {EMOJIS[i] || '🍱'}
-                        </div>
-                      )}
-                      {isOut && (
-                        <div className="absolute inset-0 flex items-center justify-center" style={{ background: 'rgba(61,31,10,0.55)' }}>
-                          <span className="text-white font-black text-sm px-2 py-1 rounded-lg" style={{ background: 'rgba(185,28,28,0.9)' }}>
-                            ໝົດ
-                          </span>
-                        </div>
-                      )}
-                      {isSel && (
-                        <div className="absolute top-2 right-2 w-6 h-6 rounded-full flex items-center justify-center text-xs font-black" style={{ background: 'var(--brown)', color: 'var(--cream)' }}>
-                          {qty}
-                        </div>
-                      )}
-                    </div>
 
-                    {/* Info */}
-                    <div className="p-2">
-                      <div className="text-sm font-black leading-tight" style={{ color: 'var(--brown)' }}>{m.lo}</div>
-                      <div className="text-sm font-black mt-1" style={{ color: 'var(--brown2)' }}>
-                        {isOut ? 'ໝົດ' : `${(prices[i] || 0).toLocaleString()} ກີບ`}
-                      </div>
-                      {!isOut && (
-                        <div className="text-xs mt-0.5 font-bold" style={{ color: s <= 5 ? '#dc2626' : 'var(--gray3)' }}>
-                          ເຫຼືອ {s} ກ້ອນ{s <= 5 ? ' ⚠' : ''}
+            {bagMode === 'bags' ? (
+              <div className="flex flex-col items-center justify-center py-10 px-4 text-center">
+                <div className="text-5xl mb-4">🛍</div>
+                <div className="font-black text-base mb-2" style={{ color: 'var(--brown)' }}>ຈັດຖົງໂດຍກົງ</div>
+                <div className="text-sm font-bold leading-relaxed" style={{ color: 'var(--gray3)' }}>
+                  ທ່ານຈະໃສ່ສິນຄ້າໃນແຕ່ລະຖົງໄດ້ທັນທີ<br/>
+                  ໂດຍບໍ່ຈຳເປັນຕ້ອງເລືອກຈຳນວນລວມກ່ອນ
+                </div>
+              </div>
+            ) : (
+              <>
+                <div className="text-center text-xs font-black tracking-widest uppercase mb-4" style={{ color: 'var(--gray3)' }}>
+                  ແຕະເພື່ອເລືອກ · Tap to select
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                  {menus.map((m, i) => {
+                    const qty = selected[i] || 0
+                    const s = stock[i] || 0
+                    const isOut = s === 0
+                    const isSel = qty > 0
+                    const img = images[i]
+                    const isLastLoneMobile = menus.length % 2 === 1 && i === menus.length - 1
+                    const isLastLoneMd = menus.length % 3 === 1 && i === menus.length - 1
+                    let loneClass = ''
+                    if (isLastLoneMobile) loneClass += ' col-span-2 w-1/2 mx-auto'
+                    if (isLastLoneMobile || isLastLoneMd) loneClass += ' md:col-span-1 md:w-full md:mx-0'
+                    if (isLastLoneMd) loneClass += ' md:col-start-2'
+                    if (isLastLoneMobile || isLastLoneMd) loneClass += ' lg:col-start-auto'
+                    return (
+                      <div
+                        key={i}
+                        onClick={() => selectMenu(i)}
+                        className={`rounded-2xl overflow-hidden cursor-pointer border-2 transition-all relative ${
+                          isOut ? 'opacity-50 cursor-not-allowed border-[#e8d5c0]' :
+                          isSel ? 'border-[#3d1f0a] shadow-[0_0_0_2px_#3d1f0a]' : 'border-[#e8d5c0]'
+                        }${loneClass}`}
+                        style={{ background: 'var(--warm-white)' }}
+                      >
+                        {/* Image */}
+                        <div className="aspect-square relative overflow-hidden" style={{ background: 'var(--cream2)' }}>
+                          {img ? (
+                            <img src={img} alt={m.lo} className="w-full h-full object-cover" />
+                          ) : (
+                            <div className="absolute inset-0 flex items-center justify-center text-4xl">
+                              {EMOJIS[i] || '🍱'}
+                            </div>
+                          )}
+                          {isOut && (
+                            <div className="absolute inset-0 flex items-center justify-center" style={{ background: 'rgba(61,31,10,0.55)' }}>
+                              <span className="text-white font-black text-sm px-2 py-1 rounded-lg" style={{ background: 'rgba(185,28,28,0.9)' }}>
+                                ໝົດ
+                              </span>
+                            </div>
+                          )}
+                          {isSel && (
+                            <div className="absolute top-2 right-2 w-6 h-6 rounded-full flex items-center justify-center text-xs font-black" style={{ background: 'var(--brown)', color: 'var(--cream)' }}>
+                              {qty}
+                            </div>
+                          )}
                         </div>
-                      )}
-                    </div>
 
-                    {/* Qty row */}
-                    {isSel && (
-                      <div className="flex items-center justify-between px-2 py-2 border-t border-[#e8d5c0]" style={{ background: 'var(--cream2)' }} onClick={e => e.stopPropagation()}>
-                        <button onClick={e => changeQty(e, i, -1)} className="w-8 h-8 rounded-full border-2 border-[#3d1f0a] flex items-center justify-center text-lg font-black" style={{ background: 'var(--warm-white)', color: 'var(--brown)' }}>−</button>
-                        <span className="font-black text-base" style={{ color: 'var(--brown)' }}>{qty}</span>
-                        <button onClick={e => changeQty(e, i, 1)} className="w-8 h-8 rounded-full border-2 border-[#3d1f0a] flex items-center justify-center text-lg font-black" style={{ background: 'var(--warm-white)', color: 'var(--brown)' }}>+</button>
+                        {/* Info */}
+                        <div className="p-2">
+                          <div className="text-sm font-black leading-tight" style={{ color: 'var(--brown)' }}>{m.lo}</div>
+                          <div className="text-sm font-black mt-1" style={{ color: 'var(--brown2)' }}>
+                            {isOut ? 'ໝົດ' : `${(prices[i] || 0).toLocaleString()} ກີບ`}
+                          </div>
+                          {!isOut && (
+                            <div className="text-xs mt-0.5 font-bold" style={{ color: s <= 5 ? '#dc2626' : 'var(--gray3)' }}>
+                              ເຫຼືອ {s} ກ້ອນ{s <= 5 ? ' ⚠' : ''}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Qty row */}
+                        {isSel && (
+                          <div className="flex items-center justify-between px-2 py-2 border-t border-[#e8d5c0]" style={{ background: 'var(--cream2)' }} onClick={e => e.stopPropagation()}>
+                            <button onClick={e => changeQty(e, i, -1)} className="w-8 h-8 rounded-full border-2 border-[#3d1f0a] flex items-center justify-center text-lg font-black" style={{ background: 'var(--warm-white)', color: 'var(--brown)' }}>−</button>
+                            <span className="font-black text-base" style={{ color: 'var(--brown)' }}>{qty}</span>
+                            <button onClick={e => changeQty(e, i, 1)} className="w-8 h-8 rounded-full border-2 border-[#3d1f0a] flex items-center justify-center text-lg font-black" style={{ background: 'var(--warm-white)', color: 'var(--brown)' }}>+</button>
+                          </div>
+                        )}
                       </div>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
+                    )
+                  })}
+                </div>
+              </>
+            )}
           </div>
 
           <div className="p-4 border-t-2 border-[#e8d5c0]" style={{ background: 'var(--warm-white)' }}>
-            {totalItems > 0 && (
+            {bagMode === 'items' && totalItems > 0 && (
               <div className="flex items-center justify-between mb-3 px-1">
                 <span className="text-sm font-black" style={{ color: 'var(--brown)' }}>
                   🛍 {totalItems} ກ້ອນ
@@ -391,10 +451,10 @@ export default function OrderPage() {
             )}
             <button
               className="btn-primary"
-              disabled={totalItems === 0}
+              disabled={bagMode === 'items' && totalItems === 0}
               onClick={() => setStep(2)}
             >
-              ຕໍ່ໄປ · Next →
+              {bagMode === 'bags' ? 'ຈັດຖົງ →' : 'ຕໍ່ໄປ · Next →'}
             </button>
           </div>
         </>
@@ -420,53 +480,70 @@ export default function OrderPage() {
           {/* Scrollable body */}
           <div className="flex-1 overflow-y-auto px-4 pt-4 pb-4" style={{ minHeight: 0 }}>
 
-            {/* ── Quick Select ── */}
-            <div className="text-xs font-black tracking-widest uppercase mb-3" style={{ color: 'var(--gray3)' }}>
-              ⚡ ເລືອກດ່ວນ · Quick Select
-            </div>
-            <div className="grid grid-cols-3 gap-3 mb-5">
-              {QUICK_BAGS.map(opt => (
-                <button key={opt.id} onClick={() => handleQuickBag(opt.id)}
-                  className="rounded-2xl p-4 text-center active:scale-95 transition-all"
-                  style={{ background: 'var(--warm-white)', border: '2px solid #e8d5c0', boxShadow: '0 2px 8px rgba(61,31,10,0.08)' }}>
-                  <div className="text-3xl mb-2">{opt.icon}</div>
-                  <div className="font-black text-sm leading-tight" style={{ color: 'var(--brown)' }}>{opt.label}</div>
-                  <div className="text-xs font-bold mt-1" style={{ color: 'var(--gray3)' }}>{opt.desc}</div>
-                </button>
-              ))}
-            </div>
-
-            {/* ── Divider ── */}
-            <div className="flex items-center gap-3 mb-4">
-              <div className="flex-1 border-t-2 border-[#e8d5c0]" />
-              <span className="text-xs font-black tracking-widest px-2" style={{ color: 'var(--gray3)' }}>ຫຼື ຈັດເອງ · OR PACK CUSTOM</span>
-              <div className="flex-1 border-t-2 border-[#e8d5c0]" />
-            </div>
-
-            {/* ── Progress tracker ── */}
-            <div className="rounded-2xl px-4 py-3 mb-4 flex items-center gap-4"
-              style={{ background: 'var(--cream2)', border: '2px solid #e8d5c0' }}>
-              <div className="flex-1">
-                <div className="flex justify-between text-xs font-black mb-2" style={{ color: 'var(--brown)' }}>
-                  <span>ຈັດແລ້ວ · Packed</span>
-                  <span>{totalPacked} / {totalOrdered}</span>
+            {/* ── Quick Select (items mode only) ── */}
+            {bagMode === 'items' && (
+              <>
+                <div className="text-xs font-black tracking-widest uppercase mb-3" style={{ color: 'var(--gray3)' }}>
+                  ⚡ ເລືອກດ່ວນ · Quick Select
                 </div>
-                <div className="h-3 rounded-full overflow-hidden" style={{ background: '#e8d5c0' }}>
-                  <div className="h-full rounded-full transition-all duration-300"
-                    style={{
-                      width: totalOrdered > 0 ? `${Math.min(100, (totalPacked / totalOrdered) * 100)}%` : '0%',
-                      background: totalPacked >= totalOrdered && totalOrdered > 0 ? '#16a34a' : 'var(--brown)',
-                    }} />
+                <div className="grid grid-cols-3 gap-3 mb-5">
+                  {QUICK_BAGS.map(opt => (
+                    <button key={opt.id} onClick={() => handleQuickBag(opt.id)}
+                      className="rounded-2xl p-4 text-center active:scale-95 transition-all"
+                      style={{ background: 'var(--warm-white)', border: '2px solid #e8d5c0', boxShadow: '0 2px 8px rgba(61,31,10,0.08)' }}>
+                      <div className="text-3xl mb-2">{opt.icon}</div>
+                      <div className="font-black text-sm leading-tight" style={{ color: 'var(--brown)' }}>{opt.label}</div>
+                      <div className="text-xs font-bold mt-1" style={{ color: 'var(--gray3)' }}>{opt.desc}</div>
+                    </button>
+                  ))}
+                </div>
+
+                {/* ── Divider ── */}
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="flex-1 border-t-2 border-[#e8d5c0]" />
+                  <span className="text-xs font-black tracking-widest px-2" style={{ color: 'var(--gray3)' }}>ຫຼື ຈັດເອງ · OR PACK CUSTOM</span>
+                  <div className="flex-1 border-t-2 border-[#e8d5c0]" />
+                </div>
+
+                {/* ── Progress tracker ── */}
+                <div className="rounded-2xl px-4 py-3 mb-4 flex items-center gap-4"
+                  style={{ background: 'var(--cream2)', border: '2px solid #e8d5c0' }}>
+                  <div className="flex-1">
+                    <div className="flex justify-between text-xs font-black mb-2" style={{ color: 'var(--brown)' }}>
+                      <span>ຈັດແລ້ວ · Packed</span>
+                      <span>{totalPacked} / {totalOrdered}</span>
+                    </div>
+                    <div className="h-3 rounded-full overflow-hidden" style={{ background: '#e8d5c0' }}>
+                      <div className="h-full rounded-full transition-all duration-300"
+                        style={{
+                          width: totalOrdered > 0 ? `${Math.min(100, (totalPacked / totalOrdered) * 100)}%` : '0%',
+                          background: totalPacked >= totalOrdered && totalOrdered > 0 ? '#16a34a' : 'var(--brown)',
+                        }} />
+                    </div>
+                  </div>
+                  <div className="flex-shrink-0 text-center w-14">
+                    <div className="font-black text-3xl leading-none"
+                      style={{ color: totalPacked >= totalOrdered && totalOrdered > 0 ? '#16a34a' : 'var(--brown)' }}>
+                      {totalOrdered - totalPacked}
+                    </div>
+                    <div className="text-xs font-bold mt-0.5" style={{ color: 'var(--gray3)' }}>ເຫຼືອ</div>
+                  </div>
+                </div>
+              </>
+            )}
+
+            {/* Bags mode hint */}
+            {bagMode === 'bags' && (
+              <div className="rounded-2xl px-4 py-3 mb-4 text-center"
+                style={{ background: 'var(--cream2)', border: '2px solid #e8d5c0' }}>
+                <div className="text-xs font-black" style={{ color: 'var(--brown)' }}>
+                  🛍 ຈັດຖົງໂດຍກົງ — ແຕະສິນຄ້າເພື່ອໃສ່ຖົງ
+                </div>
+                <div className="text-xs font-bold mt-1" style={{ color: 'var(--gray3)' }}>
+                  ແຕະຊິບໃນຖົງ = ລຶບ 1 ກ້ອນ
                 </div>
               </div>
-              <div className="flex-shrink-0 text-center w-14">
-                <div className="font-black text-3xl leading-none"
-                  style={{ color: totalPacked >= totalOrdered && totalOrdered > 0 ? '#16a34a' : 'var(--brown)' }}>
-                  {totalOrdered - totalPacked}
-                </div>
-                <div className="text-xs font-bold mt-0.5" style={{ color: 'var(--gray3)' }}>ເຫຼືອ</div>
-              </div>
-            </div>
+            )}
 
             {/* ── Custom Bag Cards ── */}
             <div className="flex flex-col gap-4">
@@ -492,10 +569,19 @@ export default function OrderPage() {
                         {filled ? (
                           <div className="flex flex-wrap gap-1.5 mt-1.5">
                             {Object.entries(bag).filter(([, qty]) => qty > 0).map(([idx, qty]) => (
-                              <span key={idx} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-black"
-                                style={{ background: 'var(--brown)', color: 'var(--cream)' }}>
-                                {menus[+idx]?.lo} ×{qty}
-                              </span>
+                              bagMode === 'bags' ? (
+                                <button key={idx}
+                                  onClick={() => removeItemFromBag(n, +idx)}
+                                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-black active:scale-95 transition-all"
+                                  style={{ background: 'var(--brown)', color: 'var(--cream)' }}>
+                                  {menus[+idx]?.lo} ×{qty} <span className="opacity-60">−</span>
+                                </button>
+                              ) : (
+                                <span key={idx} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-black"
+                                  style={{ background: 'var(--brown)', color: 'var(--cream)' }}>
+                                  {menus[+idx]?.lo} ×{qty}
+                                </span>
+                              )
                             ))}
                           </div>
                         ) : (
@@ -514,41 +600,78 @@ export default function OrderPage() {
                       )}
                     </div>
 
-                    {/* Item buttons with images + per-item limit */}
+                    {/* Item buttons */}
                     <div className="flex flex-wrap gap-3 px-5 py-4 border-t border-[#e8d5c0]">
-                      {Object.entries(selected).map(([idx]) => {
-                        const img = images[+idx]
-                        const name = menus[+idx]?.lo || ''
-                        const itemOrdered = selected[+idx] || 0
-                        const itemPackedTotal = bagPacks.reduce((s, b) => s + (b[idx] || 0), 0)
-                        const itemRemaining = itemOrdered - itemPackedTotal
-                        const qtyInThisBag = bag[idx] || 0
-                        const isDisabled = itemRemaining <= 0
-                        return (
-                          <button key={idx}
-                            disabled={isDisabled}
-                            onClick={() => addItemToBag(n, idx)}
-                            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl transition-transform ${isDisabled ? 'opacity-40 cursor-not-allowed' : 'active:scale-95'}`}
-                            style={{
-                              background: 'var(--cream)',
-                              border: `2px solid ${qtyInThisBag > 0 ? 'var(--brown)' : '#e8d5c0'}`,
-                              boxShadow: '0 1px 4px rgba(61,31,10,0.08)',
-                              color: 'var(--brown)',
-                            }}>
-                            {img
-                              ? <img src={img} className="w-9 h-9 rounded-lg object-cover flex-shrink-0" alt={name} />
-                              : <span className="text-2xl flex-shrink-0 leading-none">{EMOJIS[+idx] || '🍱'}</span>
-                            }
-                            <span className="font-black text-sm">{name}</span>
-                            {qtyInThisBag > 0 && (
-                              <span className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-black flex-shrink-0"
-                                style={{ background: 'var(--brown)', color: 'var(--cream)' }}>
-                                {qtyInThisBag}
-                              </span>
-                            )}
-                          </button>
-                        )
-                      })}
+                      {bagMode === 'bags' ? (
+                        // Bags mode: show all menus, limited only by stock
+                        menus.map((m, i) => {
+                          const img = images[i]
+                          const s = stock[i] || 0
+                          const isOut = s === 0
+                          const totalPackedForItem = bagPacks.reduce((ss, b) => ss + (b[i] || 0), 0)
+                          const isDisabled = isOut || totalPackedForItem >= s
+                          const qtyInThisBag = bag[i] || 0
+                          return (
+                            <button key={i}
+                              disabled={isDisabled}
+                              onClick={() => addItemToBag(n, i)}
+                              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl transition-transform ${isDisabled ? 'opacity-40 cursor-not-allowed' : 'active:scale-95'}`}
+                              style={{
+                                background: 'var(--cream)',
+                                border: `2px solid ${qtyInThisBag > 0 ? 'var(--brown)' : '#e8d5c0'}`,
+                                boxShadow: '0 1px 4px rgba(61,31,10,0.08)',
+                                color: 'var(--brown)',
+                              }}>
+                              {img
+                                ? <img src={img} className="w-9 h-9 rounded-lg object-cover flex-shrink-0" alt={m.lo} />
+                                : <span className="text-2xl flex-shrink-0 leading-none">{EMOJIS[i] || '🍱'}</span>
+                              }
+                              <span className="font-black text-sm">{m.lo}</span>
+                              {qtyInThisBag > 0 && (
+                                <span className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-black flex-shrink-0"
+                                  style={{ background: 'var(--brown)', color: 'var(--cream)' }}>
+                                  {qtyInThisBag}
+                                </span>
+                              )}
+                            </button>
+                          )
+                        })
+                      ) : (
+                        // Items mode: only show pre-selected items, limited by ordered qty
+                        Object.entries(selected).map(([idx]) => {
+                          const img = images[+idx]
+                          const name = menus[+idx]?.lo || ''
+                          const itemOrdered = selected[+idx] || 0
+                          const itemPackedTotal = bagPacks.reduce((s, b) => s + (b[idx] || 0), 0)
+                          const itemRemaining = itemOrdered - itemPackedTotal
+                          const qtyInThisBag = bag[idx] || 0
+                          const isDisabled = itemRemaining <= 0
+                          return (
+                            <button key={idx}
+                              disabled={isDisabled}
+                              onClick={() => addItemToBag(n, idx)}
+                              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl transition-transform ${isDisabled ? 'opacity-40 cursor-not-allowed' : 'active:scale-95'}`}
+                              style={{
+                                background: 'var(--cream)',
+                                border: `2px solid ${qtyInThisBag > 0 ? 'var(--brown)' : '#e8d5c0'}`,
+                                boxShadow: '0 1px 4px rgba(61,31,10,0.08)',
+                                color: 'var(--brown)',
+                              }}>
+                              {img
+                                ? <img src={img} className="w-9 h-9 rounded-lg object-cover flex-shrink-0" alt={name} />
+                                : <span className="text-2xl flex-shrink-0 leading-none">{EMOJIS[+idx] || '🍱'}</span>
+                              }
+                              <span className="font-black text-sm">{name}</span>
+                              {qtyInThisBag > 0 && (
+                                <span className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-black flex-shrink-0"
+                                  style={{ background: 'var(--brown)', color: 'var(--cream)' }}>
+                                  {qtyInThisBag}
+                                </span>
+                              )}
+                            </button>
+                          )
+                        })
+                      )}
                     </div>
                   </div>
                 )
@@ -571,7 +694,7 @@ export default function OrderPage() {
             style={{ background: 'var(--warm-white)', flexShrink: 0 }}>
             {bagPacks.every(b => !Object.keys(b).length) && (
               <div className="text-center text-sm font-bold mb-1" style={{ color: 'var(--gray3)' }}>
-                ເລືອກດ່ວນ ຫຼື ໃສ່ຢ່າງໜ້ອຍ 1 ຖົງ
+                {bagMode === 'bags' ? 'ໃສ່ສິນຄ້າຢ່າງໜ້ອຍ 1 ຖົງ' : 'ເລືອກດ່ວນ ຫຼື ໃສ່ຢ່າງໜ້ອຍ 1 ຖົງ'}
               </div>
             )}
             <button
@@ -606,7 +729,7 @@ export default function OrderPage() {
               </div>
               {/* maxHeight = 3 rows × 61px (py-3 + h-9 + border) */}
               <div className="overflow-y-auto" style={{ maxHeight: 183 }}>
-                {Object.entries(selected).map(([i, qty]) => (
+                {Object.entries(effectiveSelected).map(([i, qty]) => (
                   <div key={i} className="flex items-center gap-3 px-4 py-3 border-b border-[#f5ebe0] last:border-0">
                     {images[+i]
                       ? <img src={images[+i]} className="w-9 h-9 rounded-xl object-cover flex-shrink-0" alt="" />
