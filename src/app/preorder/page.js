@@ -58,6 +58,17 @@ export default function PreOrderPage() {
   const [contactFormOpen, setContactFormOpen] = useState(false)
   const chatBottomRef = useRef(null)
 
+  // Load saved customer info on mount
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('bcb-customer')
+      if (saved) {
+        const { name, phone } = JSON.parse(saved)
+        setForm(f => ({ ...f, name: name || '', phone: phone || '20' }))
+      }
+    } catch (_) {}
+  }, [])
+
   useEffect(() => {
     if (!supabase) { setLoading(false); return }
     loadShopData()
@@ -656,10 +667,26 @@ export default function PreOrderPage() {
         <>
           <div className="flex-1 overflow-y-auto p-4">
             <div className="max-w-lg mx-auto flex flex-col gap-4">
+              {/* Saved customer notice */}
+              {form.name && form.phone.length === 10 && (
+                <div className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-black"
+                  style={{ background: '#f0fdf4', border: '1.5px solid #86efac', color: '#16a34a' }}>
+                  ✓ ຈຳຂໍ້ມູນໄວ້ແລ້ວ · ລ້າງ
+                  <button onClick={() => {
+                    setForm({ name: '', phone: '20', time: '' })
+                    try { localStorage.removeItem('bcb-customer') } catch (_) {}
+                  }} className="ml-auto text-xs font-black px-2 py-0.5 rounded-lg"
+                    style={{ background: '#dcfce7', color: '#15803d' }}>ລ້າງ</button>
+                </div>
+              )}
               {/* Name */}
               <div>
                 <label className="block text-xs font-black tracking-widest uppercase mb-2" style={{ color: 'var(--brown2)' }}>ຊື່ · Name</label>
-                <input type="text" value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} placeholder="ສົມໃຈ" className="input-field" />
+                <input type="text" value={form.name} onChange={e => {
+                  const name = e.target.value
+                  setForm(p => ({ ...p, name }))
+                  try { localStorage.setItem('bcb-customer', JSON.stringify({ name, phone: form.phone })) } catch (_) {}
+                }} placeholder="ສົມໃຈ" className="input-field" />
               </div>
               {/* Phone — locked prefix "20" + 8 digits */}
               <div>
@@ -672,6 +699,7 @@ export default function PreOrderPage() {
                     if (!v.startsWith('20')) v = '20' + v.replace(/^2?0?/, '')
                     if (v.length > 10) v = v.slice(0, 10)
                     setForm(p => ({ ...p, phone: v }))
+                    try { localStorage.setItem('bcb-customer', JSON.stringify({ name: form.name, phone: v })) } catch (_) {}
                   }}
                   onKeyDown={e => {
                     if ((e.key === 'Backspace' || e.key === 'Delete') && form.phone.length <= 2) e.preventDefault()
