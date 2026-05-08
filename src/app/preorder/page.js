@@ -20,8 +20,9 @@ const STATUS_MAP = {
   done:      { label: '✓ ສຳເລັດ',        cls: 'bg-green-100 text-green-800' },
 }
 
-// Step labels: 1=Menu, 2=Bag, 3=Info, 4=Payment, 5=Status
-const STEPS = ['ເລືອກເມນູ', 'ຖົງ', 'ຂໍ້ມູນ', 'ຊຳລະ', 'ສະຖານະ']
+// Step labels: 1=Menu, 3=Info, 4=Payment, 5=Status (step 2 bag is auto-skipped)
+const STEPS = ['ເລືອກເມນູ', 'ຂໍ້ມູນ', 'ຊຳລະ', 'ສະຖານະ']
+const STEP_DISPLAY = { 1: 1, 3: 2, 4: 3, 5: 4 }
 
 export default function PreOrderPage() {
   const [step, setStep] = useState(1)
@@ -36,7 +37,7 @@ export default function PreOrderPage() {
   const [packToast, setPackToast] = useState(null)
   const [expandedBags, setExpandedBags] = useState(new Set())
   const [form, setForm] = useState({ name: '', phone: '20', time: '' })
-  const [pickupTimeRange, setPickupTimeRange] = useState({ start: '15:00', end: '19:30' })
+  const [pickupTimeRange, setPickupTimeRange] = useState({ start: '15:30', end: '19:00' })
   const [slip, setSlip] = useState(null)
   const [slipPreview, setSlipPreview] = useState(null)
   const [currentOrder, setCurrentOrder] = useState(null)
@@ -142,7 +143,7 @@ export default function PreOrderPage() {
       const s = JSON.parse(cfg.settings)
       setShopOpen(s.onlineOn !== false)
       if (s.pickupTimeStart || s.pickupTimeEnd) {
-        setPickupTimeRange({ start: s.pickupTimeStart || '15:00', end: s.pickupTimeEnd || '19:30' })
+        setPickupTimeRange({ start: s.pickupTimeStart || '15:30', end: s.pickupTimeEnd || '19:00' })
       }
     }
   }
@@ -384,14 +385,17 @@ export default function PreOrderPage() {
       {/* Progress bar */}
       {step >= 1 && step <= 5 && (
         <div className="flex gap-1 px-4 py-3 flex-shrink-0" style={{ background: 'var(--warm-white)', borderBottom: '2px solid var(--cream3)' }}>
-          {STEPS.map((s, i) => (
-            <div key={i} className="flex-1">
-              <div className={`h-1 rounded-full ${i < step ? 'bg-[#3d1f0a]' : i === step - 1 ? 'bg-[#6b3a1f]' : 'bg-[#e8d5c0]'}`} />
-              <div className="text-center text-xs mt-1 font-bold truncate" style={{ color: i < step ? 'var(--brown)' : 'var(--cream3)', fontSize: 9 }}>
-                {s}
+          {STEPS.map((s, i) => {
+            const d = STEP_DISPLAY[step] || step
+            return (
+              <div key={i} className="flex-1">
+                <div className={`h-1 rounded-full ${i < d ? 'bg-[#3d1f0a]' : i === d - 1 ? 'bg-[#6b3a1f]' : 'bg-[#e8d5c0]'}`} />
+                <div className="text-center text-xs mt-1 font-bold truncate" style={{ color: i < d ? 'var(--brown)' : 'var(--cream3)', fontSize: 9 }}>
+                  {s}
+                </div>
               </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
       )}
 
@@ -450,7 +454,12 @@ export default function PreOrderPage() {
             </div>
           </div>
           <div className="p-3 border-t-2 border-[#e8d5c0] flex flex-col gap-2 flex-shrink-0" style={{ background: 'var(--warm-white)' }}>
-            <button className="btn-primary" disabled={Object.keys(selected).length === 0} onClick={() => setStep(2)}>ຕໍ່ໄປ →</button>
+            <button className="btn-primary" disabled={Object.keys(selected).length === 0} onClick={() => {
+              const bag = {}
+              Object.entries(selected).forEach(([idx, qty]) => { bag[idx] = qty })
+              setBagPacks([bag])
+              setStep(3)
+            }}>ຕໍ່ໄປ →</button>
             <button className="btn-outline flex items-center justify-center gap-2" onClick={() => { setContactForm({ name: '', phone: '' }); setContactFormOpen(true) }}>
               <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5 flex-shrink-0">
                 <path d="M12 2C6.477 2 2 6.145 2 11.243c0 2.906 1.404 5.503 3.601 7.23V22l3.324-1.827A11.13 11.13 0 0012 20.485c5.523 0 10-4.144 10-9.242C22 6.145 17.523 2 12 2zm1.088 12.45l-2.55-2.72-4.976 2.72 5.473-5.81 2.612 2.72 4.913-2.72-5.472 5.81z"/>
@@ -698,7 +707,7 @@ export default function PreOrderPage() {
             if (form.time < pickupTimeRange.start || form.time > pickupTimeRange.end) { alert(`ເວລາຮັບຂອງໄດ້ ${pickupTimeRange.start} – ${pickupTimeRange.end} ເທົ່ານັ້ນ`); return }
               setStep(4)
             }}>ຕໍ່ໄປ →</button>
-            <button className="btn-outline" onClick={() => setStep(2)}>← ກັບຄືນ</button>
+            <button className="btn-outline" onClick={() => setStep(1)}>← ກັບຄືນ</button>
           </div>
         </>
       )}
