@@ -1107,11 +1107,10 @@ export default function StaffPage() {
                         <div className="text-xs font-bold mt-0.5" style={{ color: 'var(--gray3)' }}>ຕັ້ງໃໝ່ທຸກມື້ຕອນເປີດຮ້ານ</div>
                       </div>
                       <button
-                        onClick={async () => {
-                          if (!confirm('ລີເຊັດເລກຄິວເປັນ 0001 ແທ້ບໍ?')) return
+                        onClick={() => showConfirm('ລີເຊັດເລກຄິວເປັນ 0001 ແທ້ບໍ?', async () => {
                           await saveConfig('next_queue', '0')
-                          showToast('ລີເຊັດຄິວແລ້ວ ✅', 'green')
-                        }}
+                          showToast('ລີເຊັດຄິວເປັນ 0001 ແລ້ວ ✅', 'green')
+                        })}
                         className="text-xs px-3 py-2 rounded-xl font-black flex-shrink-0"
                         style={{ background: '#fef2f2', color: '#dc2626', border: '1.5px solid #fca5a5' }}>
                         ລີເຊັດ
