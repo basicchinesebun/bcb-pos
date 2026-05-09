@@ -63,6 +63,14 @@ export default function StaffPage() {
   const [chatSending, setChatSending] = useState(false)
   const [unreadChat, setUnreadChat] = useState(0)
   const [payingId, setPayingId] = useState(null)
+  const [qoOpen, setQoOpen] = useState(false)
+  const [qoBagMode, setQoBagMode] = useState('items')
+  const [qoSelected, setQoSelected] = useState({})
+  const [qoBagPacks, setQoBagPacks] = useState([{}])
+  const [qoStep, setQoStep] = useState(1)
+  const [qoQnum, setQoQnum] = useState(null)
+  const [qoSubmitting, setQoSubmitting] = useState(false)
+  const [qoPackToast, setQoPackToast] = useState(null)
   const [chatVH, setChatVH] = useState(null)
   const chatBottomRef = useRef(null)
   const activeChatPhoneRef = useRef(null)
@@ -172,6 +180,73 @@ export default function StaffPage() {
 
   function showConfirm(message, onConfirm) {
     setConfirmModal({ message, onConfirm })
+  }
+
+  function resetQo() {
+    setQoBagMode('items'); setQoSelected({}); setQoBagPacks([{}]); setQoStep(1); setQoQnum(null)
+  }
+
+  function qoShowPackToast(msg) {
+    setQoPackToast(msg); setTimeout(() => setQoPackToast(null), 2000)
+  }
+
+  function qoAddItemToBag(bagIdx, menuIdx) {
+    if (qoBagMode === 'bags') {
+      const total = qoBagPacks.reduce((s, b) => s + (b[menuIdx] || 0), 0)
+      if (total >= (stockShop[menuIdx] || 0)) { qoShowPackToast('ໝົດ · Out of stock'); return }
+    } else {
+      const packed = qoBagPacks.reduce((s, b) => s + (b[menuIdx] || 0), 0)
+      if (packed >= (qoSelected[menuIdx] || 0)) { qoShowPackToast('ຄົບແລ້ວ'); return }
+    }
+    setQoBagPacks(prev => { const a = prev.map(b => ({ ...b })); a[bagIdx] = { ...a[bagIdx], [menuIdx]: (a[bagIdx][menuIdx] || 0) + 1 }; return a })
+  }
+
+  function qoRemoveItemFromBag(bagIdx, menuIdx) {
+    setQoBagPacks(prev => {
+      const a = prev.map(b => ({ ...b }))
+      const cur = a[bagIdx][menuIdx] || 0
+      if (cur <= 1) delete a[bagIdx][menuIdx]; else a[bagIdx][menuIdx] = cur - 1
+      return a
+    })
+  }
+
+  function qoHandleQuickBag(id) {
+    if (id === 'single') {
+      const bag = {}; Object.entries(qoSelected).forEach(([idx, qty]) => { bag[idx] = qty }); setQoBagPacks([bag])
+    } else if (id === 'bytype') {
+      const packs = Object.entries(qoSelected).map(([idx, qty]) => ({ [idx]: qty })); setQoBagPacks(packs.length ? packs : [{}])
+    } else {
+      const packs = []; Object.entries(qoSelected).forEach(([idx, qty]) => { for (let i = 0; i < qty; i++) packs.push({ [idx]: 1 }) }); setQoBagPacks(packs.length ? packs : [{}])
+    }
+  }
+
+  async function submitQuickOrder(paymentMethod) {
+    setQoSubmitting(true)
+    try {
+      const { data: qnumData, error: qErr } = await supabase.rpc('next_queue_number')
+      if (qErr) throw qErr
+      const effSel = qoBagMode === 'bags'
+        ? qoBagPacks.reduce((acc, bag) => { Object.entries(bag).forEach(([idx, qty]) => { if (qty > 0) acc[idx] = (acc[idx] || 0) + qty }); return acc }, {})
+        : qoSelected
+      const items = Object.entries(effSel).map(([i, qty]) => ({ menuIdx: +i, name: menus[+i]?.lo || '', qty, price: prices[+i] || 0, sub: (prices[+i] || 0) * qty }))
+      const packingLabel = qoBagPacks.map((b, i) => {
+        const t = Object.entries(b).filter(([, q]) => q > 0).map(([idx, q]) => `${menus[+idx]?.lo || ''} ×${q}`).join(', ')
+        return t ? `ຖົງ ${i + 1}: ${t}` : null
+      }).filter(Boolean).join(' | ')
+      const total = Object.entries(effSel).reduce((s, [i, q]) => s + (prices[+i] || 0) * q, 0)
+      const { error } = await supabase.from('orders').insert({
+        qnum: qnumData, type: 'walkin', status: 'confirmed',
+        items: JSON.stringify(items), total, bag_label: packingLabel,
+        done: false, cancelled: false, paid: true, payment_method: paymentMethod,
+      })
+      if (error) throw error
+      const newStock = [...stockShop]
+      Object.entries(effSel).forEach(([i, qty]) => { newStock[+i] = Math.max(0, (newStock[+i] || 0) - qty) })
+      await supabase.from('shop_config').upsert({ key: 'stock_shop', value: JSON.stringify(newStock) })
+      setQoQnum(qnumData); setQoStep(3)
+      showToast(`✅ ຄິວ ${String(qnumData).padStart(4, '0')} · ${paymentMethod === 'cash' ? '💵 ສດ' : '📱 ໂອນ'}`, 'green')
+    } catch (e) { alert('❌ ' + (e.message || 'error')) }
+    finally { setQoSubmitting(false) }
   }
 
   async function markPaid(o, method) {
@@ -329,6 +404,13 @@ export default function StaffPage() {
       { onConflict: 'key' }
     )
   }
+
+  // ─── Quick Order computed ───
+  const qoEffSel = qoBagMode === 'bags'
+    ? qoBagPacks.reduce((acc, bag) => { Object.entries(bag).forEach(([idx, qty]) => { if (qty > 0) acc[idx] = (acc[idx] || 0) + qty }); return acc }, {})
+    : qoSelected
+  const qoTotalItems = Object.values(qoEffSel).reduce((s, q) => s + q, 0)
+  const qoTotalPrice = Object.entries(qoEffSel).reduce((s, [i, q]) => s + (prices[+i] || 0) * q, 0)
 
   // ─── Orders ───
   const filteredOrders = orders.filter(o => {
@@ -1781,6 +1863,17 @@ export default function StaffPage() {
         </div>
       )}
 
+      {/* Quick Order FAB */}
+      {tab === 'orders' && !qoOpen && (
+        <button
+          onClick={() => { resetQo(); setQoOpen(true) }}
+          className="fixed bottom-20 right-4 z-40 w-16 h-16 rounded-full flex items-center justify-center text-3xl active:scale-95 transition-all"
+          style={{ background: 'var(--brown)', color: 'var(--cream)', boxShadow: '0 4px 20px rgba(61,31,10,0.45)', border: '3px solid var(--cream)' }}
+        >
+          🛒
+        </button>
+      )}
+
       {/* Bottom Nav */}
       <div className="fixed bottom-0 left-0 right-0 flex" style={{ background: 'var(--brown)', borderTop: '2px solid var(--brown2)' }}>
         {[['orders','📋','ອໍເດີ'],['sales','📊','ຍອດຂາຍ']].map(([t,icon,l]) => (
@@ -1800,6 +1893,214 @@ export default function StaffPage() {
           ແຊດ
         </button>
       </div>
+
+      {/* Quick Order Modal */}
+      {qoOpen && (
+        <div className="fixed inset-0 z-50 flex flex-col" style={{ background: 'var(--cream)' }}>
+          {/* Header */}
+          <div className="flex items-center gap-3 px-4 py-3 flex-shrink-0" style={{ background: 'var(--brown)' }}>
+            <button onClick={() => { setQoOpen(false); resetQo() }} className="text-xl font-black w-8" style={{ color: 'var(--cream)' }}>✕</button>
+            <div className="flex-1 font-serif font-black text-lg" style={{ color: 'var(--cream)' }}>🛒 ສັ່ງດ່ວນ</div>
+            {qoStep < 3 && (
+              <div className="flex gap-1 p-1 rounded-xl" style={{ background: 'rgba(253,246,238,0.15)' }}>
+                {[{ id: 'items', label: 'ເລືອກ' }, { id: 'bags', label: 'ຈັດຖົງ' }].map(m => (
+                  <button key={m.id}
+                    onClick={() => { setQoBagMode(m.id); if (m.id === 'bags') { setQoSelected({}); setQoBagPacks([{}]) } setQoStep(1) }}
+                    className="px-3 py-1 rounded-lg text-xs font-black transition-all"
+                    style={{ background: qoBagMode === m.id ? 'var(--cream)' : 'transparent', color: qoBagMode === m.id ? 'var(--brown)' : 'rgba(253,246,238,0.6)' }}>
+                    {m.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Pack toast */}
+          {qoPackToast && (
+            <div className="fixed top-16 left-1/2 -translate-x-1/2 z-[60] px-6 py-3 rounded-full text-base font-black text-white shadow-xl pointer-events-none" style={{ background: 'var(--brown)' }}>
+              {qoPackToast}
+            </div>
+          )}
+
+          {/* Step 1 — items mode */}
+          {qoStep === 1 && qoBagMode === 'items' && (
+            <>
+              <div className="flex-1 overflow-y-auto p-4">
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                  {menus.map((m, i) => {
+                    const qty = qoSelected[i] || 0
+                    const s = stockShop[i] || 0
+                    const isOut = s === 0
+                    const img = images[i]
+                    return (
+                      <div key={i} onClick={() => { if (!isOut && qty === 0) setQoSelected(prev => ({ ...prev, [i]: 1 })) }}
+                        className={`rounded-2xl overflow-hidden cursor-pointer border-2 transition-all relative ${isOut ? 'opacity-50 cursor-not-allowed border-[#e8d5c0]' : qty > 0 ? 'border-[#3d1f0a]' : 'border-[#e8d5c0]'}`}
+                        style={{ background: 'var(--warm-white)' }}>
+                        <div className="aspect-square relative overflow-hidden" style={{ background: 'var(--cream2)' }}>
+                          {img ? <img src={img} alt={m.lo} className="w-full h-full object-cover" />
+                            : <div className="absolute inset-0 flex items-center justify-center text-4xl">{EMOJIS[i] || '🍱'}</div>}
+                          {isOut && <div className="absolute inset-0 flex items-center justify-center" style={{ background: 'rgba(61,31,10,0.55)' }}><span className="text-white font-black text-sm px-2 py-1 rounded-lg" style={{ background: 'rgba(185,28,28,0.9)' }}>ໝົດ</span></div>}
+                          {qty > 0 && <div className="absolute top-2 right-2 w-6 h-6 rounded-full flex items-center justify-center text-xs font-black" style={{ background: 'var(--brown)', color: 'var(--cream)' }}>{qty}</div>}
+                        </div>
+                        <div className="p-2">
+                          <div className="text-sm font-black leading-tight" style={{ color: 'var(--brown)' }}>{m.lo}</div>
+                          <div className="text-sm font-black mt-0.5" style={{ color: 'var(--brown2)' }}>{isOut ? 'ໝົດ' : `${(prices[i] || 0).toLocaleString()} ກີບ`}</div>
+                          {!isOut && <div className="text-xs font-bold mt-0.5" style={{ color: s <= 5 ? '#dc2626' : 'var(--gray3)' }}>ເຫຼືອ {s}{s <= 5 ? ' ⚠' : ''}</div>}
+                        </div>
+                        {qty > 0 && (
+                          <div className="flex items-center justify-between px-2 py-2 border-t border-[#e8d5c0]" style={{ background: 'var(--cream2)' }} onClick={e => e.stopPropagation()}>
+                            <button onClick={e => { e.stopPropagation(); setQoSelected(prev => { const n = { ...prev }; const next = Math.max(0, (n[i] || 0) - 1); if (next === 0) delete n[i]; else n[i] = next; return n }) }} className="w-8 h-8 rounded-full border-2 border-[#3d1f0a] flex items-center justify-center text-lg font-black" style={{ background: 'var(--warm-white)', color: 'var(--brown)' }}>−</button>
+                            <span className="font-black" style={{ color: 'var(--brown)' }}>{qty}</span>
+                            <button onClick={e => { e.stopPropagation(); setQoSelected(prev => ({ ...prev, [i]: Math.min(s, (prev[i] || 0) + 1) })) }} className="w-8 h-8 rounded-full border-2 border-[#3d1f0a] flex items-center justify-center text-lg font-black" style={{ background: 'var(--warm-white)', color: 'var(--brown)' }}>+</button>
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+              {qoTotalItems > 0 && (
+                <div className="p-4 border-t-2 border-[#e8d5c0] flex-shrink-0" style={{ background: 'var(--warm-white)' }}>
+                  <div className="flex justify-between mb-3 px-1">
+                    <span className="text-sm font-black" style={{ color: 'var(--brown)' }}>🛍 {qoTotalItems} ກ້ອນ</span>
+                    <span className="text-sm font-black" style={{ color: 'var(--brown)' }}>{qoTotalPrice.toLocaleString()} ກີບ</span>
+                  </div>
+                  <button className="btn-primary" onClick={() => setQoStep(2)}>ຈັດຖົງ →</button>
+                </div>
+              )}
+            </>
+          )}
+
+          {/* Step 1 — bags mode */}
+          {qoStep === 1 && qoBagMode === 'bags' && (
+            <div className="flex-1 flex flex-col items-center justify-center p-8 text-center">
+              <div className="text-5xl mb-4">🛍</div>
+              <div className="font-black text-lg mb-2" style={{ color: 'var(--brown)' }}>ຈັດຖົງໂດຍກົງ</div>
+              <div className="text-sm font-bold mb-6" style={{ color: 'var(--gray3)' }}>ໃສ່ສິນຄ້າໃນແຕ່ລະຖົງໄດ້ທັນທີ<br/>ບໍ່ຈຳເປັນຕ້ອງເລືອກຈຳນວນລວມກ່ອນ</div>
+              <button className="btn-primary w-full max-w-xs" onClick={() => setQoStep(2)}>ຈັດຖົງ →</button>
+            </div>
+          )}
+
+          {/* Step 2 — bag packing */}
+          {qoStep === 2 && (
+            <>
+              <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-4">
+                {/* Quick options (items mode only) */}
+                {qoBagMode === 'items' && (
+                  <div className="grid grid-cols-3 gap-3">
+                    {[{ id: 'single', icon: '🛍', label: 'ຖົງດຽວ' }, { id: 'bytype', icon: '🛍🛍', label: 'ແຍກເມນູ' }, { id: 'each', icon: '🛍🛍🛍', label: 'ແຍກທຸກກ້ອນ' }].map(opt => (
+                      <button key={opt.id} onClick={() => qoHandleQuickBag(opt.id)}
+                        className="rounded-2xl p-3 text-center active:scale-95 transition-all"
+                        style={{ background: 'var(--warm-white)', border: '2px solid #e8d5c0' }}>
+                        <div className="text-2xl mb-1">{opt.icon}</div>
+                        <div className="font-black text-xs" style={{ color: 'var(--brown)' }}>{opt.label}</div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {/* Bag list */}
+                {qoBagPacks.map((bag, n) => {
+                  const bagItems = Object.entries(bag).filter(([, q]) => q > 0)
+                  return (
+                    <div key={n} className="rounded-2xl border-2 border-[#3d1f0a] overflow-hidden">
+                      <div className="flex items-center justify-between px-4 py-3 gap-2 flex-wrap" style={{ background: 'var(--brown)' }}>
+                        <div className="font-serif font-black flex-shrink-0" style={{ color: 'var(--cream)' }}>ຖົງ {n + 1}</div>
+                        <div className="flex gap-1 flex-wrap">
+                          {bagItems.length === 0 && <span className="text-xs font-bold" style={{ color: 'rgba(253,246,238,0.5)' }}>ຫວ່າງ</span>}
+                          {bagItems.map(([idx, qty]) => (
+                            <button key={idx} onClick={() => qoRemoveItemFromBag(n, +idx)}
+                              className="px-2 py-1 rounded-lg text-xs font-black" style={{ background: 'rgba(253,246,238,0.2)', color: 'var(--cream)' }}>
+                              {menus[+idx]?.lo} ×{qty} ✕
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="p-3 flex flex-wrap gap-2" style={{ background: 'var(--warm-white)' }}>
+                        {menus.map((m, i) => {
+                          const img = images[i]
+                          const s = stockShop[i] || 0
+                          const qtyInBag = bag[i] || 0
+                          if (qoBagMode === 'items') {
+                            if (!(qoSelected[i] > 0)) return null
+                            const totalPacked = qoBagPacks.reduce((acc, b) => acc + (b[i] || 0), 0)
+                            const isDisabled = totalPacked >= (qoSelected[i] || 0)
+                            return (
+                              <button key={i} disabled={isDisabled} onClick={() => qoAddItemToBag(n, i)}
+                                className={`flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-black transition-transform ${isDisabled ? 'opacity-40 cursor-not-allowed' : 'active:scale-95'}`}
+                                style={{ background: 'var(--cream)', border: `2px solid ${qtyInBag > 0 ? 'var(--brown)' : '#e8d5c0'}`, color: 'var(--brown)' }}>
+                                {img ? <img src={img} className="w-8 h-8 rounded-lg object-cover flex-shrink-0" alt="" /> : <span className="text-xl">{EMOJIS[i] || '🍱'}</span>}
+                                <span>{m.lo}</span>
+                                {qtyInBag > 0 && <span className="w-5 h-5 rounded-full flex items-center justify-center text-xs font-black flex-shrink-0" style={{ background: 'var(--brown)', color: 'var(--cream)' }}>{qtyInBag}</span>}
+                              </button>
+                            )
+                          } else {
+                            if (s === 0) return null
+                            return (
+                              <button key={i} onClick={() => qoAddItemToBag(n, i)}
+                                className="flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-black active:scale-95 transition-transform"
+                                style={{ background: 'var(--cream)', border: `2px solid ${qtyInBag > 0 ? 'var(--brown)' : '#e8d5c0'}`, color: 'var(--brown)' }}>
+                                {img ? <img src={img} className="w-8 h-8 rounded-lg object-cover flex-shrink-0" alt="" /> : <span className="text-xl">{EMOJIS[i] || '🍱'}</span>}
+                                <span>{m.lo}</span>
+                                {qtyInBag > 0 && <span className="w-5 h-5 rounded-full flex items-center justify-center text-xs font-black flex-shrink-0" style={{ background: 'var(--brown)', color: 'var(--cream)' }}>{qtyInBag}</span>}
+                              </button>
+                            )
+                          }
+                        })}
+                      </div>
+                    </div>
+                  )
+                })}
+
+                <button onClick={() => setQoBagPacks(prev => [...prev, {}])}
+                  className="flex items-center gap-2 px-6 py-3 rounded-2xl font-black self-end active:scale-95 transition-all"
+                  style={{ background: 'var(--brown)', color: 'var(--cream)' }}>
+                  ➕ ເພີ່ມຖົງ
+                </button>
+              </div>
+
+              {!qoBagPacks.every(b => !Object.keys(b).length) && (
+                <div className="p-4 border-t-2 border-[#e8d5c0] flex-shrink-0" style={{ background: 'var(--warm-white)' }}>
+                  <div className="flex justify-between mb-3 px-1">
+                    <span className="font-black" style={{ color: 'var(--brown)' }}>ລວມ {qoTotalItems} ກ້ອນ</span>
+                    <span className="font-black" style={{ color: 'var(--brown)' }}>{qoTotalPrice.toLocaleString()} ກີບ</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <button onClick={() => submitQuickOrder('cash')} disabled={qoSubmitting}
+                      className="py-4 rounded-2xl font-black text-base text-white" style={{ background: '#15803d' }}>
+                      {qoSubmitting ? '...' : '💵 ສດ · ຮັບຄິວ'}
+                    </button>
+                    <button onClick={() => submitQuickOrder('qr')} disabled={qoSubmitting}
+                      className="py-4 rounded-2xl font-black text-base text-white" style={{ background: '#1d4ed8' }}>
+                      {qoSubmitting ? '...' : '📱 ໂອນ · ຮັບຄິວ'}
+                    </button>
+                  </div>
+                  <button className="btn-outline mt-2 py-3 text-sm w-full" onClick={() => setQoStep(1)}>← ກັບຄືນ</button>
+                </div>
+              )}
+            </>
+          )}
+
+          {/* Step 3 — done */}
+          {qoStep === 3 && qoQnum && (
+            <div className="flex-1 flex flex-col items-center justify-center p-6">
+              <div className="w-full max-w-sm rounded-2xl overflow-hidden border-2 border-[#3d1f0a] shadow-xl text-center">
+                <div className="py-5" style={{ background: 'var(--brown)' }}>
+                  <div className="font-serif text-xl font-black" style={{ color: 'var(--cream)' }}>ສຳເລັດ ✅</div>
+                </div>
+                <div className="py-8 px-4" style={{ background: 'var(--warm-white)' }}>
+                  <div className="text-xs font-black tracking-widest uppercase mb-1" style={{ color: 'var(--gray3)' }}>ເລກຄິວ · QUEUE</div>
+                  <div className="font-serif font-black leading-none" style={{ fontSize: 96, color: 'var(--brown)' }}>
+                    {String(qoQnum).padStart(4, '0')}
+                  </div>
+                </div>
+              </div>
+              <button className="btn-primary mt-6 w-full max-w-sm" onClick={resetQo}>🛒 ສັ່ງໃໝ່</button>
+              <button className="btn-outline mt-2 w-full max-w-sm py-3" onClick={() => { setQoOpen(false); resetQo() }}>ປິດ</button>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Slip Modal */}
       {slipModal && (
