@@ -62,6 +62,7 @@ export default function StaffPage() {
   const [chatInput, setChatInput] = useState('')
   const [chatSending, setChatSending] = useState(false)
   const [unreadChat, setUnreadChat] = useState(0)
+  const [payingId, setPayingId] = useState(null)
   const [chatVH, setChatVH] = useState(null)
   const chatBottomRef = useRef(null)
   const activeChatPhoneRef = useRef(null)
@@ -171,6 +172,13 @@ export default function StaffPage() {
 
   function showConfirm(message, onConfirm) {
     setConfirmModal({ message, onConfirm })
+  }
+
+  async function markPaid(o, method) {
+    setOrders(prev => prev.map(ord => ord.id === o.id ? { ...ord, paid: true, payment_method: method } : ord))
+    await supabase.from('orders').update({ paid: true, payment_method: method }).eq('id', o.id)
+    setPayingId(null)
+    showToast(`💰 #${String(o.qnum).padStart(4,'0')} ຮັບເງິນແລ້ວ`, 'green')
   }
 
   function announce(qnum) {
@@ -1403,6 +1411,11 @@ export default function StaffPage() {
                             <span className={`tag text-xs mt-1 ${o.type === 'online' ? 'bg-orange-50 text-orange-700' : 'bg-blue-50 text-blue-700'}`}>
                               {o.type === 'online' ? '🌐 Online' : '🏪 Walk-in'}
                             </span>
+                            {o.type === 'walkin' && !o.cancelled && !o.done && (
+                              o.paid
+                                ? <span className="tag text-xs ml-1" style={{ background: '#f0fdf4', color: '#16a34a' }}>{o.payment_method === 'cash' ? '💵' : '📱'} ຈ່າຍແລ້ວ</span>
+                                : <span className="tag bg-orange-50 text-orange-600 text-xs ml-1">💰 ຍັງບໍ່ຈ່າຍ</span>
+                            )}
                             {o.done && <span className="tag bg-green-50 text-green-700 text-xs ml-1">✓ Done</span>}
                             {o.cancelled && <span className="tag bg-red-50 text-red-700 text-xs ml-1">✕ ຍົກເລີກ</span>}
                             {o.status === 'rejected' && <span className="tag bg-red-50 text-red-700 text-xs ml-1">✕ ປະຕິເສດ</span>}
@@ -1471,10 +1484,23 @@ export default function StaffPage() {
                           ) : o.done ? (
                             <button onClick={() => undoOrder(o.id, 'done')} className="flex-1 py-2 rounded-xl text-sm font-black border-2 border-[#e8d5c0]" style={{ color: 'var(--gray3)' }}>↩ ຍົກເລີກ Done</button>
                           ) : o.type === 'walkin' && o.status === 'pending' ? (
-                            <>
-                              <button onClick={() => confirmWalkin(o)} className="flex-1 py-3 rounded-xl text-sm font-black text-white bg-green-700">🍳 ສົ່ງຄົວ</button>
-                              <button onClick={() => cancelOrder(o)} className="py-3 px-4 rounded-xl text-sm font-black border-2 border-red-400 text-red-600">✕</button>
-                            </>
+                            <div className="w-full flex flex-col gap-2">
+                              {!o.paid && (
+                                payingId === o.id ? (
+                                  <div className="flex gap-2">
+                                    <button onClick={() => markPaid(o, 'cash')} className="flex-1 py-3 rounded-xl text-sm font-black text-white" style={{ background: '#15803d' }}>💵 ສດ</button>
+                                    <button onClick={() => markPaid(o, 'qr')} className="flex-1 py-3 rounded-xl text-sm font-black text-white" style={{ background: '#1d4ed8' }}>📱 ໂອນ</button>
+                                    <button onClick={() => setPayingId(null)} className="py-3 px-3 rounded-xl text-sm font-black border-2 border-[#e8d5c0]" style={{ color: 'var(--gray3)' }}>✕</button>
+                                  </div>
+                                ) : (
+                                  <button onClick={() => setPayingId(o.id)} className="w-full py-3 rounded-xl text-sm font-black border-2 border-orange-400 text-orange-600">💰 ຮັບເງິນ</button>
+                                )
+                              )}
+                              <div className="flex gap-2">
+                                <button onClick={() => confirmWalkin(o)} className="flex-1 py-3 rounded-xl text-sm font-black text-white bg-green-700">🍳 ສົ່ງຄົວ</button>
+                                <button onClick={() => cancelOrder(o)} className="py-3 px-4 rounded-xl text-sm font-black border-2 border-red-400 text-red-600">✕</button>
+                              </div>
+                            </div>
                           ) : o.type === 'online' && o.status === 'pending' ? (
                             <>
                               <button onClick={() => confirmOrder(o)} className="flex-1 py-3 rounded-xl text-sm font-black text-white bg-green-700">✓ ຢືນຢັນ</button>

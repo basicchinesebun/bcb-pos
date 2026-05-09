@@ -742,7 +742,7 @@ export default function OrderPage() {
               </div>
             </div>
 
-            {/* 2. Total price — large, above QR */}
+            {/* 2. Total price */}
             <div className="rounded-2xl overflow-hidden border-2 border-[#3d1f0a]">
               <div className="px-5 py-5 flex items-center justify-between" style={{ background: 'var(--brown)' }}>
                 <div>
@@ -754,16 +754,6 @@ export default function OrderPage() {
                     {totalPrice.toLocaleString()}
                   </div>
                   <div className="text-sm font-black mt-1" style={{ color: 'rgba(253,246,238,0.65)' }}>ກີບ (LAK)</div>
-                </div>
-              </div>
-
-              {/* 3. QR code — directly below total, never cut off */}
-              <div className="px-4 pt-5 pb-5 text-center" style={{ background: 'var(--warm-white)' }}>
-                <div className="text-xs font-black tracking-widest uppercase mb-3" style={{ color: 'var(--gray3)' }}>ສະແກນ QR ຊຳລະ · Scan to Pay</div>
-                <div className="w-56 h-56 mx-auto rounded-2xl border-2 border-[#3d1f0a] overflow-hidden flex items-center justify-center" style={{ background: 'var(--cream)' }}>
-                  {qrImage
-                    ? <img src={qrImage} alt="QR" className="w-full h-full object-contain" />
-                    : <div className="text-sm font-bold text-center p-4" style={{ color: 'var(--gray3)' }}>QR ຍັງບໍ່ໄດ້ຕັ້ງຄ່າ</div>}
                 </div>
               </div>
             </div>
