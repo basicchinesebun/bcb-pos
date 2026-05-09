@@ -21,6 +21,7 @@ function StatusContent() {
   const [chatMessages, setChatMessages] = useState([])
   const [chatInput, setChatInput] = useState('')
   const [chatSending, setChatSending] = useState(false)
+  const [currentQueue, setCurrentQueue] = useState(null)
   const [chatVH, setChatVH] = useState(null)
   const chatBottomRef = useRef(null)
 
@@ -29,18 +30,23 @@ function StatusContent() {
     supabase.from('shop_config').select('key,value').then(({ data }) => {
       if (data) {
         const cfg = Object.fromEntries(data.map(r => [r.key, r.value]))
-        if (cfg.shop_info) setShopInfo(JSON.parse(cfg.shop_info))
+        if (cfg.shop_info) { try { setShopInfo(JSON.parse(cfg.shop_info)) } catch (_) {} }
+        if (cfg.current_queue) setCurrentQueue(cfg.current_queue)
       }
     })
     supabase.from('orders').select('*').eq('id', id).single().then(({ data }) => {
       if (data) setOrder(data)
       else setNotFound(true)
     })
-    const ch = supabase.channel('status-' + id)
+    const chOrder = supabase.channel('status-' + id)
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'orders', filter: `id=eq.${id}` },
         payload => setOrder(payload.new))
       .subscribe()
-    return () => supabase.removeChannel(ch)
+    const chQueue = supabase.channel('status-queue-' + id)
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'shop_config', filter: 'key=eq.current_queue' },
+        payload => setCurrentQueue(payload.new.value))
+      .subscribe()
+    return () => { supabase.removeChannel(chOrder); supabase.removeChannel(chQueue) }
   }, [id])
 
   useEffect(() => {
@@ -125,6 +131,27 @@ function StatusContent() {
             {statusInfo.label}
           </span>
         </div>
+
+        {/* Now serving */}
+        {currentQueue && !order.done && !order.cancelled && (
+          <div className="card py-4 flex items-center justify-between">
+            <div>
+              <div className="text-xs font-black tracking-widest uppercase" style={{ color: 'var(--gray3)' }}>ກຳລັງເອີ້ນ · NOW SERVING</div>
+              <div className="font-serif font-black mt-0.5" style={{ fontSize: 36, color: String(currentQueue) === String(order.qnum) ? '#16a34a' : 'var(--brown2)' }}>
+                {String(currentQueue).padStart(4, '0')}
+              </div>
+            </div>
+            {String(currentQueue) === String(order.qnum)
+              ? <span className="text-3xl">🎉</span>
+              : (
+                <div className="text-right">
+                  <div className="text-xs font-bold" style={{ color: 'var(--gray3)' }}>ຄິວທ່ານ</div>
+                  <div className="font-black text-lg" style={{ color: 'var(--brown)' }}>{String(order.qnum).padStart(4, '0')}</div>
+                </div>
+              )
+            }
+          </div>
+        )}
 
         {/* Order details */}
         <div className="card">
