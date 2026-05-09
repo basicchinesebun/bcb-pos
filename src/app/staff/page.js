@@ -174,6 +174,7 @@ export default function StaffPage() {
   }
 
   function announce(qnum) {
+    saveConfig('current_queue', String(qnum))
     if (!settings.soundOn) return
     window.speechSynthesis.cancel()
     const u = new SpeechSynthesisUtterance(`หมายเลข ${String(qnum).padStart(4, '0')} รับสินค้าได้เลยค่ะ`)
