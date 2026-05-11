@@ -1,8 +1,4 @@
 {
-  "buildCommand": null,
-  "installCommand": "echo skip",
-  "framework": null,
-  "outputDirectory": "out",
   "cleanUrls": true,
   "trailingSlash": false,
   "redirects": [
