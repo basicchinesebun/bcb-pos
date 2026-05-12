@@ -63,6 +63,9 @@ export default function StaffPage() {
   const [chatSending, setChatSending] = useState(false)
   const [unreadChat, setUnreadChat] = useState(0)
   const [payingId, setPayingId] = useState(null)
+  const [editOrder, setEditOrder] = useState(null)
+  const [editItems, setEditItems] = useState({})
+  const [editSaving, setEditSaving] = useState(false)
   const [qoOpen, setQoOpen] = useState(false)
   const [qoBagMode, setQoBagMode] = useState('items')
   const [qoSelected, setQoSelected] = useState({})
@@ -71,6 +74,7 @@ export default function StaffPage() {
   const [qoQnum, setQoQnum] = useState(null)
   const [qoSubmitting, setQoSubmitting] = useState(false)
   const [qoPackToast, setQoPackToast] = useState(null)
+  const [qoName, setQoName] = useState('')
   const [chatVH, setChatVH] = useState(null)
   const chatBottomRef = useRef(null)
   const activeChatPhoneRef = useRef(null)
@@ -183,7 +187,42 @@ export default function StaffPage() {
   }
 
   function resetQo() {
-    setQoBagMode('items'); setQoSelected({}); setQoBagPacks([{}]); setQoStep(1); setQoQnum(null)
+    setQoBagMode('items'); setQoSelected({}); setQoBagPacks([{}]); setQoStep(1); setQoQnum(null); setQoName('')
+  }
+
+  function openEditOrder(o) {
+    const items = typeof o.items === 'string' ? JSON.parse(o.items) : o.items || []
+    const itemMap = {}
+    items.forEach(it => { if (it.qty > 0) itemMap[it.menuIdx] = it.qty })
+    setEditItems(itemMap)
+    setEditOrder(o)
+  }
+
+  async function saveEditOrder() {
+    setEditSaving(true)
+    try {
+      const oldItems = typeof editOrder.items === 'string' ? JSON.parse(editOrder.items) : editOrder.items || []
+      const oldMap = {}
+      oldItems.forEach(it => { oldMap[it.menuIdx] = it.qty })
+      const newItems = Object.entries(editItems)
+        .filter(([, qty]) => qty > 0)
+        .map(([i, qty]) => ({ menuIdx: +i, name: menus[+i]?.lo || '', qty, price: prices[+i] || 0, sub: (prices[+i] || 0) * qty }))
+      if (newItems.length === 0) { alert('ຕ້ອງມີສິນຄ້າຢ່າງໜ້ອຍ 1 ລາຍການ'); setEditSaving(false); return }
+      const newTotal = newItems.reduce((s, it) => s + it.sub, 0)
+      const stockKey = editOrder.type === 'online' ? 'stock_online' : 'stock_shop'
+      const stockArr = editOrder.type === 'online' ? [...stockOnline] : [...stockShop]
+      const allIdxes = new Set([...Object.keys(oldMap), ...Object.keys(editItems)].map(Number))
+      allIdxes.forEach(idx => {
+        const diff = (editItems[idx] || 0) - (oldMap[idx] || 0)
+        stockArr[idx] = Math.max(0, (stockArr[idx] || 0) - diff)
+      })
+      await supabase.from('orders').update({ items: JSON.stringify(newItems), total: newTotal }).eq('id', editOrder.id)
+      await saveConfig(stockKey, stockArr)
+      setOrders(prev => prev.map(o => o.id === editOrder.id ? { ...o, items: JSON.stringify(newItems), total: newTotal } : o))
+      setEditOrder(null)
+      showToast(`✏️ #${String(editOrder.qnum).padStart(4, '0')} ແກ້ໄຂແລ້ວ`, 'green')
+    } catch (e) { alert('❌ ' + (e.message || 'error')) }
+    finally { setEditSaving(false) }
   }
 
   function qoShowPackToast(msg) {
@@ -238,6 +277,7 @@ export default function StaffPage() {
         qnum: qnumData, type: 'walkin', status: 'confirmed',
         items: JSON.stringify(items), total, bag_label: packingLabel,
         done: false, cancelled: false, paid: true, payment_method: paymentMethod,
+        ...(qoName.trim() ? { customer: JSON.stringify({ name: qoName.trim() }) } : {}),
       })
       if (error) throw error
       const newStock = [...stockShop]
@@ -1485,8 +1525,13 @@ export default function StaffPage() {
 
                       <div className="p-3">
                         <div className="flex justify-between items-start mb-2">
-                          <div className="font-serif text-2xl font-black" style={{ color: 'var(--brown)' }}>
-                            #{String(o.qnum).padStart(4,'0')}
+                          <div className="flex items-center gap-2">
+                            <div className="font-serif text-2xl font-black" style={{ color: 'var(--brown)' }}>
+                              #{String(o.qnum).padStart(4,'0')}
+                            </div>
+                            {!o.done && !o.cancelled && o.status !== 'rejected' && (
+                              <button onClick={() => openEditOrder(o)} className="py-1 px-2 rounded-lg text-xs font-black" style={{ background: '#eff6ff', color: '#1d4ed8' }}>✏️ ແກ້</button>
+                            )}
                           </div>
                           <div className="text-right">
                             <div className="text-xs font-bold" style={{ color: 'var(--gray3)' }}>{time}</div>
@@ -1925,6 +1970,16 @@ export default function StaffPage() {
           {/* Step 1 — items mode */}
           {qoStep === 1 && qoBagMode === 'items' && (
             <>
+              <div className="px-4 pt-3 pb-1 flex-shrink-0">
+                <input
+                  type="text"
+                  placeholder="ຊື່ລູກຄ້າ (ຖ້າມີ) · Customer name"
+                  value={qoName}
+                  onChange={e => setQoName(e.target.value)}
+                  className="w-full px-4 py-2.5 rounded-xl border-2 border-[#e8d5c0] text-sm font-bold outline-none"
+                  style={{ background: 'var(--warm-white)', color: 'var(--brown)' }}
+                />
+              </div>
               <div className="flex-1 overflow-y-auto p-4">
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                   {menus.map((m, i) => {
@@ -2099,6 +2154,71 @@ export default function StaffPage() {
               <button className="btn-outline mt-2 w-full max-w-sm py-3" onClick={() => { setQoOpen(false); resetQo() }}>ປິດ</button>
             </div>
           )}
+        </div>
+      )}
+
+      {/* Edit Order Modal */}
+      {editOrder && (
+        <div className="fixed inset-0 z-50 flex flex-col" style={{ background: 'var(--cream)' }}>
+          <div className="flex items-center gap-3 px-4 py-3 flex-shrink-0" style={{ background: 'var(--brown)' }}>
+            <button onClick={() => setEditOrder(null)} className="text-xl font-black w-8" style={{ color: 'var(--cream)' }}>✕</button>
+            <div className="flex-1 font-serif font-black text-lg" style={{ color: 'var(--cream)' }}>
+              ✏️ ແກ້ໄຂ #{String(editOrder.qnum).padStart(4, '0')}
+            </div>
+          </div>
+          <div className="flex-1 overflow-y-auto p-4">
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+              {menus.map((m, i) => {
+                const qty = editItems[i] || 0
+                const stockArr = editOrder.type === 'online' ? stockOnline : stockShop
+                const oldItems = typeof editOrder.items === 'string' ? JSON.parse(editOrder.items) : editOrder.items || []
+                const oldQty = oldItems.find(it => it.menuIdx === i)?.qty || 0
+                const available = (stockArr[i] || 0) + oldQty
+                const isOut = available === 0
+                const img = images[i]
+                return (
+                  <div key={i} className={`rounded-2xl overflow-hidden border-2 transition-all ${qty > 0 ? 'border-[#3d1f0a]' : 'border-[#e8d5c0]'}`} style={{ background: 'var(--warm-white)' }}>
+                    <div className="aspect-square relative overflow-hidden" style={{ background: 'var(--cream2)' }}>
+                      {img ? <img src={img} alt={m.lo} className="w-full h-full object-cover" />
+                        : <div className="absolute inset-0 flex items-center justify-center text-4xl">{EMOJIS[i] || '🍱'}</div>}
+                      {qty > 0 && <div className="absolute top-2 right-2 w-6 h-6 rounded-full flex items-center justify-center text-xs font-black" style={{ background: 'var(--brown)', color: 'var(--cream)' }}>{qty}</div>}
+                    </div>
+                    <div className="p-2">
+                      <div className="text-sm font-black leading-tight" style={{ color: 'var(--brown)' }}>{m.lo}</div>
+                      <div className="text-xs font-bold mt-0.5" style={{ color: 'var(--gray3)' }}>{(prices[i] || 0).toLocaleString()} ກີບ</div>
+                    </div>
+                    <div className="flex items-center justify-between px-2 py-2 border-t border-[#e8d5c0]" style={{ background: 'var(--cream2)' }}>
+                      <button
+                        onClick={() => setEditItems(prev => { const n = { ...prev }; const next = Math.max(0, (n[i] || 0) - 1); if (next === 0) delete n[i]; else n[i] = next; return n })}
+                        disabled={qty === 0}
+                        className="w-8 h-8 rounded-full border-2 flex items-center justify-center text-lg font-black disabled:opacity-30"
+                        style={{ borderColor: 'var(--brown)', background: 'var(--warm-white)', color: 'var(--brown)' }}>−</button>
+                      <span className="font-black text-sm" style={{ color: 'var(--brown)' }}>{qty}</span>
+                      <button
+                        onClick={() => setEditItems(prev => ({ ...prev, [i]: Math.min(available, (prev[i] || 0) + 1) }))}
+                        disabled={isOut || qty >= available}
+                        className="w-8 h-8 rounded-full border-2 flex items-center justify-center text-lg font-black disabled:opacity-30"
+                        style={{ borderColor: 'var(--brown)', background: 'var(--warm-white)', color: 'var(--brown)' }}>+</button>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+          <div className="p-4 border-t-2 border-[#e8d5c0] flex-shrink-0" style={{ background: 'var(--warm-white)' }}>
+            <div className="flex justify-between mb-3 px-1">
+              <span className="font-black" style={{ color: 'var(--brown)' }}>
+                {Object.values(editItems).reduce((s, q) => s + q, 0)} ກ້ອນ
+              </span>
+              <span className="font-black" style={{ color: 'var(--brown)' }}>
+                {Object.entries(editItems).reduce((s, [i, q]) => s + (prices[+i] || 0) * q, 0).toLocaleString()} ກີບ
+              </span>
+            </div>
+            <button onClick={saveEditOrder} disabled={editSaving} className="btn-primary w-full">
+              {editSaving ? '...' : '✅ ບັນທຶກການແກ້ໄຂ'}
+            </button>
+            <button onClick={() => setEditOrder(null)} className="btn-outline mt-2 w-full py-3 text-sm">ຍົກເລີກ</button>
+          </div>
         </div>
       )}
 
