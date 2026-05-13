@@ -1053,42 +1053,51 @@ export default function StaffPage() {
     const custName = (() => { try { const c = typeof o.customer === 'string' ? JSON.parse(o.customer) : o.customer; return c?.name || '' } catch { return '' } })()
     const dt = new Date(o.created_at)
     const dateStr = `${dt.getDate()}/${dt.getMonth()+1}/${dt.getFullYear()} ${String(dt.getHours()).padStart(2,'0')}:${String(dt.getMinutes()).padStart(2,'0')}`
-    const fontFace = receiptFontRef.current
-      ? `@font-face{font-family:'NotoLaoReceipt';src:url('${receiptFontRef.current}');font-weight:100 900;}`
-      : ''
-    const fontFamily = fontFace ? "'NotoLaoReceipt',monospace" : "'Noto Sans Lao',monospace"
 
-    // Build hidden receipt element
+    // Load Lao font into browser's FontFace registry
+    let fontFamily = "'Noto Sans Lao',monospace"
+    if (receiptFontRef.current && !document.fonts.check("900 16px 'NotoLaoReceipt'")) {
+      try {
+        const face = new FontFace('NotoLaoReceipt', `url(${receiptFontRef.current})`, { weight: '100 900' })
+        const loaded = await face.load()
+        document.fonts.add(loaded)
+        fontFamily = "'NotoLaoReceipt',monospace"
+      } catch { /* use fallback */ }
+    } else if (document.fonts.check("900 16px 'NotoLaoReceipt'")) {
+      fontFamily = "'NotoLaoReceipt',monospace"
+    }
+    await document.fonts.ready
+
     const el = document.createElement('div')
     el.style.cssText = `position:fixed;left:-9999px;top:0;width:302px;padding:12px;background:#fff;color:#000;font-family:${fontFamily};font-size:12px;`
     el.innerHTML = `
-      ${fontFace ? `<style>${fontFace}</style>` : ''}
-      <div style="font-size:17px;font-weight:900;text-align:center;font-family:${fontFamily};">${shopInfo.name}</div>
-      ${shopInfo.address ? `<div style="font-size:10px;text-align:center;color:#555;font-family:${fontFamily};">${shopInfo.address}</div>` : ''}
+      <div style="font-size:17px;font-weight:900;text-align:center;">${shopInfo.name}</div>
+      ${shopInfo.address ? `<div style="font-size:10px;text-align:center;color:#555;">${shopInfo.address}</div>` : ''}
       ${shopInfo.phone ? `<div style="font-size:10px;text-align:center;color:#555;">Tel: ${shopInfo.phone}</div>` : ''}
       <div style="border-top:1px dashed #000;margin:8px 0;"></div>
-      <div style="font-size:10px;text-align:center;color:#666;font-family:${fontFamily};">ເລກຄິວ · QUEUE</div>
+      <div style="font-size:10px;text-align:center;color:#666;">ເລກຄິວ · QUEUE</div>
       <div style="font-size:52px;font-weight:900;text-align:center;line-height:1.1;margin:4px 0;">${String(o.qnum).padStart(4,'0')}</div>
-      ${custName ? `<div style="font-size:11px;text-align:center;font-family:${fontFamily};">${custName}</div>` : ''}
+      ${custName ? `<div style="font-size:11px;text-align:center;">${custName}</div>` : ''}
       <div style="font-size:10px;text-align:center;color:#666;">${dateStr}</div>
       <div style="border-top:1px dashed #000;margin:8px 0;"></div>
-      <table style="width:100%;border-collapse:collapse;font-family:${fontFamily};">
+      <table style="width:100%;border-collapse:collapse;">
         ${items.map(it => `<tr><td style="padding:2px 0;">${nameOf(it)} x${it.qty}</td><td style="text-align:right;padding:2px 0;">${(it.sub||0).toLocaleString()}</td></tr>`).join('')}
-        ${o.bag_label ? `<tr><td colspan="2" style="font-size:10px;padding-top:4px;border-left:3px solid #000;padding-left:6px;font-family:${fontFamily};">${o.bag_label.replace(/ \| /g,'<br>')}</td></tr>` : ''}
+        ${o.bag_label ? `<tr><td colspan="2" style="font-size:10px;padding-top:4px;border-left:3px solid #000;padding-left:6px;">${o.bag_label.replace(/ \| /g,'<br>')}</td></tr>` : ''}
       </table>
       <div style="border-top:1px dashed #000;margin:8px 0;"></div>
-      <div style="display:flex;justify-content:space-between;font-weight:900;font-size:13px;font-family:${fontFamily};">
+      <div style="display:flex;justify-content:space-between;font-weight:900;font-size:13px;">
         <span>ລວມ · TOTAL</span><span>${(o.total||0).toLocaleString()} ກີບ</span>
       </div>
-      <div style="font-size:10px;text-align:center;color:#666;margin-top:8px;font-family:${fontFamily};">${shopInfo.footer || 'ຂອບໃຈທີ່ໃຊ້ບໍລິການ'}</div>
+      <div style="font-size:10px;text-align:center;color:#666;margin-top:8px;">${shopInfo.footer || 'ຂອບໃຈທີ່ໃຊ້ບໍລິການ'}</div>
     `
     document.body.appendChild(el)
 
     try {
-      if (fontFace) await document.fonts.load(`900 16px 'NotoLaoReceipt'`)
       const html2canvas = (await import('html2canvas')).default
-      const canvas = await html2canvas(el, { scale: 2, useCORS: false, allowTaint: true, backgroundColor: '#fff' })
+      const canvas = await html2canvas(el, { scale: 2, backgroundColor: '#fff', logging: false })
       document.body.removeChild(el)
+
+      // Show preview + print
       const imgData = canvas.toDataURL('image/png')
       const printEl = document.createElement('div')
       printEl.id = 'print-receipt'
