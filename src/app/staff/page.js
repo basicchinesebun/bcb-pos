@@ -1033,7 +1033,15 @@ export default function StaffPage() {
   // ─── Print ───
   function printOrder(o) {
     const items = typeof o.items === 'string' ? JSON.parse(o.items) : o.items || []
-    const itemsHtml = items.map(it => `<div style="display:flex;justify-content:space-between;"><span>${it.name} x${it.qty}</span><span>${it.sub?.toLocaleString()}</span></div>`).join('')
+    const nameOf = it => {
+      const m = menus[it.menuIdx]
+      return (m?.en && m.en !== `Menu ${it.menuIdx + 1}`) ? m.en : (m?.lo || it.name || `Item ${it.menuIdx + 1}`)
+    }
+    const itemsHtml = items.map(it => `<div style="display:flex;justify-content:space-between;margin:2px 0;"><span>${nameOf(it)} x${it.qty}</span><span>${(it.sub||0).toLocaleString()}</span></div>`).join('')
+    const bagHtml = o.bag_label ? `<div style="font-size:10px;color:#444;margin:4px 0;border-left:3px solid #000;padding-left:6px;">${o.bag_label.replace(/ \| /g,'<br>')}</div>` : ''
+    const custName = (() => { try { const c = typeof o.customer === 'string' ? JSON.parse(o.customer) : o.customer; return c?.name || '' } catch { return '' } })()
+    const dt = new Date(o.created_at)
+    const dateStr = `${dt.getDate()}/${dt.getMonth()+1}/${dt.getFullYear()} ${String(dt.getHours()).padStart(2,'0')}:${String(dt.getMinutes()).padStart(2,'0')}`
     const w = window.open('', '_blank', 'width=320,height=600')
     w.document.write(`
       <html><head><style>
@@ -1050,14 +1058,16 @@ export default function StaffPage() {
         ${shopInfo.address ? `<div class="sub">${shopInfo.address}</div>` : ''}
         ${shopInfo.phone ? `<div class="sub">Tel: ${shopInfo.phone}</div>` : ''}
         <hr class="div">
-        <div class="qlbl">ເລກຄິວ · QUEUE</div>
+        <div class="qlbl">QUEUE</div>
         <div class="qnum">${String(o.qnum).padStart(4,'0')}</div>
-        <div class="sub">${new Date(o.created_at).toLocaleString('lo-LA')}</div>
+        ${custName ? `<div class="sub">${custName}</div>` : ''}
+        <div class="sub">${dateStr}</div>
         <hr class="div">
         ${itemsHtml}
+        ${bagHtml}
         <hr class="div">
-        <div class="total"><span>ລວມ</span><span>${o.total?.toLocaleString()} ກີບ</span></div>
-        <div class="foot">${shopInfo.footer}</div>
+        <div class="total"><span>TOTAL</span><span>${(o.total||0).toLocaleString()} LAK</span></div>
+        <div class="foot">Thank you!</div>
       </body></html>
     `)
     w.document.close()
