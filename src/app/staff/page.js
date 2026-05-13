@@ -1060,8 +1060,11 @@ export default function StaffPage() {
     document.body.appendChild(el)
 
     try {
+      // Wait for Noto Sans Lao font to be ready before capturing
+      await document.fonts.load('900 16px "Noto Sans Lao"')
+      await document.fonts.ready
       const html2canvas = (await import('html2canvas')).default
-      const canvas = await html2canvas(el, { scale: 2, useCORS: true, backgroundColor: '#fff' })
+      const canvas = await html2canvas(el, { scale: 2, useCORS: true, backgroundColor: '#fff', onclone: (doc) => { doc.body.style.fontFamily = '"Noto Sans Lao", monospace' } })
       document.body.removeChild(el)
       const imgData = canvas.toDataURL('image/png')
       const w = window.open('', '_blank', 'width=340,height=700')
