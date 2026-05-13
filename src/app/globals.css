@@ -64,3 +64,17 @@ body {
     @apply inline-block text-xs font-black rounded px-2 py-1;
   }
 }
+
+@media print {
+  body > *:not(#print-receipt) { display: none !important; }
+  #print-receipt {
+    display: block !important;
+    font-family: 'Noto Sans Lao', monospace;
+    padding: 10px;
+    max-width: 300px;
+    margin: 0 auto;
+    font-size: 12px;
+    color: #000;
+    background: #fff;
+  }
+}
