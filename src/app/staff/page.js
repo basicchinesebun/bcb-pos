@@ -1031,50 +1031,57 @@ export default function StaffPage() {
   }
 
   // ─── Print ───
-  async function printOrder(o) {
+  function printOrder(o) {
     const items = typeof o.items === 'string' ? JSON.parse(o.items) : o.items || []
-    const nameOf = it => menus[it.menuIdx]?.lo || it.name || `Item ${it.menuIdx + 1}`
+    const nameOf = it => menus[it.menuIdx]?.lo || it.name || `Item ${(it.menuIdx||0)+1}`
     const custName = (() => { try { const c = typeof o.customer === 'string' ? JSON.parse(o.customer) : o.customer; return c?.name || '' } catch { return '' } })()
     const dt = new Date(o.created_at)
     const dateStr = `${dt.getDate()}/${dt.getMonth()+1}/${dt.getFullYear()} ${String(dt.getHours()).padStart(2,'0')}:${String(dt.getMinutes()).padStart(2,'0')}`
-
-    // Build receipt DOM element (hidden, off-screen)
-    const el = document.createElement('div')
-    el.style.cssText = 'position:fixed;left:-9999px;top:0;width:300px;background:#fff;padding:12px;font-family:"Noto Sans Lao",monospace;color:#000;'
-    el.innerHTML = `
-      <div style="font-size:17px;font-weight:900;text-align:center;">${shopInfo.name}</div>
-      ${shopInfo.address ? `<div style="font-size:10px;text-align:center;color:#555;">${shopInfo.address}</div>` : ''}
-      ${shopInfo.phone ? `<div style="font-size:10px;text-align:center;color:#555;">Tel: ${shopInfo.phone}</div>` : ''}
-      <div style="border-top:1px dashed #000;margin:8px 0;"></div>
-      <div style="font-size:10px;text-align:center;color:#666;">ເລກຄິວ · QUEUE</div>
-      <div style="font-size:52px;font-weight:900;text-align:center;line-height:1.1;">${String(o.qnum).padStart(4,'0')}</div>
-      ${custName ? `<div style="font-size:11px;text-align:center;">${custName}</div>` : ''}
-      <div style="font-size:10px;text-align:center;color:#666;">${dateStr}</div>
-      <div style="border-top:1px dashed #000;margin:8px 0;"></div>
-      ${items.map(it => `<div style="display:flex;justify-content:space-between;font-size:12px;margin:3px 0;"><span>${nameOf(it)} x${it.qty}</span><span>${(it.sub||0).toLocaleString()}</span></div>`).join('')}
-      ${o.bag_label ? `<div style="font-size:10px;color:#444;margin:4px 0;padding-left:6px;border-left:3px solid #000;">${o.bag_label.replace(/ \| /g,'<br>')}</div>` : ''}
-      <div style="border-top:1px dashed #000;margin:8px 0;"></div>
-      <div style="display:flex;justify-content:space-between;font-weight:900;font-size:13px;"><span>ລວມ · TOTAL</span><span>${(o.total||0).toLocaleString()} ກີບ</span></div>
-      <div style="font-size:10px;text-align:center;color:#666;margin-top:8px;">${shopInfo.footer || 'ຂອບໃຈທີ່ໃຊ້ບໍລິການ'}</div>
-    `
-    document.body.appendChild(el)
-
-    try {
-      // Wait for Noto Sans Lao font to be ready before capturing
-      await document.fonts.load('900 16px "Noto Sans Lao"')
-      await document.fonts.ready
-      const html2canvas = (await import('html2canvas')).default
-      const canvas = await html2canvas(el, { scale: 2, useCORS: true, backgroundColor: '#fff', onclone: (doc) => { doc.body.style.fontFamily = '"Noto Sans Lao", monospace' } })
-      document.body.removeChild(el)
-      const imgData = canvas.toDataURL('image/png')
-      const w = window.open('', '_blank', 'width=340,height=700')
-      w.document.write(`<html><head><style>body{margin:0;padding:8px;}img{width:100%;max-width:300px;display:block;margin:0 auto;}@media print{body{margin:0;padding:0;}}</style></head><body><img src="${imgData}"/></body></html>`)
-      w.document.close()
-      setTimeout(() => { w.onafterprint = () => w.close(); w.print() }, 400)
-    } catch {
-      document.body.removeChild(el)
-      showToast('❌ ປິ້ນຜິດພາດ', 'red')
-    }
+    const itemsHtml = items.map(it => `<tr><td>${nameOf(it)} x${it.qty}</td><td align="right">${(it.sub||0).toLocaleString()}</td></tr>`).join('')
+    const bagHtml = o.bag_label ? `<tr><td colspan="2" style="font-size:10px;padding-top:4px;border-left:3px solid #000;padding-left:6px;">${o.bag_label.replace(/ \| /g,'<br>')}</td></tr>` : ''
+    const w = window.open('', '_blank', 'width=320,height=600')
+    if (!w) { showToast('Allow popups to print', 'red'); return }
+    w.document.write(`<!DOCTYPE html><html><head>
+      <meta charset="utf-8">
+      <link rel="preconnect" href="https://fonts.googleapis.com">
+      <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+      <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Lao:wght@400;700;900&display=swap" rel="stylesheet">
+      <style>
+        *{box-sizing:border-box;}
+        body{font-family:'Noto Sans Lao',monospace;padding:10px;max-width:300px;margin:0 auto;font-size:12px;color:#000;}
+        .shop{font-size:17px;font-weight:900;text-align:center;}
+        .sub{font-size:10px;text-align:center;color:#555;margin-top:2px;}
+        .div{border:none;border-top:1px dashed #000;margin:8px 0;}
+        .qnum{font-size:52px;font-weight:900;text-align:center;line-height:1.1;margin:4px 0;}
+        .qlbl{font-size:10px;text-align:center;color:#666;}
+        .foot{font-size:10px;text-align:center;color:#666;margin-top:8px;}
+        table{width:100%;border-collapse:collapse;}
+        td{padding:2px 0;vertical-align:top;}
+        .total td{font-weight:900;font-size:13px;padding-top:4px;}
+        @media print{body{padding:0;}}
+      </style>
+    </head><body>
+      <div class="shop">${shopInfo.name}</div>
+      ${shopInfo.address ? `<div class="sub">${shopInfo.address}</div>` : ''}
+      ${shopInfo.phone ? `<div class="sub">Tel: ${shopInfo.phone}</div>` : ''}
+      <hr class="div">
+      <div class="qlbl">ເລກຄິວ · QUEUE</div>
+      <div class="qnum">${String(o.qnum).padStart(4,'0')}</div>
+      ${custName ? `<div class="sub">${custName}</div>` : ''}
+      <div class="sub">${dateStr}</div>
+      <hr class="div">
+      <table>${itemsHtml}${bagHtml}</table>
+      <hr class="div">
+      <table><tr class="total"><td>ລວມ · TOTAL</td><td align="right">${(o.total||0).toLocaleString()} ກີບ</td></tr></table>
+      <div class="foot">${shopInfo.footer || 'ຂອບໃຈທີ່ໃຊ້ບໍລິການ'}</div>
+      <script>
+        document.fonts.ready.then(function() {
+          window.onafterprint = function() { window.close(); };
+          window.print();
+        });
+      <\/script>
+    </body></html>`)
+    w.document.close()
   }
 
   // ─── Sales ───
