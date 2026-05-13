@@ -1171,10 +1171,10 @@ export default function StaffPage() {
             </div>
             <div className="flex gap-2">
               <button onClick={connectUsbPrinter} className={`text-xs font-black px-3 py-2 rounded-lg border ${usbConnected ? 'border-green-400 text-green-300' : 'border-[rgba(253,246,238,0.35)] text-[#fdf6ee]'}`}>
-                🖨 {usbConnected ? '✓' : 'USB'}
+                {usbConnected ? '🖨 USB ✓' : 'USB'}
               </button>
               <button onClick={connectPrinter} className={`text-xs font-black px-3 py-2 rounded-lg border ${btConnected ? 'border-green-400 text-green-300' : 'border-[rgba(253,246,238,0.35)] text-[#fdf6ee]'}`}>
-                🖨 {btConnected ? '✓' : 'BT'}
+                {btConnected ? '🖨 BT ✓' : 'BT'}
               </button>
               <button onClick={() => alert('ຕ້ອງຊອກຫາ ↺ Reset ໃນລາຍການ')} className="text-xs font-black px-3 py-2 rounded-lg border border-red-400 text-red-300">↺</button>
             </div>
