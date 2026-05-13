@@ -79,6 +79,22 @@ export default function StaffPage() {
   const chatBottomRef = useRef(null)
   const activeChatPhoneRef = useRef(null)
   const voicesRef = useRef([])
+  const receiptFontRef = useRef(null)
+
+  useEffect(() => {
+    // Pre-fetch Noto Sans Lao font as base64 for receipt image printing
+    ;(async () => {
+      try {
+        const css = await (await fetch('https://fonts.googleapis.com/css2?family=Noto+Sans+Lao:wght@400;700;900&display=swap')).text()
+        const url = css.match(/url\((https:\/\/fonts\.gstatic\.com[^)]+\.woff2)\)/)?.[1]
+        if (!url) return
+        const blob = await (await fetch(url)).blob()
+        const reader = new FileReader()
+        reader.onloadend = () => { receiptFontRef.current = reader.result }
+        reader.readAsDataURL(blob)
+      } catch { /* no font, will fall back */ }
+    })()
+  }, [])
 
   useEffect(() => {
     if (!supabase) { setLoading(false); return }
@@ -1031,42 +1047,60 @@ export default function StaffPage() {
   }
 
   // ─── Print ───
-  function printOrder(o) {
+  async function printOrder(o) {
     const items = typeof o.items === 'string' ? JSON.parse(o.items) : o.items || []
     const nameOf = it => menus[it.menuIdx]?.lo || it.name || `Item ${(it.menuIdx||0)+1}`
     const custName = (() => { try { const c = typeof o.customer === 'string' ? JSON.parse(o.customer) : o.customer; return c?.name || '' } catch { return '' } })()
     const dt = new Date(o.created_at)
     const dateStr = `${dt.getDate()}/${dt.getMonth()+1}/${dt.getFullYear()} ${String(dt.getHours()).padStart(2,'0')}:${String(dt.getMinutes()).padStart(2,'0')}`
+    const fontFace = receiptFontRef.current
+      ? `@font-face{font-family:'NotoLaoReceipt';src:url('${receiptFontRef.current}');font-weight:100 900;}`
+      : ''
+    const fontFamily = fontFace ? "'NotoLaoReceipt',monospace" : "'Noto Sans Lao',monospace"
 
-    const old = document.getElementById('print-receipt')
-    if (old) old.remove()
-
+    // Build hidden receipt element
     const el = document.createElement('div')
-    el.id = 'print-receipt'
-    el.style.display = 'none'
+    el.style.cssText = `position:fixed;left:-9999px;top:0;width:302px;padding:12px;background:#fff;color:#000;font-family:${fontFamily};font-size:12px;`
     el.innerHTML = `
-      <div style="font-size:17px;font-weight:900;text-align:center;">${shopInfo.name}</div>
-      ${shopInfo.address ? `<div style="font-size:10px;text-align:center;color:#555;">${shopInfo.address}</div>` : ''}
+      ${fontFace ? `<style>${fontFace}</style>` : ''}
+      <div style="font-size:17px;font-weight:900;text-align:center;font-family:${fontFamily};">${shopInfo.name}</div>
+      ${shopInfo.address ? `<div style="font-size:10px;text-align:center;color:#555;font-family:${fontFamily};">${shopInfo.address}</div>` : ''}
       ${shopInfo.phone ? `<div style="font-size:10px;text-align:center;color:#555;">Tel: ${shopInfo.phone}</div>` : ''}
       <div style="border-top:1px dashed #000;margin:8px 0;"></div>
-      <div style="font-size:10px;text-align:center;color:#666;">ເລກຄິວ · QUEUE</div>
+      <div style="font-size:10px;text-align:center;color:#666;font-family:${fontFamily};">ເລກຄິວ · QUEUE</div>
       <div style="font-size:52px;font-weight:900;text-align:center;line-height:1.1;margin:4px 0;">${String(o.qnum).padStart(4,'0')}</div>
-      ${custName ? `<div style="font-size:11px;text-align:center;">${custName}</div>` : ''}
+      ${custName ? `<div style="font-size:11px;text-align:center;font-family:${fontFamily};">${custName}</div>` : ''}
       <div style="font-size:10px;text-align:center;color:#666;">${dateStr}</div>
       <div style="border-top:1px dashed #000;margin:8px 0;"></div>
-      <table style="width:100%;border-collapse:collapse;">
+      <table style="width:100%;border-collapse:collapse;font-family:${fontFamily};">
         ${items.map(it => `<tr><td style="padding:2px 0;">${nameOf(it)} x${it.qty}</td><td style="text-align:right;padding:2px 0;">${(it.sub||0).toLocaleString()}</td></tr>`).join('')}
-        ${o.bag_label ? `<tr><td colspan="2" style="font-size:10px;padding-top:4px;border-left:3px solid #000;padding-left:6px;">${o.bag_label.replace(/ \| /g,'<br>')}</td></tr>` : ''}
+        ${o.bag_label ? `<tr><td colspan="2" style="font-size:10px;padding-top:4px;border-left:3px solid #000;padding-left:6px;font-family:${fontFamily};">${o.bag_label.replace(/ \| /g,'<br>')}</td></tr>` : ''}
       </table>
       <div style="border-top:1px dashed #000;margin:8px 0;"></div>
-      <div style="display:flex;justify-content:space-between;font-weight:900;font-size:13px;">
+      <div style="display:flex;justify-content:space-between;font-weight:900;font-size:13px;font-family:${fontFamily};">
         <span>ລວມ · TOTAL</span><span>${(o.total||0).toLocaleString()} ກີບ</span>
       </div>
-      <div style="font-size:10px;text-align:center;color:#666;margin-top:8px;">${shopInfo.footer || 'ຂອບໃຈທີ່ໃຊ້ບໍລິການ'}</div>
+      <div style="font-size:10px;text-align:center;color:#666;margin-top:8px;font-family:${fontFamily};">${shopInfo.footer || 'ຂອບໃຈທີ່ໃຊ້ບໍລິການ'}</div>
     `
     document.body.appendChild(el)
-    window.onafterprint = () => { el.remove(); window.onafterprint = null }
-    window.print()
+
+    try {
+      if (fontFace) await document.fonts.load(`900 16px 'NotoLaoReceipt'`)
+      const html2canvas = (await import('html2canvas')).default
+      const canvas = await html2canvas(el, { scale: 2, useCORS: false, allowTaint: true, backgroundColor: '#fff' })
+      document.body.removeChild(el)
+      const imgData = canvas.toDataURL('image/png')
+      const printEl = document.createElement('div')
+      printEl.id = 'print-receipt'
+      printEl.innerHTML = `<img src="${imgData}" style="width:100%;max-width:302px;display:block;margin:0 auto;">`
+      printEl.style.display = 'none'
+      document.body.appendChild(printEl)
+      window.onafterprint = () => { printEl.remove(); window.onafterprint = null }
+      window.print()
+    } catch {
+      if (document.body.contains(el)) document.body.removeChild(el)
+      showToast('❌ ປິ້ນຜິດພາດ', 'red')
+    }
   }
 
   // ─── Sales ───
