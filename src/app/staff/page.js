@@ -1061,7 +1061,10 @@ export default function StaffPage() {
       </body></html>
     `)
     w.document.close()
-    setTimeout(() => { w.print(); w.close() }, 300)
+    setTimeout(() => {
+      w.onafterprint = () => w.close()
+      w.print()
+    }, 300)
   }
 
   // ─── Sales ───
