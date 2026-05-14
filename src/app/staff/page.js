@@ -82,17 +82,22 @@ export default function StaffPage() {
   const receiptFontRef = useRef(null)
 
   useEffect(() => {
-    // Pre-fetch Noto Sans Lao font as base64 for receipt image printing
+    // Load Noto Sans Lao into document.fonts for canvas receipt rendering
     ;(async () => {
       try {
-        const css = await (await fetch('https://fonts.googleapis.com/css2?family=Noto+Sans+Lao:wght@400;700;900&display=swap')).text()
-        const url = css.match(/url\((https:\/\/fonts\.gstatic\.com[^)]+\.woff2)\)/)?.[1]
-        if (!url) return
-        const blob = await (await fetch(url)).blob()
-        const reader = new FileReader()
-        reader.onloadend = () => { receiptFontRef.current = reader.result }
-        reader.readAsDataURL(blob)
-      } catch { /* no font, will fall back */ }
+        const css = await fetch('https://fonts.googleapis.com/css2?family=Noto+Sans+Lao:wght@400;700&display=swap').then(r => r.text())
+        const blocks = css.split('@font-face').slice(1)
+        for (const block of blocks) {
+          const urlMatch = block.match(/url\((https:\/\/fonts\.gstatic\.com[^)]+\.woff2)\)/)
+          const weightMatch = block.match(/font-weight:\s*(\d+)/)
+          if (!urlMatch) continue
+          try {
+            const face = new FontFace('NotoLaoR', `url(${urlMatch[1]})`, { weight: weightMatch?.[1] || '400' })
+            document.fonts.add(await face.load())
+          } catch { }
+        }
+        receiptFontRef.current = 'NotoLaoR'
+      } catch { /* fall back to system Noto Sans Lao */ }
     })()
   }, [])
 
@@ -826,16 +831,16 @@ export default function StaffPage() {
 
   async function usbPrint(o) {
     if (!usbDeviceRef.current || !usbEndpointRef.current) { printOrder(o); return }
-    const data = buildEscPos(o)
+    let data
+    try { const c = await renderReceiptCanvas(o, 384); data = canvasToEscPos(c) }
+    catch { data = buildEscPos(o) }
     const chunkSize = 64
     try {
       for (let i = 0; i < data.length; i += chunkSize) {
         await usbDeviceRef.current.transferOut(usbEndpointRef.current.endpointNumber, data.slice(i, i + chunkSize))
       }
       showToast('ພິມແລ້ວ ✅', 'green')
-    } catch (e) {
-      showToast('❌ USB ພິມຜິດ', 'red')
-    }
+    } catch { showToast('❌ USB ພິມຜິດ', 'red') }
   }
 
   async function connectPrinter() {
@@ -937,7 +942,9 @@ export default function StaffPage() {
 
   async function btPrint(o) {
     if (!btCharRef.current) { printOrder(o); return }
-    const data = buildEscPos(o)
+    let data
+    try { const c = await renderReceiptCanvas(o, 384); data = canvasToEscPos(c) }
+    catch { data = buildEscPos(o) }
     const chunkSize = 200
     for (let i = 0; i < data.length; i += chunkSize) {
       const chunk = data.slice(i, i + chunkSize)
@@ -948,7 +955,7 @@ export default function StaffPage() {
           await btCharRef.current.writeValue(chunk)
         }
         await new Promise(r => setTimeout(r, 20))
-      } catch (e) { showToast('❌ ພິມຜິດ', 'red'); return }
+      } catch { showToast('❌ ພິມຜິດ', 'red'); return }
     }
     showToast('ພິມແລ້ວ ✅', 'green')
   }
@@ -1047,69 +1054,108 @@ export default function StaffPage() {
   }
 
   // ─── Print ───
-  async function printOrder(o) {
+  async function renderReceiptCanvas(o, W = 560) {
     const items = typeof o.items === 'string' ? JSON.parse(o.items) : o.items || []
     const nameOf = it => menus[it.menuIdx]?.lo || it.name || `Item ${(it.menuIdx||0)+1}`
     const custName = (() => { try { const c = typeof o.customer === 'string' ? JSON.parse(o.customer) : o.customer; return c?.name || '' } catch { return '' } })()
     const dt = new Date(o.created_at)
     const dateStr = `${dt.getDate()}/${dt.getMonth()+1}/${dt.getFullYear()} ${String(dt.getHours()).padStart(2,'0')}:${String(dt.getMinutes()).padStart(2,'0')}`
 
-    // Load Lao font into browser's FontFace registry
-    let fontFamily = "'Noto Sans Lao',monospace"
-    if (receiptFontRef.current && !document.fonts.check("900 16px 'NotoLaoReceipt'")) {
-      try {
-        const face = new FontFace('NotoLaoReceipt', `url(${receiptFontRef.current})`, { weight: '100 900' })
-        const loaded = await face.load()
-        document.fonts.add(loaded)
-        fontFamily = "'NotoLaoReceipt',monospace"
-      } catch { /* use fallback */ }
-    } else if (document.fonts.check("900 16px 'NotoLaoReceipt'")) {
-      fontFamily = "'NotoLaoReceipt',monospace"
-    }
     await document.fonts.ready
+    const fontName = receiptFontRef.current || 'Noto Sans Lao'
+    const s = W / 560
+    const canvas = document.createElement('canvas')
+    canvas.width = W
+    canvas.height = 100
+    const ctx = canvas.getContext('2d')
+    const f = (sz, wt = '400') => `${wt} ${Math.round(sz * s)}px '${fontName}', 'Noto Sans Lao', sans-serif`
 
-    const el = document.createElement('div')
-    el.style.cssText = `position:fixed;left:-9999px;top:0;width:302px;padding:12px;background:#fff;color:#000;font-family:${fontFamily};font-size:12px;`
-    el.innerHTML = `
-      <div style="font-size:17px;font-weight:900;text-align:center;">${shopInfo.name}</div>
-      ${shopInfo.address ? `<div style="font-size:10px;text-align:center;color:#555;">${shopInfo.address}</div>` : ''}
-      ${shopInfo.phone ? `<div style="font-size:10px;text-align:center;color:#555;">Tel: ${shopInfo.phone}</div>` : ''}
-      <div style="border-top:1px dashed #000;margin:8px 0;"></div>
-      <div style="font-size:10px;text-align:center;color:#666;">ເລກຄິວ · QUEUE</div>
-      <div style="font-size:52px;font-weight:900;text-align:center;line-height:1.1;margin:4px 0;">${String(o.qnum).padStart(4,'0')}</div>
-      ${custName ? `<div style="font-size:11px;text-align:center;">${custName}</div>` : ''}
-      <div style="font-size:10px;text-align:center;color:#666;">${dateStr}</div>
-      <div style="border-top:1px dashed #000;margin:8px 0;"></div>
-      <table style="width:100%;border-collapse:collapse;">
-        ${items.map(it => `<tr><td style="padding:2px 0;">${nameOf(it)} x${it.qty}</td><td style="text-align:right;padding:2px 0;">${(it.sub||0).toLocaleString()}</td></tr>`).join('')}
-        ${o.bag_label ? `<tr><td colspan="2" style="font-size:10px;padding-top:4px;border-left:3px solid #000;padding-left:6px;">${o.bag_label.replace(/ \| /g,'<br>')}</td></tr>` : ''}
-      </table>
-      <div style="border-top:1px dashed #000;margin:8px 0;"></div>
-      <div style="display:flex;justify-content:space-between;font-weight:900;font-size:13px;">
-        <span>ລວມ · TOTAL</span><span>${(o.total||0).toLocaleString()} ກີບ</span>
-      </div>
-      <div style="font-size:10px;text-align:center;color:#666;margin-top:8px;">${shopInfo.footer || 'ຂອບໃຈທີ່ໃຊ້ບໍລິການ'}</div>
-    `
-    document.body.appendChild(el)
-
-    try {
-      const html2canvas = (await import('html2canvas')).default
-      const canvas = await html2canvas(el, { scale: 2, backgroundColor: '#fff', logging: false })
-      document.body.removeChild(el)
-
-      // Show preview + print
-      const imgData = canvas.toDataURL('image/png')
-      const printEl = document.createElement('div')
-      printEl.id = 'print-receipt'
-      printEl.innerHTML = `<img src="${imgData}" style="width:100%;max-width:302px;display:block;margin:0 auto;">`
-      printEl.style.display = 'none'
-      document.body.appendChild(printEl)
-      window.onafterprint = () => { printEl.remove(); window.onafterprint = null }
-      window.print()
-    } catch {
-      if (document.body.contains(el)) document.body.removeChild(el)
-      showToast('❌ ປິ້ນຜິດພາດ', 'red')
+    let y = 0
+    const ops = []
+    const push = fn => ops.push(fn)
+    const dash = () => {
+      ctx.setLineDash([4, 3])
+      ctx.beginPath(); ctx.moveTo(10, y); ctx.lineTo(W - 10, y)
+      ctx.strokeStyle = '#000'; ctx.stroke(); ctx.setLineDash([])
+      y += Math.round(14 * s)
     }
+    push(() => { ctx.font = f(28, '900'); ctx.textAlign = 'center'; ctx.fillStyle = '#000'; ctx.fillText(shopInfo.name || 'BCB', W/2, y += Math.round(34 * s)) })
+    if (shopInfo.address) push(() => { ctx.font = f(18); ctx.textAlign = 'center'; ctx.fillStyle = '#555'; ctx.fillText(shopInfo.address, W/2, y += Math.round(24 * s)); ctx.fillStyle = '#000' })
+    if (shopInfo.phone) push(() => { ctx.font = f(18); ctx.textAlign = 'center'; ctx.fillStyle = '#555'; ctx.fillText('Tel: ' + shopInfo.phone, W/2, y += Math.round(24 * s)); ctx.fillStyle = '#000' })
+    push(() => { y += Math.round(8 * s); dash() })
+    push(() => { ctx.font = f(17); ctx.textAlign = 'center'; ctx.fillStyle = '#888'; ctx.fillText('ເລກຄິວ · QUEUE', W/2, y += Math.round(22 * s)); ctx.fillStyle = '#000' })
+    push(() => { ctx.font = f(88, '900'); ctx.textAlign = 'center'; ctx.fillText(String(o.qnum).padStart(4, '0'), W/2, y += Math.round(96 * s)) })
+    if (custName) push(() => { ctx.font = f(18); ctx.textAlign = 'center'; ctx.fillText(custName, W/2, y += Math.round(26 * s)) })
+    push(() => { ctx.font = f(18); ctx.textAlign = 'center'; ctx.fillStyle = '#888'; ctx.fillText(dateStr, W/2, y += Math.round(24 * s)); ctx.fillStyle = '#000' })
+    push(() => { y += Math.round(8 * s); dash() })
+    items.forEach(it => push(() => {
+      ctx.font = f(20); ctx.textAlign = 'left'; ctx.fillStyle = '#000'
+      ctx.fillText(nameOf(it) + ' x' + it.qty, 10, y += Math.round(28 * s))
+      ctx.textAlign = 'right'; ctx.fillText((it.sub || 0).toLocaleString(), W - 10, y)
+    }))
+    if (o.bag_label) o.bag_label.split(' | ').forEach(bl => push(() => {
+      ctx.font = f(17); ctx.fillStyle = '#444'; ctx.textAlign = 'left'
+      ctx.fillText(bl, 20, y += Math.round(26 * s)); ctx.fillStyle = '#000'
+    }))
+    push(() => { y += Math.round(8 * s); dash() })
+    push(() => {
+      ctx.font = f(22, '900'); ctx.textAlign = 'left'; ctx.fillStyle = '#000'
+      ctx.fillText('ລວມ · TOTAL', 10, y += Math.round(30 * s))
+      ctx.textAlign = 'right'; ctx.fillText((o.total || 0).toLocaleString() + ' ກີບ', W - 10, y)
+    })
+    push(() => { ctx.font = f(17); ctx.textAlign = 'center'; ctx.fillStyle = '#888'; ctx.fillText(shopInfo.footer || 'ຂອບໃຈທີ່ໃຊ້ບໍລິການ', W/2, y += Math.round(30 * s)); ctx.fillStyle = '#000' })
+    push(() => { y += Math.round(16 * s) })
+
+    // First pass: measure total height
+    y = 0; ops.forEach(fn => fn())
+    const H = y + Math.round(20 * s)
+
+    // Second pass: render at correct height
+    canvas.height = H
+    ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, W, H)
+    y = 0; ops.forEach(fn => fn())
+    return canvas
+  }
+
+  function canvasToEscPos(canvas) {
+    const ctx = canvas.getContext('2d')
+    const W = canvas.width, H = canvas.height
+    const pixels = ctx.getImageData(0, 0, W, H).data
+    const wb = Math.ceil(W / 8)
+    const bitmap = new Uint8Array(wb * H)
+    for (let row = 0; row < H; row++) {
+      for (let bx = 0; bx < wb; bx++) {
+        let byte = 0
+        for (let bit = 0; bit < 8; bit++) {
+          const x = bx * 8 + bit
+          if (x < W) {
+            const i = (row * W + x) * 4
+            const gray = 0.299 * pixels[i] + 0.587 * pixels[i + 1] + 0.114 * pixels[i + 2]
+            if (gray < 128) byte |= (1 << (7 - bit))
+          }
+        }
+        bitmap[row * wb + bx] = byte
+      }
+    }
+    const xL = wb & 0xFF, xH = (wb >> 8) & 0xFF
+    const yL = H & 0xFF, yH = (H >> 8) & 0xFF
+    const header = new Uint8Array([0x1B, 0x40, 0x1D, 0x76, 0x30, 0x00, xL, xH, yL, yH])
+    const footer = new Uint8Array([0x0A, 0x0A, 0x0A, 0x0A, 0x1D, 0x56, 0x00])
+    const out = new Uint8Array(header.length + bitmap.length + footer.length)
+    out.set(header, 0); out.set(bitmap, header.length); out.set(footer, header.length + bitmap.length)
+    return out
+  }
+
+  async function printOrder(o) {
+    const canvas = await renderReceiptCanvas(o, 560)
+    const imgData = canvas.toDataURL('image/png')
+    const printEl = document.createElement('div')
+    printEl.id = 'print-receipt'
+    printEl.innerHTML = `<img src="${imgData}" style="width:100%;max-width:302px;display:block;margin:0 auto;">`
+    printEl.style.display = 'none'
+    document.body.appendChild(printEl)
+    window.onafterprint = () => { printEl.remove(); window.onafterprint = null }
+    window.print()
   }
 
   // ─── Sales ───
