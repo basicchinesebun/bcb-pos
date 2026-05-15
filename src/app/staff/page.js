@@ -38,7 +38,11 @@ export default function StaffPage() {
   const [qrImage, setQrImage] = useState(null)
   const [qrPreview, setQrPreview] = useState(null)
   const [logoPreview, setLogoPreview] = useState(null)
-  const [shopInfo, setShopInfo] = useState({ name: 'Basic Chinese Bun', address: '', phone: '', footer: 'ຂອບໃຈທີ່ໃຊ້ບໍລິການ', logo: '' })
+  const [shopInfo, setShopInfo] = useState({ name: 'Basic Chinese Bun', address: '', phone: '', footer: 'ຂອບໃຈທີ່ໃຊ້ບໍລິການ', logo: '', printerWidth: 384 })
+  const [receiptDraft, setReceiptDraft] = useState({ name: 'Basic Chinese Bun', address: '', phone: '', footer: 'ຂອບໃຈທີ່ໃຊ້ບໍລິການ', logo: '', printerWidth: 384 })
+  const [receiptPreviewUrl, setReceiptPreviewUrl] = useState('')
+  const [previewLoading, setPreviewLoading] = useState(false)
+  const previewTimerRef = useRef(null)
   const [settings, setSettings] = useState({ soundOn: true, walkinOn: true, onlineOn: true, autoprintOn: false, pickupTimeStart: '15:30', pickupTimeEnd: '19:00' })
   const [branches, setBranches] = useState([
     { id: 'simeuang',  name: 'ສາຂາສີເມື່ອງ',  nameEn: 'Si Meuang Branch',  visible: true, schedule: 'ຈ · ພ · ສ (Mon / Wed / Fri)', mapUrl: '', facebookUrl: '', tiktokUrl: '', phone1: '', phone2: '', whatsapp: '' },
@@ -439,7 +443,11 @@ export default function StaffPage() {
     setTimeout(() => checkLowStock(loadedStockShop), 500)
     if (cfg.menu_images) setImages(JSON.parse(cfg.menu_images))
     if (cfg.qr_image) setQrImage(cfg.qr_image)
-    if (cfg.shop_info) setShopInfo(prev => ({ ...prev, ...JSON.parse(cfg.shop_info) }))
+    if (cfg.shop_info) {
+      const info = JSON.parse(cfg.shop_info)
+      setShopInfo(prev => ({ ...prev, ...info }))
+      setReceiptDraft(prev => ({ ...prev, ...info, printerWidth: info.printerWidth || 384 }))
+    }
     // Fix stale closure: use functional update for settings
     if (cfg.settings) setSettings(prev => ({ ...prev, ...JSON.parse(cfg.settings) }))
     if (cfg.branches) setBranches(JSON.parse(cfg.branches))
@@ -666,16 +674,24 @@ export default function StaffPage() {
 
   // ─── Shop Info + Logo ───
   async function saveShopInfo() {
-    const info = {
-      name: document.getElementById('si-name')?.value || shopInfo.name,
-      address: document.getElementById('si-addr')?.value || '',
-      phone: document.getElementById('si-phone')?.value || '',
-      footer: document.getElementById('si-footer')?.value || 'ຂອບໃຈທີ່ໃຊ້ບໍລິການ',
-      logo: shopInfo.logo || '',
-    }
-    await saveConfig('shop_info', info)
-    setShopInfo(info)
+    await saveConfig('shop_info', receiptDraft)
+    setShopInfo(receiptDraft)
     showToast('ບັນທຶກ ✅', 'green')
+  }
+
+  async function generatePreview(draft = receiptDraft) {
+    setPreviewLoading(true)
+    const sampleItems = menus.slice(0, 2).map((m, i) => ({
+      menuIdx: i, qty: i + 1,
+      name: typeof m === 'string' ? m : (m.lo || m.en || 'ເຂົ້າ'),
+      sub: (i + 1) * 25000,
+    }))
+    const mockOrder = { qnum: 42, items: sampleItems, total: sampleItems.reduce((s, it) => s + it.sub, 0), created_at: new Date().toISOString(), bag_label: null, customer: null }
+    try {
+      const canvas = await renderReceiptCanvas(mockOrder, 360, draft)
+      setReceiptPreviewUrl(canvas.toDataURL('image/png'))
+    } catch { }
+    setPreviewLoading(false)
   }
 
   async function uploadLogo(e) {
@@ -688,17 +704,17 @@ export default function StaffPage() {
     const { error } = await supabase.storage.from('bcb - upload').upload('shop/logo.jpg', file, { upsert: true, contentType })
     if (error) { console.error('uploadLogo error:', error); showToast('❌ ' + (error.message || 'ອັບໂຫລດຜິດ'), 'red'); setLogoPreview(null); return }
     const { data } = supabase.storage.from('bcb - upload').getPublicUrl('shop/logo.jpg')
-    const newInfo = { ...shopInfo, logo: data.publicUrl }
-    setShopInfo(newInfo)
+    const newInfo = { ...receiptDraft, logo: data.publicUrl }
+    setShopInfo(newInfo); setReceiptDraft(newInfo)
     setLogoPreview(null)
     await saveConfig('shop_info', newInfo)
     showToast('ອັບໂຫລດໂລໂກ້ ✅', 'green')
   }
 
   async function removeLogo() {
-    const newInfo = { ...shopInfo, logo: '' }
+    const newInfo = { ...receiptDraft, logo: '' }
     await saveConfig('shop_info', newInfo)
-    setShopInfo(newInfo)
+    setShopInfo(newInfo); setReceiptDraft(newInfo)
     showToast('ລຶບໂລໂກ້', 'orange')
   }
 
@@ -832,7 +848,8 @@ export default function StaffPage() {
   async function usbPrint(o) {
     if (!usbDeviceRef.current || !usbEndpointRef.current) { printOrder(o); return }
     let data
-    try { const c = await renderReceiptCanvas(o, 384); data = canvasToEscPos(c) }
+    const pw = shopInfo.printerWidth || 384
+    try { const c = await renderReceiptCanvas(o, pw); data = canvasToEscPos(c) }
     catch { data = buildEscPos(o) }
     const chunkSize = 64
     try {
@@ -943,7 +960,8 @@ export default function StaffPage() {
   async function btPrint(o) {
     if (!btCharRef.current) { printOrder(o); return }
     let data
-    try { const c = await renderReceiptCanvas(o, 384); data = canvasToEscPos(c) }
+    const pw = shopInfo.printerWidth || 384
+    try { const c = await renderReceiptCanvas(o, pw); data = canvasToEscPos(c) }
     catch { data = buildEscPos(o) }
     const chunkSize = 200
     for (let i = 0; i < data.length; i += chunkSize) {
@@ -1054,7 +1072,8 @@ export default function StaffPage() {
   }
 
   // ─── Print ───
-  async function renderReceiptCanvas(o, W = 560) {
+  async function renderReceiptCanvas(o, W = 560, infoOverride = null) {
+    const si = infoOverride || shopInfo
     const items = typeof o.items === 'string' ? JSON.parse(o.items) : o.items || []
     const nameOf = it => menus[it.menuIdx]?.lo || it.name || `Item ${(it.menuIdx||0)+1}`
     const custName = (() => { try { const c = typeof o.customer === 'string' ? JSON.parse(o.customer) : o.customer; return c?.name || '' } catch { return '' } })()
@@ -1070,6 +1089,18 @@ export default function StaffPage() {
     const ctx = canvas.getContext('2d')
     const f = (sz, wt = '400') => `${wt} ${Math.round(sz * s)}px '${fontName}', 'Noto Sans Lao', sans-serif`
 
+    // Load logo image with CORS if available
+    let logoImg = null
+    if (si.logo) {
+      logoImg = await new Promise(resolve => {
+        const img = new Image()
+        img.crossOrigin = 'anonymous'
+        img.onload = () => resolve(img)
+        img.onerror = () => resolve(null)
+        img.src = si.logo
+      })
+    }
+
     let y = 0
     const ops = []
     const push = fn => ops.push(fn)
@@ -1079,9 +1110,14 @@ export default function StaffPage() {
       ctx.strokeStyle = '#000'; ctx.stroke(); ctx.setLineDash([])
       y += Math.round(14 * s)
     }
-    push(() => { ctx.font = f(28, '900'); ctx.textAlign = 'center'; ctx.fillStyle = '#000'; ctx.fillText(shopInfo.name || 'BCB', W/2, y += Math.round(34 * s)) })
-    if (shopInfo.address) push(() => { ctx.font = f(18); ctx.textAlign = 'center'; ctx.fillStyle = '#555'; ctx.fillText(shopInfo.address, W/2, y += Math.round(24 * s)); ctx.fillStyle = '#000' })
-    if (shopInfo.phone) push(() => { ctx.font = f(18); ctx.textAlign = 'center'; ctx.fillStyle = '#555'; ctx.fillText('Tel: ' + shopInfo.phone, W/2, y += Math.round(24 * s)); ctx.fillStyle = '#000' })
+    if (logoImg) push(() => {
+      const ls = Math.round(72 * s)
+      ctx.drawImage(logoImg, (W - ls) / 2, y + Math.round(10 * s), ls, ls)
+      y += ls + Math.round(14 * s)
+    })
+    push(() => { ctx.font = f(28, '900'); ctx.textAlign = 'center'; ctx.fillStyle = '#000'; ctx.fillText(si.name || 'BCB', W/2, y += Math.round(34 * s)) })
+    if (si.address) push(() => { ctx.font = f(18); ctx.textAlign = 'center'; ctx.fillStyle = '#555'; ctx.fillText(si.address, W/2, y += Math.round(24 * s)); ctx.fillStyle = '#000' })
+    if (si.phone) push(() => { ctx.font = f(18); ctx.textAlign = 'center'; ctx.fillStyle = '#555'; ctx.fillText('Tel: ' + si.phone, W/2, y += Math.round(24 * s)); ctx.fillStyle = '#000' })
     push(() => { y += Math.round(8 * s); dash() })
     push(() => { ctx.font = f(17); ctx.textAlign = 'center'; ctx.fillStyle = '#888'; ctx.fillText('ເລກຄິວ · QUEUE', W/2, y += Math.round(22 * s)); ctx.fillStyle = '#000' })
     push(() => { ctx.font = f(88, '900'); ctx.textAlign = 'center'; ctx.fillText(String(o.qnum).padStart(4, '0'), W/2, y += Math.round(96 * s)) })
@@ -1103,7 +1139,7 @@ export default function StaffPage() {
       ctx.fillText('ລວມ · TOTAL', 10, y += Math.round(30 * s))
       ctx.textAlign = 'right'; ctx.fillText((o.total || 0).toLocaleString() + ' ກີບ', W - 10, y)
     })
-    push(() => { ctx.font = f(17); ctx.textAlign = 'center'; ctx.fillStyle = '#888'; ctx.fillText(shopInfo.footer || 'ຂອບໃຈທີ່ໃຊ້ບໍລິການ', W/2, y += Math.round(30 * s)); ctx.fillStyle = '#000' })
+    push(() => { ctx.font = f(17); ctx.textAlign = 'center'; ctx.fillStyle = '#888'; ctx.fillText(si.footer || 'ຂອບໃຈທີ່ໃຊ້ບໍລິການ', W/2, y += Math.round(30 * s)); ctx.fillStyle = '#000' })
     push(() => { y += Math.round(16 * s) })
 
     // First pass: measure total height
@@ -1487,35 +1523,99 @@ export default function StaffPage() {
               </details>
 
               {/* Shop Info */}
-              <details className="card">
-                <summary className="font-black text-xs tracking-widest uppercase cursor-pointer" style={{ color: 'var(--brown3)' }}>🏪 ຂໍ້ມູນຮ້ານ</summary>
-                <div className="mt-3 flex flex-col gap-3">
+              {/* Receipt Settings */}
+              <details className="card" open>
+                <summary className="font-black text-xs tracking-widest uppercase cursor-pointer" style={{ color: 'var(--brown3)' }}>🧾 ຕັ້ງຄ່າໃບເສດ</summary>
+                <div className="mt-4 flex flex-col gap-4">
+
                   {/* Logo */}
-                  <div className="flex gap-3 items-start">
-                    <div className={`w-16 h-16 rounded-xl border-2 overflow-hidden flex items-center justify-center flex-shrink-0 relative ${logoPreview || shopInfo.logo ? 'border-[#a0522d]' : 'border-dashed border-[#e8d5c0]'}`} style={{ background: 'var(--cream)' }}>
-                      {logoPreview
-                        ? <><img src={logoPreview} className="w-full h-full object-cover" alt="preview" /><span className="absolute inset-0 flex items-center justify-center text-xs font-black text-white bg-black/40">...</span></>
-                        : shopInfo.logo ? <img src={shopInfo.logo} className="w-full h-full object-cover" alt="logo" /> : <span className="text-2xl">🏪</span>}
-                    </div>
-                    <div className="flex flex-col gap-1">
-                      <label className="px-3 py-2 rounded-lg border border-[#3d1f0a] text-xs font-black cursor-pointer" style={{ color: 'var(--brown)', background: 'var(--warm-white)' }}>
-                        📤 ອັບໂຫລດໂລໂກ້
-                        <input type="file" accept="image/*" className="hidden" onChange={uploadLogo} />
-                      </label>
-                      {shopInfo.logo && <button onClick={removeLogo} className="text-xs text-red-500 font-black">✕ ລຶບ</button>}
+                  <div>
+                    <div className="text-xs font-black uppercase tracking-widest mb-2" style={{ color: 'var(--brown2)' }}>ໂລໂກ້ຮ້ານ</div>
+                    <div className="flex gap-3 items-center">
+                      <div className={`w-20 h-20 rounded-2xl border-2 overflow-hidden flex items-center justify-center flex-shrink-0 relative ${logoPreview || receiptDraft.logo ? 'border-[#a0522d]' : 'border-dashed border-[#e8d5c0]'}`} style={{ background: 'var(--cream)' }}>
+                        {logoPreview
+                          ? <><img src={logoPreview} className="w-full h-full object-cover" alt="preview" /><span className="absolute inset-0 flex items-center justify-center text-xs font-black text-white bg-black/40">...</span></>
+                          : receiptDraft.logo ? <img src={receiptDraft.logo} className="w-full h-full object-cover" alt="logo" /> : <span className="text-4xl">🏪</span>}
+                      </div>
+                      <div className="flex flex-col gap-2">
+                        <label className="px-3 py-2 rounded-xl border-2 border-[#3d1f0a] text-xs font-black cursor-pointer text-center" style={{ color: 'var(--brown)', background: 'var(--warm-white)' }}>
+                          📤 ອັບໂຫລດໂລໂກ້
+                          <input type="file" accept="image/*" className="hidden" onChange={uploadLogo} />
+                        </label>
+                        {receiptDraft.logo && <button onClick={removeLogo} className="text-xs text-red-500 font-black text-center">✕ ລຶບໂລໂກ້</button>}
+                      </div>
                     </div>
                   </div>
-                  {[['si-name','ຊື່ຮ້ານ',shopInfo.name,'text'],['si-addr','ທີ່ຢູ່',shopInfo.address,'text'],['si-phone','ເບີໂທ',shopInfo.phone,'tel']].map(([id,l,v,t]) => (
-                    <div key={id}>
-                      <label className="text-xs font-black uppercase tracking-widest block mb-1" style={{ color: 'var(--brown2)' }}>{l}</label>
-                      <input id={id} defaultValue={v} type={t} className="input-field text-sm py-2" />
+
+                  {/* Form fields */}
+                  {[
+                    ['ຊື່ຮ້ານ · Shop Name', 'name', 'text'],
+                    ['ທີ່ຢູ່ · Address', 'address', 'text'],
+                    ['ເບີໂທ · Phone', 'phone', 'tel'],
+                  ].map(([label, key, type]) => (
+                    <div key={key}>
+                      <label className="text-xs font-black uppercase tracking-widest block mb-1" style={{ color: 'var(--brown2)' }}>{label}</label>
+                      <input
+                        type={type}
+                        value={receiptDraft[key] || ''}
+                        onChange={e => setReceiptDraft(p => ({ ...p, [key]: e.target.value }))}
+                        className="input-field text-sm py-2"
+                      />
                     </div>
                   ))}
                   <div>
-                    <label className="text-xs font-black uppercase tracking-widest block mb-1" style={{ color: 'var(--brown2)' }}>Footer ໃບເສດ</label>
-                    <textarea id="si-footer" defaultValue={shopInfo.footer} className="input-field text-sm py-2" rows={2} />
+                    <label className="text-xs font-black uppercase tracking-widest block mb-1" style={{ color: 'var(--brown2)' }}>ຂໍ້ຄວາມໃຕ້ໃບເສດ · Footer</label>
+                    <textarea
+                      value={receiptDraft.footer || ''}
+                      onChange={e => setReceiptDraft(p => ({ ...p, footer: e.target.value }))}
+                      className="input-field text-sm py-2" rows={2}
+                      placeholder="ຂອບໃຈທີ່ໃຊ້ບໍລິການ"
+                    />
                   </div>
-                  <button onClick={saveShopInfo} className="btn-primary text-sm py-3">💾 ບັນທຶກ</button>
+
+                  {/* Printer width */}
+                  <div>
+                    <div className="text-xs font-black uppercase tracking-widest mb-2" style={{ color: 'var(--brown2)' }}>ຄວາມກວ້າງກະດາດ · Paper Width</div>
+                    <div className="flex gap-2">
+                      {[[384, '58mm'], [576, '80mm']].map(([pw, label]) => (
+                        <button key={pw} onClick={() => setReceiptDraft(p => ({ ...p, printerWidth: pw }))}
+                          className="flex-1 py-2.5 rounded-xl font-black text-sm border-2 transition-all"
+                          style={{
+                            borderColor: receiptDraft.printerWidth === pw ? '#3d1f0a' : '#e8d5c0',
+                            background: receiptDraft.printerWidth === pw ? '#3d1f0a' : 'var(--warm-white)',
+                            color: receiptDraft.printerWidth === pw ? '#fdf6ee' : 'var(--brown)',
+                          }}>
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="text-xs mt-1" style={{ color: 'var(--gray3)' }}>ເຄື່ອງພິມທົ່ວໄປ 58mm · ຖ້າໃຊ້ 80mm ໃຫ້ເລືອກ 80mm</div>
+                  </div>
+
+                  {/* Preview */}
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="text-xs font-black uppercase tracking-widest" style={{ color: 'var(--brown2)' }}>ຕົວຢ່າງໃບເສດ · Preview</div>
+                      <button onClick={() => generatePreview(receiptDraft)}
+                        disabled={previewLoading}
+                        className="text-xs font-black px-3 py-1.5 rounded-lg border-2 border-[#3d1f0a]"
+                        style={{ color: 'var(--brown)', background: 'var(--warm-white)' }}>
+                        {previewLoading ? '⏳' : '👁 ເບິ່ງ'}
+                      </button>
+                    </div>
+                    {receiptPreviewUrl && (
+                      <div className="rounded-xl overflow-hidden border-2" style={{ borderColor: 'var(--cream3)', background: '#f5f5f5' }}>
+                        <img src={receiptPreviewUrl} alt="Receipt Preview" style={{ width: '100%', maxWidth: 300, display: 'block', margin: '0 auto' }} />
+                      </div>
+                    )}
+                    {!receiptPreviewUrl && (
+                      <div className="rounded-xl py-8 text-center text-xs" style={{ background: 'var(--cream2)', color: 'var(--gray3)' }}>
+                        ກົດ "ເບິ່ງ" ເພື່ອເບິ່ງຕົວຢ່າງໃບເສດ
+                      </div>
+                    )}
+                  </div>
+
+                  <button onClick={saveShopInfo} className="btn-primary text-sm py-3">💾 ບັນທຶກຕັ້ງຄ່າ</button>
                 </div>
               </details>
 
