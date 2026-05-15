@@ -962,11 +962,17 @@ export default function StaffPage() {
   async function btPrint(o) {
     if (!btCharRef.current) { printOrder(o); return }
     let data
+    let mode = 'bitmap'
     const pw = shopInfo.printerWidth || 384
     try {
-      const hires = await renderReceiptCanvas(o, pw * 2)  // render 2x for sharpness
+      const hires = await renderReceiptCanvas(o, pw * 2)
       data = canvasToEscPos(downsampleCanvas(hires, pw))
-    } catch { data = buildEscPos(o) }
+      showToast(`🖼 bitmap ${data.length}b`, 'blue')
+    } catch (err) {
+      mode = 'text'
+      showToast('⚠️ text mode: ' + (err?.message || String(err)).slice(0, 40), 'orange')
+      data = buildEscPos(o)
+    }
     const chunkSize = 200
     for (let i = 0; i < data.length; i += chunkSize) {
       const chunk = data.slice(i, i + chunkSize)
