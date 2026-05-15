@@ -1115,9 +1115,11 @@ export default function StaffPage() {
     const ops = []
     const push = fn => ops.push(fn)
     const dash = () => {
-      ctx.setLineDash([4, 3])
+      ctx.lineWidth = Math.max(2, Math.round(2 * s))
+      ctx.setLineDash([Math.round(6 * s), Math.round(4 * s)])
       ctx.beginPath(); ctx.moveTo(10, y); ctx.lineTo(W - 10, y)
-      ctx.strokeStyle = '#000'; ctx.stroke(); ctx.setLineDash([])
+      ctx.strokeStyle = '#000'; ctx.stroke()
+      ctx.setLineDash([]); ctx.lineWidth = 1
       y += Math.round(14 * s)
     }
     if (logoImg) push(() => {
