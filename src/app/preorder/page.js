@@ -37,7 +37,7 @@ export default function PreOrderPage() {
   const [packToast, setPackToast] = useState(null)
   const [expandedBags, setExpandedBags] = useState(new Set())
   const [form, setForm] = useState({ name: '', phone: '20', time: '' })
-  const [pickupTimeRange, setPickupTimeRange] = useState({ start: '15:30', end: '19:00' })
+  const [pickupTimeRange, setPickupTimeRange] = useState({ start: '15:30', end: '19:30' })
   const [slip, setSlip] = useState(null)
   const [slipPreview, setSlipPreview] = useState(null)
   const [currentOrder, setCurrentOrder] = useState(null)
@@ -732,19 +732,36 @@ export default function PreOrderPage() {
                   <div className="font-bold text-sm mt-0.5" style={{ color: 'var(--brown2)' }}>📞 {form.phone}</div>
                 </div>
               </div>
-              {/* Time — restricted to pickup window */}
+              {/* Time slots */}
               <div>
-                <label className="block text-xs font-black tracking-widest uppercase mb-2" style={{ color: 'var(--brown2)' }}>ເວລາ · Time</label>
-                <input
-                  type="time"
-                  value={form.time}
-                  min={pickupTimeRange.start}
-                  max={pickupTimeRange.end}
-                  onChange={e => setForm(p => ({ ...p, time: e.target.value }))}
-                  className="input-field"
-                />
-                <div className="text-xs font-bold mt-1" style={{ color: 'var(--gray3)' }}>
+                <label className="block text-xs font-black tracking-widest uppercase mb-1" style={{ color: 'var(--brown2)' }}>ເວລາ · Time</label>
+                <div className="text-xs font-bold mb-3" style={{ color: 'var(--gray3)' }}>
                   ຮັບໄດ້: {pickupTimeRange.start} – {pickupTimeRange.end}
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  {(() => {
+                    const slots = []
+                    const [sh, sm] = pickupTimeRange.start.split(':').map(Number)
+                    const [eh, em] = pickupTimeRange.end.split(':').map(Number)
+                    let h = sh, m = sm
+                    while (h * 60 + m <= eh * 60 + em) {
+                      slots.push(`${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`)
+                      m += 30
+                      if (m >= 60) { h++; m -= 60 }
+                    }
+                    return slots.map(t => (
+                      <button key={t}
+                        onClick={() => setForm(p => ({ ...p, time: t }))}
+                        className="py-3 rounded-xl font-black text-sm transition-all active:scale-95"
+                        style={{
+                          background: form.time === t ? 'var(--brown)' : 'var(--cream2)',
+                          color: form.time === t ? 'var(--cream)' : 'var(--brown)',
+                          border: `2px solid ${form.time === t ? 'var(--brown)' : '#e8d5c0'}`,
+                        }}>
+                        {t}
+                      </button>
+                    ))
+                  })()}
                 </div>
               </div>
             </div>
