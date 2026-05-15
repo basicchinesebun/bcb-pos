@@ -849,8 +849,10 @@ export default function StaffPage() {
     if (!usbDeviceRef.current || !usbEndpointRef.current) { printOrder(o); return }
     let data
     const pw = shopInfo.printerWidth || 384
-    try { const c = await renderReceiptCanvas(o, pw); data = canvasToEscPos(c) }
-    catch { data = buildEscPos(o) }
+    try {
+      const hires = await renderReceiptCanvas(o, pw * 2)
+      data = canvasToEscPos(downsampleCanvas(hires, pw))
+    } catch { data = buildEscPos(o) }
     const chunkSize = 64
     try {
       for (let i = 0; i < data.length; i += chunkSize) {
@@ -961,18 +963,21 @@ export default function StaffPage() {
     if (!btCharRef.current) { printOrder(o); return }
     let data
     const pw = shopInfo.printerWidth || 384
-    try { const c = await renderReceiptCanvas(o, pw); data = canvasToEscPos(c) }
-    catch { data = buildEscPos(o) }
-    const chunkSize = 200
+    try {
+      const hires = await renderReceiptCanvas(o, pw * 2)  // render 2x for sharpness
+      data = canvasToEscPos(downsampleCanvas(hires, pw))
+    } catch { data = buildEscPos(o) }
+    const isNoResp = btCharRef.current.properties.writeWithoutResponse
+    const chunkSize = isNoResp ? 512 : 200
     for (let i = 0; i < data.length; i += chunkSize) {
       const chunk = data.slice(i, i + chunkSize)
       try {
-        if (btCharRef.current.properties.writeWithoutResponse) {
+        if (isNoResp) {
           await btCharRef.current.writeValueWithoutResponse(chunk)
+          await new Promise(r => setTimeout(r, 8))  // 8ms ≈ 64KB/s, within printer buffer
         } else {
           await btCharRef.current.writeValue(chunk)
         }
-        await new Promise(r => setTimeout(r, 20))
       } catch { showToast('❌ ພິມຜິດ', 'red'); return }
     }
     showToast('ພິມແລ້ວ ✅', 'green')
@@ -1153,6 +1158,20 @@ export default function StaffPage() {
     return canvas
   }
 
+  // Downsample a high-res canvas to printer width for sharper 1-bit output
+  function downsampleCanvas(src, targetW) {
+    const ratio = targetW / src.width
+    const targetH = Math.round(src.height * ratio)
+    const dst = document.createElement('canvas')
+    dst.width = targetW; dst.height = targetH
+    const ctx = dst.getContext('2d')
+    ctx.imageSmoothingEnabled = true
+    ctx.imageSmoothingQuality = 'high'
+    ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, targetW, targetH)
+    ctx.drawImage(src, 0, 0, targetW, targetH)
+    return dst
+  }
+
   function canvasToEscPos(canvas) {
     const ctx = canvas.getContext('2d')
     const W = canvas.width, H = canvas.height
@@ -1167,7 +1186,7 @@ export default function StaffPage() {
           if (x < W) {
             const i = (row * W + x) * 4
             const gray = 0.299 * pixels[i] + 0.587 * pixels[i + 1] + 0.114 * pixels[i + 2]
-            if (gray < 128) byte |= (1 << (7 - bit))
+            if (gray < 160) byte |= (1 << (7 - bit))  // threshold 160 for bolder text
           }
         }
         bitmap[row * wb + bx] = byte
