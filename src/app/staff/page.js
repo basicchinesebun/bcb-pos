@@ -499,6 +499,16 @@ export default function StaffPage() {
   })
   const activeOrders = filteredOrders.filter(o => !o.done && !o.cancelled && o.status !== 'rejected')
   const archivedOrders = filteredOrders.filter(o => o.done || o.cancelled || o.status === 'rejected')
+
+  // ─── Customer Search ───
+  const customerSearchResults = customerSearch.trim()
+    ? orders.filter(o => {
+        const q = customerSearch.trim().toLowerCase()
+        const c = (() => { try { return JSON.parse(o.customer || '{}') } catch { return {} } })()
+        return c.name?.toLowerCase().includes(q) || c.phone?.includes(q)
+      })
+    : []
+
   const waiting = orders.filter(o => !o.done && !o.cancelled && o.status !== 'rejected').length
   const done = orders.filter(o => o.done).length
   const pendingOnline = orders.filter(o => o.type === 'online' && o.status === 'pending' && !o.cancelled).length
@@ -1728,9 +1738,84 @@ export default function StaffPage() {
                 {search && <button onClick={() => setSearch('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs font-black" style={{ color: 'var(--gray3)' }}>✕</button>}
               </div>
 
-              {activeOrders.length === 0 && <div className="text-center py-12 text-lg font-bold" style={{ color: 'var(--cream3)' }}>ຍັງບໍ່ມີອໍເດີ</div>}
+              {/* Customer search */}
+              <div className="relative mb-3">
+                <input
+                  type="text"
+                  value={customerSearch}
+                  onChange={e => setCustomerSearch(e.target.value)}
+                  placeholder="ຄົ້ນຫາຊື່ / ເບີ... · Search name / phone"
+                  className="input-field w-full text-sm pl-8"
+                />
+                <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-sm" style={{ color: 'var(--gray3)' }}>👤</span>
+                {customerSearch && (
+                  <button onClick={() => setCustomerSearch('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs font-black px-2 py-0.5 rounded" style={{ color: 'var(--brown)', background: 'var(--cream2)' }}>
+                    ລ້າງ · Clear
+                  </button>
+                )}
+              </div>
 
-              <div className="flex flex-col gap-3">
+              {/* Customer search results */}
+              {customerSearch.trim() && (
+                <div className="mb-4">
+                  <div className="text-xs font-black tracking-widest uppercase mb-2" style={{ color: 'var(--gray3)' }}>
+                    ຜົນຄົ້ນຫາ · Results ({customerSearchResults.length})
+                  </div>
+                  {customerSearchResults.length === 0 && (
+                    <div className="text-center py-6 text-sm font-bold rounded-xl" style={{ color: 'var(--cream3)', background: 'var(--cream2)' }}>
+                      ບໍ່ພົບຜົນ
+                    </div>
+                  )}
+                  <div className="flex flex-col gap-3">
+                    {customerSearchResults.map(o => {
+                      const items = typeof o.items === 'string' ? JSON.parse(o.items) : o.items || []
+                      const cust = o.customer ? (typeof o.customer === 'string' ? JSON.parse(o.customer) : o.customer) : null
+                      const time = new Date(o.created_at).toLocaleTimeString('lo-LA', { hour: '2-digit', minute: '2-digit' })
+                      const borderColor = o.cancelled || o.status === 'rejected' ? '#fca5a5' : o.done ? '#e8d5c0' : '#3d1f0a'
+                      return (
+                        <div key={o.id} className="rounded-2xl overflow-hidden" style={{ border: `2px solid ${borderColor}`, background: 'var(--warm-white)' }}>
+                          <div className="p-3">
+                            <div className="flex justify-between items-start mb-2">
+                              <div className="flex items-center gap-2">
+                                <div className="font-serif text-2xl font-black" style={{ color: 'var(--brown)' }}>
+                                  #{String(o.qnum).padStart(4,'0')}
+                                </div>
+                              </div>
+                              <div className="text-right">
+                                <div className="text-xs font-bold" style={{ color: 'var(--gray3)' }}>{time}</div>
+                                <span className={`tag text-xs mt-1 ${o.type === 'online' ? 'bg-orange-50 text-orange-700' : 'bg-blue-50 text-blue-700'}`}>
+                                  {o.type === 'online' ? '🌐 Online' : '🏪 Walk-in'}
+                                </span>
+                                {o.done && <span className="tag bg-green-50 text-green-700 text-xs ml-1">✓ Done</span>}
+                                {o.cancelled && <span className="tag bg-red-50 text-red-700 text-xs ml-1">✕ ຍົກເລີກ</span>}
+                                {o.status === 'rejected' && <span className="tag bg-red-50 text-red-700 text-xs ml-1">✕ ປະຕິເສດ</span>}
+                                {o.status === 'confirmed' && !o.done && <span className="tag bg-green-50 text-green-700 text-xs ml-1">✓ ຢືນຢັນ</span>}
+                                {o.status === 'pending' && !o.cancelled && <span className="tag bg-yellow-50 text-yellow-700 text-xs ml-1">⏳ ລໍຖ້າ</span>}
+                              </div>
+                            </div>
+                            {cust && (
+                              <div className="rounded-xl p-2 mb-2 text-sm font-bold leading-6" style={{ background: 'var(--cream2)', color: 'var(--brown2)' }}>
+                                <div>👤 {cust.name} · 📞 {cust.phone}</div>
+                                {cust.time && <div>🕐 {cust.time}</div>}
+                              </div>
+                            )}
+                            <div className="text-sm font-bold mb-1" style={{ color: 'var(--brown2)' }}>
+                              {items.map((it, ii) => <span key={ii} className="mr-2">{it.name} ×{it.qty}</span>)}
+                            </div>
+                            <div className="text-sm font-black" style={{ color: 'var(--brown)' }}>
+                              ລວມ: {(o.total || 0).toLocaleString()} ກີບ
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {!customerSearch.trim() && activeOrders.length === 0 && <div className="text-center py-12 text-lg font-bold" style={{ color: 'var(--cream3)' }}>ຍັງບໍ່ມີອໍເດີ</div>}
+
+              {!customerSearch.trim() && <div className="flex flex-col gap-3">
                 {activeOrders.map(o => {
                   const items = typeof o.items === 'string' ? JSON.parse(o.items) : o.items || []
                   const cust = o.customer ? (typeof o.customer === 'string' ? JSON.parse(o.customer) : o.customer) : null
@@ -1863,10 +1948,10 @@ export default function StaffPage() {
                     </div>
                   )
                 })}
-              </div>
+              </div>}
 
               {/* ─── Archive ─── */}
-              {archivedOrders.length > 0 && (
+              {!customerSearch.trim() && archivedOrders.length > 0 && (
                 <div className="mt-4">
                   <button
                     onClick={() => setArchiveOpen(o => !o)}
