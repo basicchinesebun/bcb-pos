@@ -50,6 +50,7 @@ export default function StaffPage() {
   ])
   const [filter, setFilter] = useState('all')
   const [search, setSearch] = useState('')
+  const [customerSearch, setCustomerSearch] = useState('')
   const [toast, setToast] = useState([])
   const [slipModal, setSlipModal] = useState(null)
   const [confirmModal, setConfirmModal] = useState(null) // { message, onConfirm }

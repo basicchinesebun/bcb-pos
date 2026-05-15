@@ -20,12 +20,12 @@ const STATUS_MAP = {
   done:      { label: '✓ ສຳເລັດ',        cls: 'bg-green-100 text-green-800' },
 }
 
-// Step labels: 1=Menu, 3=Info, 4=Payment, 5=Status (step 2 bag is auto-skipped)
-const STEPS = ['ເລືອກເມນູ', 'ຂໍ້ມູນ', 'ຊຳລະ', 'ສະຖານະ']
-const STEP_DISPLAY = { 1: 1, 3: 2, 4: 3, 5: 4 }
+// Step labels: 0=CustomerInfo, 1=Menu, 3=Time, 4=Payment, 5=Status (step 2 bag is auto-skipped)
+const STEPS = ['ຂໍ້ມູນ', 'ເລືອກເມນູ', 'ເວລາ', 'ຊຳລະ', 'ສະຖານະ']
+const STEP_DISPLAY = { 0: 1, 1: 2, 3: 3, 4: 4, 5: 5 }
 
 export default function PreOrderPage() {
-  const [step, setStep] = useState(1)
+  const [step, setStep] = useState(0)
   const [menus, setMenus] = useState([])
   const [prices, setPrices] = useState([])
   const [stock, setStock] = useState([])
@@ -394,7 +394,7 @@ export default function PreOrderPage() {
       </div>
 
       {/* Progress bar */}
-      {step >= 1 && step <= 5 && (
+      {step >= 0 && step <= 5 && (
         <div className="flex gap-1 px-4 py-3 flex-shrink-0" style={{ background: 'var(--warm-white)', borderBottom: '2px solid var(--cream3)' }}>
           {STEPS.map((s, i) => {
             const d = STEP_DISPLAY[step] || step
@@ -408,6 +408,62 @@ export default function PreOrderPage() {
             )
           })}
         </div>
+      )}
+
+      {/* ─── STEP 0: Customer Info ─── */}
+      {step === 0 && (
+        <>
+          <div className="flex-1 overflow-y-auto p-4">
+            <div className="max-w-lg mx-auto flex flex-col gap-4">
+              {/* Welcome */}
+              <div className="text-center py-6">
+                <div className="font-serif text-3xl font-black mb-1" style={{ color: 'var(--brown)' }}>ຍິນດີຕ້ອນຮັບ 👋</div>
+                <div className="text-sm font-bold" style={{ color: 'var(--gray3)' }}>ກະລຸນາໃສ່ຊື່ ແລະ ເບີໂທ ກ່ອນສັ່ງ</div>
+              </div>
+              {/* Name */}
+              <div>
+                <label className="block text-xs font-black tracking-widest uppercase mb-2" style={{ color: 'var(--brown2)' }}>ຊື່ · Name</label>
+                <input
+                  type="text"
+                  value={form.name}
+                  onChange={e => setForm(p => ({ ...p, name: e.target.value }))}
+                  placeholder="ສົມໃຈ"
+                  className="input-field"
+                />
+              </div>
+              {/* Phone */}
+              <div>
+                <label className="block text-xs font-black tracking-widest uppercase mb-2" style={{ color: 'var(--brown2)' }}>ເບີໂທ · Phone</label>
+                <input
+                  type="tel" inputMode="numeric"
+                  value={form.phone}
+                  onChange={e => {
+                    let v = e.target.value.replace(/\D/g, '')
+                    if (!v.startsWith('20')) v = '20' + v.replace(/^2?0?/, '')
+                    if (v.length > 10) v = v.slice(0, 10)
+                    setForm(p => ({ ...p, phone: v }))
+                  }}
+                  onKeyDown={e => {
+                    if ((e.key === 'Backspace' || e.key === 'Delete') && form.phone.length <= 2) e.preventDefault()
+                  }}
+                  placeholder="20XXXXXXXX"
+                  className="input-field"
+                />
+                <div className="text-xs font-bold mt-1" style={{ color: 'var(--gray3)' }}>
+                  ເລີ່ມດ້ວຍ 20 · ພິມ {Math.max(0, 10 - form.phone.length)} ຕົວອີກ
+                </div>
+              </div>
+            </div>
+          </div>
+          <div className="p-4 border-t-2 border-[#e8d5c0] flex flex-col gap-2 flex-shrink-0" style={{ background: 'var(--warm-white)' }}>
+            <button className="btn-primary" onClick={() => {
+              if (!form.name.trim()) { alert('ກະລຸນາໃສ່ຊື່'); return }
+              if (form.phone.length < 10 || !form.phone.startsWith('20')) { alert('ເບີໂທຕ້ອງຄົບ 10 ຕົວເລກ ແລະ ເລີ່ມດ້ວຍ 20'); return }
+              try { localStorage.setItem('bcb-customer', JSON.stringify({ name: form.name, phone: form.phone })) } catch (_) {}
+              setStep(1)
+            }}>ຕໍ່ໄປ →</button>
+          </div>
+        </>
       )}
 
       {/* ─── STEP 1: Menu ─── */}
@@ -662,53 +718,18 @@ export default function PreOrderPage() {
         </>
       )}
 
-      {/* ─── STEP 3: Info ─── */}
+      {/* ─── STEP 3: Time ─── */}
       {step === 3 && (
         <>
           <div className="flex-1 overflow-y-auto p-4">
             <div className="max-w-lg mx-auto flex flex-col gap-4">
-              {/* Saved customer notice */}
-              {form.name && form.phone.length === 10 && (
-                <div className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-black"
-                  style={{ background: '#f0fdf4', border: '1.5px solid #86efac', color: '#16a34a' }}>
-                  ✓ ຈຳຂໍ້ມູນໄວ້ແລ້ວ · ລ້າງ
-                  <button onClick={() => {
-                    setForm({ name: '', phone: '20', time: '' })
-                    try { localStorage.removeItem('bcb-customer') } catch (_) {}
-                  }} className="ml-auto text-xs font-black px-2 py-0.5 rounded-lg"
-                    style={{ background: '#dcfce7', color: '#15803d' }}>ລ້າງ</button>
-                </div>
-              )}
-              {/* Name */}
-              <div>
-                <label className="block text-xs font-black tracking-widest uppercase mb-2" style={{ color: 'var(--brown2)' }}>ຊື່ · Name</label>
-                <input type="text" value={form.name} onChange={e => {
-                  const name = e.target.value
-                  setForm(p => ({ ...p, name }))
-                  try { localStorage.setItem('bcb-customer', JSON.stringify({ name, phone: form.phone })) } catch (_) {}
-                }} placeholder="ສົມໃຈ" className="input-field" />
-              </div>
-              {/* Phone — locked prefix "20" + 8 digits */}
-              <div>
-                <label className="block text-xs font-black tracking-widest uppercase mb-2" style={{ color: 'var(--brown2)' }}>ເບີໂທ · Phone</label>
-                <input
-                  type="tel" inputMode="numeric"
-                  value={form.phone}
-                  onChange={e => {
-                    let v = e.target.value.replace(/\D/g, '')
-                    if (!v.startsWith('20')) v = '20' + v.replace(/^2?0?/, '')
-                    if (v.length > 10) v = v.slice(0, 10)
-                    setForm(p => ({ ...p, phone: v }))
-                    try { localStorage.setItem('bcb-customer', JSON.stringify({ name: form.name, phone: v })) } catch (_) {}
-                  }}
-                  onKeyDown={e => {
-                    if ((e.key === 'Backspace' || e.key === 'Delete') && form.phone.length <= 2) e.preventDefault()
-                  }}
-                  placeholder="20XXXXXXXX"
-                  className="input-field"
-                />
-                <div className="text-xs font-bold mt-1" style={{ color: 'var(--gray3)' }}>
-                  ເລີ່ມດ້ວຍ 20 · ພິມ {Math.max(0, 10 - form.phone.length)} ຕົວອີກ
+              {/* Customer summary (readonly) */}
+              <div className="flex items-center gap-3 px-4 py-3 rounded-2xl"
+                style={{ background: 'var(--cream2)', border: '1.5px solid var(--cream3)' }}>
+                <div className="flex-1">
+                  <div className="text-xs font-black tracking-widest uppercase mb-1" style={{ color: 'var(--gray3)' }}>ຂໍ້ມູນລູກຄ້າ</div>
+                  <div className="font-black text-sm" style={{ color: 'var(--brown)' }}>👤 {form.name}</div>
+                  <div className="font-bold text-sm mt-0.5" style={{ color: 'var(--brown2)' }}>📞 {form.phone}</div>
                 </div>
               </div>
               {/* Time — restricted to pickup window */}
@@ -730,9 +751,8 @@ export default function PreOrderPage() {
           </div>
           <div className="p-4 border-t-2 border-[#e8d5c0] flex flex-col gap-2 flex-shrink-0" style={{ background: 'var(--warm-white)' }}>
             <button className="btn-primary" onClick={() => {
-              if (!form.name || !form.phone || !form.time) { alert('ກະລຸນາໃສ່ຂໍ້ມູນໃຫ້ຄົບ'); return }
-            if (form.phone.length < 10) { alert('ເບີໂທຕ້ອງຄົບ 10 ຕົວເລກ'); return }
-            if (form.time < pickupTimeRange.start || form.time > pickupTimeRange.end) { alert(`ເວລາຮັບຂອງໄດ້ ${pickupTimeRange.start} – ${pickupTimeRange.end} ເທົ່ານັ້ນ`); return }
+              if (!form.time) { alert('ກະລຸນາເລືອກເວລາ'); return }
+              if (form.time < pickupTimeRange.start || form.time > pickupTimeRange.end) { alert(`ເວລາຮັບຂອງໄດ້ ${pickupTimeRange.start} – ${pickupTimeRange.end} ເທົ່ານັ້ນ`); return }
               setStep(4)
             }}>ຕໍ່ໄປ →</button>
             <button className="btn-outline" onClick={() => setStep(1)}>← ກັບຄືນ</button>
@@ -905,7 +925,7 @@ export default function PreOrderPage() {
             <button className="btn-outline" onClick={() => {
               setSelected({})
               setBagPacks([{}])
-              setForm({ name: '', phone: '20', time: '' })
+              setForm(f => ({ ...f, time: '' }))
               setSlip(null)
               setSlipPreview(null)
               setCurrentOrder(null)
