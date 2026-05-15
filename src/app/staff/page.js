@@ -967,17 +967,16 @@ export default function StaffPage() {
       const hires = await renderReceiptCanvas(o, pw * 2)  // render 2x for sharpness
       data = canvasToEscPos(downsampleCanvas(hires, pw))
     } catch { data = buildEscPos(o) }
-    const isNoResp = btCharRef.current.properties.writeWithoutResponse
-    const chunkSize = isNoResp ? 512 : 200
+    const chunkSize = 200
     for (let i = 0; i < data.length; i += chunkSize) {
       const chunk = data.slice(i, i + chunkSize)
       try {
-        if (isNoResp) {
+        if (btCharRef.current.properties.writeWithoutResponse) {
           await btCharRef.current.writeValueWithoutResponse(chunk)
-          await new Promise(r => setTimeout(r, 8))  // 8ms ≈ 64KB/s, within printer buffer
         } else {
           await btCharRef.current.writeValue(chunk)
         }
+        await new Promise(r => setTimeout(r, 20))
       } catch { showToast('❌ ພິມຜິດ', 'red'); return }
     }
     showToast('ພິມແລ້ວ ✅', 'green')
