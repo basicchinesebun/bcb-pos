@@ -54,6 +54,7 @@ export default function StaffPage() {
   const [toast, setToast] = useState([])
   const [slipModal, setSlipModal] = useState(null)
   const [confirmModal, setConfirmModal] = useState(null) // { message, onConfirm }
+  const [slipVerify, setSlipVerify] = useState({}) // orderId -> { loading, result, error }
 
   const [archiveOpen, setArchiveOpen] = useState(false)
   const [expandedArchive, setExpandedArchive] = useState(new Set())
@@ -575,6 +576,22 @@ export default function StaffPage() {
   async function undoOrder(id, field) {
     setOrders(prev => prev.map(o => o.id === id ? { ...o, [field]: false } : o))
     await supabase.from('orders').update({ [field]: false }).eq('id', id)
+  }
+
+  async function verifySlip(o) {
+    setSlipVerify(prev => ({ ...prev, [o.id]: { loading: true } }))
+    try {
+      const res = await fetch('/api/verify-slip', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ slipUrl: o.slip_url, expectedAmount: o.total }),
+      })
+      const data = await res.json()
+      if (!res.ok || data.error) throw new Error(data.error || 'ເກີດຂໍ້ຜິດພາດ')
+      setSlipVerify(prev => ({ ...prev, [o.id]: { loading: false, result: data.result } }))
+    } catch (err) {
+      setSlipVerify(prev => ({ ...prev, [o.id]: { loading: false, error: err.message } }))
+    }
   }
 
   // ─── Menus ───
@@ -1896,11 +1913,46 @@ export default function StaffPage() {
                         </div>
 
                         {/* Slip */}
-                        {o.slip_url && (
-                          <div className="mb-2 cursor-pointer" onClick={() => setSlipModal(o.slip_url)}>
-                            <img src={o.slip_url} className="w-24 rounded-lg border-2 border-[#e8d5c0]" alt="slip" />
-                          </div>
-                        )}
+                        {o.slip_url && (() => {
+                          const sv = slipVerify[o.id]
+                          const r = sv?.result
+                          return (
+                            <div className="mb-3">
+                              <div className="flex items-start gap-3">
+                                <div className="cursor-pointer flex-shrink-0" onClick={() => setSlipModal(o.slip_url)}>
+                                  <img src={o.slip_url} className="w-24 rounded-lg border-2 border-[#e8d5c0]" alt="slip" />
+                                </div>
+                                <div className="flex flex-col gap-2 flex-1 min-w-0">
+                                  <button
+                                    onClick={() => verifySlip(o)}
+                                    disabled={sv?.loading}
+                                    className="py-2 px-3 rounded-xl text-xs font-black transition-all active:scale-95"
+                                    style={{ background: sv?.loading ? '#e8d5c0' : '#3d1f0a', color: sv?.loading ? '#a08060' : 'white' }}>
+                                    {sv?.loading ? '⏳ ກຳລັງກວດ...' : '🤖 AI ກວດສລິບ'}
+                                  </button>
+                                  {r && (
+                                    <div className="rounded-xl p-2 text-xs font-bold leading-6"
+                                      style={{
+                                        background: r.suspicious ? '#fff1f2' : (r.amount_matches && r.date_is_today) ? '#f0fdf4' : '#fffbeb',
+                                        border: `1.5px solid ${r.suspicious ? '#fca5a5' : (r.amount_matches && r.date_is_today) ? '#86efac' : '#fcd34d'}`,
+                                        color: '#374151',
+                                      }}>
+                                      <div>{r.amount_matches ? '✅' : '❌'} ຈຳນວນ: {r.amount_found != null ? r.amount_found.toLocaleString() + ' ກີບ' : 'ບໍ່ພົບ'}</div>
+                                      <div>{r.date_is_today ? '✅' : '⚠️'} ວັນທີ: {r.transfer_date || 'ບໍ່ພົບ'}</div>
+                                      {r.suspicious && <div className="text-red-600">🚨 {r.suspicious_reason}</div>}
+                                      {r.summary_lo && <div className="mt-1 text-gray-500 leading-5">{r.summary_lo}</div>}
+                                    </div>
+                                  )}
+                                  {sv?.error && (
+                                    <div className="rounded-xl p-2 text-xs font-bold" style={{ background: '#fff1f2', color: '#dc2626' }}>
+                                      ❌ {sv.error}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          )
+                        })()}
 
                         <div className="text-base font-black mb-3" style={{ color: 'var(--brown)' }}>
                           ລວມ: {(o.total || 0).toLocaleString()} ກີບ
