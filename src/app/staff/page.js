@@ -86,6 +86,7 @@ export default function StaffPage() {
   const activeChatPhoneRef = useRef(null)
   const voicesRef = useRef([])
   const receiptFontRef = useRef(null)
+  const slipVerifyingRef = useRef(new Set())
 
   useEffect(() => {
     // Load Noto Sans Lao into document.fonts for canvas receipt rendering
@@ -825,6 +826,22 @@ export default function StaffPage() {
       }
     })
   }
+
+  // ─── Auto slip verification ───
+  useEffect(() => {
+    const toVerify = orders.filter(o =>
+      o.type === 'online' &&
+      o.status === 'pending' &&
+      !o.done && !o.cancelled &&
+      o.slip_url &&
+      !slipVerify[o.id] &&
+      !slipVerifyingRef.current.has(o.id)
+    )
+    for (const o of toVerify) {
+      slipVerifyingRef.current.add(o.id)
+      verifySlip(o)
+    }
+  }, [orders])
 
   // ─── Bluetooth Printer (ESC/POS) ───
   const btCharRef = useRef(null)
@@ -1843,6 +1860,33 @@ export default function StaffPage() {
                     <div key={o.id} className="rounded-2xl overflow-hidden" style={{ border: `2px solid ${borderColor}`, background: 'var(--warm-white)' }}>
 
                       <div className="p-3">
+                        {/* Slip warning banner */}
+                        {(() => {
+                          const sv = slipVerify[o.id]
+                          const r = sv?.result
+                          if (!r) return null
+                          const warn = r.suspicious || !r.amount_matches || !r.date_is_today
+                          if (!warn) return null
+                          const [warnOpen, setWarnOpen] = [expandedArchive.has('warn_' + o.id), v => setExpandedArchive(prev => { const n = new Set(prev); v ? n.add('warn_' + o.id) : n.delete('warn_' + o.id); return n })]
+                          return (
+                            <div className="rounded-xl mb-2 overflow-hidden" style={{ border: '2px solid #f97316' }}>
+                              <button onClick={() => setWarnOpen(!warnOpen)} className="w-full flex items-center gap-2 px-3 py-2 text-left" style={{ background: '#fff7ed' }}>
+                                <span className="text-base">⚠️</span>
+                                <span className="text-xs font-black flex-1" style={{ color: '#c2410c' }}>ສລິບນີ້ຕ້ອງກວດສອບ — ກົດເພື່ອເບິ່ງ</span>
+                                <span className="text-xs" style={{ color: '#c2410c' }}>{warnOpen ? '▲' : '▼'}</span>
+                              </button>
+                              {warnOpen && (
+                                <div className="px-3 pb-3 pt-1 text-xs font-bold leading-6" style={{ background: '#fff7ed', color: '#7c2d12' }}>
+                                  {!r.amount_matches && <div>❌ ຈຳນວນ: {r.amount_found != null ? r.amount_found.toLocaleString() + ' ກີບ' : 'ບໍ່ພົບ'} (ຄາດ {(o.total||0).toLocaleString()} ກີບ)</div>}
+                                  {!r.date_is_today && <div>⚠️ ວັນໂອນ: {r.transfer_date || 'ບໍ່ພົບ'} — ບໍ່ໃຊ່ມື້ນີ້</div>}
+                                  {r.suspicious && <div>🚨 {r.suspicious_reason}</div>}
+                                  {r.summary_lo && <div className="mt-1 opacity-70">{r.summary_lo}</div>}
+                                </div>
+                              )}
+                            </div>
+                          )
+                        })()}
+
                         <div className="flex justify-between items-start mb-2">
                           <div className="flex items-center gap-2">
                             <div className="font-serif text-2xl font-black" style={{ color: 'var(--brown)' }}>
@@ -1913,46 +1957,16 @@ export default function StaffPage() {
                         </div>
 
                         {/* Slip */}
-                        {o.slip_url && (() => {
-                          const sv = slipVerify[o.id]
-                          const r = sv?.result
-                          return (
-                            <div className="mb-3">
-                              <div className="flex items-start gap-3">
-                                <div className="cursor-pointer flex-shrink-0" onClick={() => setSlipModal(o.slip_url)}>
-                                  <img src={o.slip_url} className="w-24 rounded-lg border-2 border-[#e8d5c0]" alt="slip" />
-                                </div>
-                                <div className="flex flex-col gap-2 flex-1 min-w-0">
-                                  <button
-                                    onClick={() => verifySlip(o)}
-                                    disabled={sv?.loading}
-                                    className="py-2 px-3 rounded-xl text-xs font-black transition-all active:scale-95"
-                                    style={{ background: sv?.loading ? '#e8d5c0' : '#3d1f0a', color: sv?.loading ? '#a08060' : 'white' }}>
-                                    {sv?.loading ? '⏳ ກຳລັງກວດ...' : '🤖 AI ກວດສລິບ'}
-                                  </button>
-                                  {r && (
-                                    <div className="rounded-xl p-2 text-xs font-bold leading-6"
-                                      style={{
-                                        background: r.suspicious ? '#fff1f2' : (r.amount_matches && r.date_is_today) ? '#f0fdf4' : '#fffbeb',
-                                        border: `1.5px solid ${r.suspicious ? '#fca5a5' : (r.amount_matches && r.date_is_today) ? '#86efac' : '#fcd34d'}`,
-                                        color: '#374151',
-                                      }}>
-                                      <div>{r.amount_matches ? '✅' : '❌'} ຈຳນວນ: {r.amount_found != null ? r.amount_found.toLocaleString() + ' ກີບ' : 'ບໍ່ພົບ'}</div>
-                                      <div>{r.date_is_today ? '✅' : '⚠️'} ວັນທີ: {r.transfer_date || 'ບໍ່ພົບ'}</div>
-                                      {r.suspicious && <div className="text-red-600">🚨 {r.suspicious_reason}</div>}
-                                      {r.summary_lo && <div className="mt-1 text-gray-500 leading-5">{r.summary_lo}</div>}
-                                    </div>
-                                  )}
-                                  {sv?.error && (
-                                    <div className="rounded-xl p-2 text-xs font-bold" style={{ background: '#fff1f2', color: '#dc2626' }}>
-                                      ❌ {sv.error}
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
+                        {o.slip_url && (
+                          <div className="mb-2 flex items-center gap-2">
+                            <div className="cursor-pointer" onClick={() => setSlipModal(o.slip_url)}>
+                              <img src={o.slip_url} className="w-20 rounded-lg border-2 border-[#e8d5c0]" alt="slip" />
                             </div>
-                          )
-                        })()}
+                            {slipVerify[o.id]?.loading && (
+                              <span className="text-xs font-bold" style={{ color: 'var(--gray3)' }}>🤖 ກຳລັງກວດ...</span>
+                            )}
+                          </div>
+                        )}
 
                         <div className="text-base font-black mb-3" style={{ color: 'var(--brown)' }}>
                           ລວມ: {(o.total || 0).toLocaleString()} ກີບ
