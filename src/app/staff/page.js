@@ -1121,22 +1121,18 @@ export default function StaffPage() {
       y += ls + Math.round(14 * s)
     })
     push(() => { ctx.font = f(28, '900'); ctx.textAlign = 'center'; ctx.fillStyle = '#000'; ctx.fillText(si.name || 'BCB', W/2, y += Math.round(34 * s)) })
-    if (si.address) push(() => { ctx.font = f(18); ctx.textAlign = 'center'; ctx.fillStyle = '#555'; ctx.fillText(si.address, W/2, y += Math.round(24 * s)); ctx.fillStyle = '#000' })
-    if (si.phone) push(() => { ctx.font = f(18); ctx.textAlign = 'center'; ctx.fillStyle = '#555'; ctx.fillText('Tel: ' + si.phone, W/2, y += Math.round(24 * s)); ctx.fillStyle = '#000' })
+    if (si.address) push(() => { ctx.font = f(18); ctx.textAlign = 'center'; ctx.fillStyle = '#000'; ctx.fillText(si.address, W/2, y += Math.round(24 * s)) })
+    if (si.phone) push(() => { ctx.font = f(18); ctx.textAlign = 'center'; ctx.fillStyle = '#000'; ctx.fillText('Tel: ' + si.phone, W/2, y += Math.round(24 * s)) })
     push(() => { y += Math.round(8 * s); dash() })
-    push(() => { ctx.font = f(17); ctx.textAlign = 'center'; ctx.fillStyle = '#888'; ctx.fillText('ເລກຄິວ · QUEUE', W/2, y += Math.round(22 * s)); ctx.fillStyle = '#000' })
+    push(() => { ctx.font = f(17); ctx.textAlign = 'center'; ctx.fillStyle = '#000'; ctx.fillText('ເລກຄິວ · QUEUE', W/2, y += Math.round(22 * s)) })
     push(() => { ctx.font = f(88, '900'); ctx.textAlign = 'center'; ctx.fillText(String(o.qnum).padStart(4, '0'), W/2, y += Math.round(96 * s)) })
     if (custName) push(() => { ctx.font = f(18); ctx.textAlign = 'center'; ctx.fillText(custName, W/2, y += Math.round(26 * s)) })
-    push(() => { ctx.font = f(18); ctx.textAlign = 'center'; ctx.fillStyle = '#888'; ctx.fillText(dateStr, W/2, y += Math.round(24 * s)); ctx.fillStyle = '#000' })
+    push(() => { ctx.font = f(18); ctx.textAlign = 'center'; ctx.fillStyle = '#000'; ctx.fillText(dateStr, W/2, y += Math.round(24 * s)) })
     push(() => { y += Math.round(8 * s); dash() })
     items.forEach(it => push(() => {
       ctx.font = f(20); ctx.textAlign = 'left'; ctx.fillStyle = '#000'
       ctx.fillText(nameOf(it) + ' x' + it.qty, 10, y += Math.round(28 * s))
       ctx.textAlign = 'right'; ctx.fillText((it.sub || 0).toLocaleString(), W - 10, y)
-    }))
-    if (o.bag_label) o.bag_label.split(' | ').forEach(bl => push(() => {
-      ctx.font = f(17); ctx.fillStyle = '#444'; ctx.textAlign = 'left'
-      ctx.fillText(bl, 20, y += Math.round(26 * s)); ctx.fillStyle = '#000'
     }))
     push(() => { y += Math.round(8 * s); dash() })
     push(() => {
@@ -1144,7 +1140,7 @@ export default function StaffPage() {
       ctx.fillText('ລວມ · TOTAL', 10, y += Math.round(30 * s))
       ctx.textAlign = 'right'; ctx.fillText((o.total || 0).toLocaleString() + ' ກີບ', W - 10, y)
     })
-    push(() => { ctx.font = f(17); ctx.textAlign = 'center'; ctx.fillStyle = '#888'; ctx.fillText(si.footer || 'ຂອບໃຈທີ່ໃຊ້ບໍລິການ', W/2, y += Math.round(30 * s)); ctx.fillStyle = '#000' })
+    push(() => { ctx.font = f(17); ctx.textAlign = 'center'; ctx.fillStyle = '#000'; ctx.fillText(si.footer || 'ຂອບໃຈທີ່ໃຊ້ບໍລິການ', W/2, y += Math.round(30 * s)) })
     push(() => { y += Math.round(16 * s) })
 
     // First pass: measure total height
