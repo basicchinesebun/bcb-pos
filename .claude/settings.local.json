@@ -17,7 +17,8 @@
       "mcp__65ee66eb-d88e-4bfe-80a7-336cef5f67d5__get_deployment_build_logs",
       "mcp__45894cac-602c-45cf-a7f5-437de2064e7c__get_project_url",
       "mcp__45894cac-602c-45cf-a7f5-437de2064e7c__list_extensions",
-      "mcp__45894cac-602c-45cf-a7f5-437de2064e7c__deploy_edge_function"
+      "mcp__45894cac-602c-45cf-a7f5-437de2064e7c__deploy_edge_function",
+      "mcp__45894cac-602c-45cf-a7f5-437de2064e7c__get_edge_function"
     ]
   }
 }
