@@ -68,6 +68,7 @@ export default function StaffPage() {
   const [chatInput, setChatInput] = useState('')
   const [chatSending, setChatSending] = useState(false)
   const [unreadChat, setUnreadChat] = useState(0)
+  const [aiPausedPhones, setAiPausedPhones] = useState(new Set())
   const [payingId, setPayingId] = useState(null)
   const [editOrder, setEditOrder] = useState(null)
   const [editItems, setEditItems] = useState({})
@@ -168,7 +169,7 @@ export default function StaffPage() {
           } else {
             setUnreadChat(prev => prev + 1)
           }
-        } else if (msg.sender === 'staff' && currentPhone === msg.phone) {
+        } else if ((msg.sender === 'staff' || msg.sender === 'ai') && currentPhone === msg.phone) {
           setChatMessages(prev => [...prev, msg])
         }
         setChatConvos(prev => {
@@ -351,8 +352,27 @@ export default function StaffPage() {
     } catch (_) {}
   }
 
+  async function loadAiPausedPhones() {
+    if (!supabase) return
+    const { data } = await supabase.from('ai_chat_paused').select('phone')
+    if (data) setAiPausedPhones(new Set(data.map(r => r.phone)))
+  }
+
+  async function toggleAiForPhone(phone) {
+    if (!supabase) return
+    const isPaused = aiPausedPhones.has(phone)
+    if (isPaused) {
+      await supabase.from('ai_chat_paused').delete().eq('phone', phone)
+      setAiPausedPhones(prev => { const n = new Set(prev); n.delete(phone); return n })
+    } else {
+      await supabase.from('ai_chat_paused').upsert({ phone })
+      setAiPausedPhones(prev => new Set([...prev, phone]))
+    }
+  }
+
   async function loadChatConvos() {
     if (!supabase) return
+    loadAiPausedPhones()
     const { data } = await supabase.from('messages').select('*').order('created_at', { ascending: false })
     if (!data) return
     const map = {}
@@ -2223,10 +2243,23 @@ export default function StaffPage() {
                   </div>
                   <div className="text-xs font-bold" style={{ color: 'rgba(253,246,238,0.6)' }}>{activeChatPhone}</div>
                 </div>
+                {/* AI toggle */}
+                <button
+                  onClick={() => toggleAiForPhone(activeChatPhone)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-black transition-all active:scale-95"
+                  style={{
+                    background: aiPausedPhones.has(activeChatPhone) ? 'rgba(255,255,255,0.15)' : '#16a34a',
+                    color: 'white',
+                  }}>
+                  🤖 {aiPausedPhones.has(activeChatPhone) ? 'AI OFF' : 'AI ON'}
+                </button>
               </div>
               <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3">
-                {chatMessages.map(msg => (
-                  <div key={msg.id} className={`flex ${msg.sender === 'staff' ? 'justify-end' : 'justify-start'}`}>
+                {chatMessages.map(msg => {
+                  const isStaffSide = msg.sender === 'staff' || msg.sender === 'ai'
+                  const isAi = msg.sender === 'ai'
+                  return (
+                  <div key={msg.id} className={`flex ${isStaffSide ? 'justify-end' : 'justify-start'}`}>
                     {msg.sender === 'customer' && (
                       <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs mr-2 flex-shrink-0 self-end mb-1 font-black"
                         style={{ background: 'var(--cream2)', color: 'var(--brown)' }}>
@@ -2239,23 +2272,25 @@ export default function StaffPage() {
                           Order #{String(msg.qnum).padStart(4, '0')}
                         </div>
                       )}
+                      {isAi && <div className="text-[10px] font-black mb-1 px-1 text-right" style={{ color: '#16a34a' }}>🤖 AI</div>}
                       <div className="px-4 py-2.5 rounded-2xl text-sm font-bold leading-snug"
                         style={{
-                          background: msg.sender === 'staff' ? 'var(--brown)' : 'white',
-                          color: msg.sender === 'staff' ? 'var(--cream)' : 'var(--brown)',
-                          border: msg.sender === 'customer' ? '1.5px solid var(--cream3)' : 'none',
-                          borderBottomRightRadius: msg.sender === 'staff' ? 4 : undefined,
+                          background: isAi ? '#f0fdf4' : isStaffSide ? 'var(--brown)' : 'white',
+                          color: isAi ? '#166534' : isStaffSide ? 'var(--cream)' : 'var(--brown)',
+                          border: isAi ? '1.5px solid #86efac' : msg.sender === 'customer' ? '1.5px solid var(--cream3)' : 'none',
+                          borderBottomRightRadius: isStaffSide ? 4 : undefined,
                           borderBottomLeftRadius: msg.sender === 'customer' ? 4 : undefined,
                         }}>
                         {msg.text}
                       </div>
                       <div className="text-[10px] font-bold mt-1 px-1"
-                        style={{ color: 'var(--gray3)', textAlign: msg.sender === 'staff' ? 'right' : 'left' }}>
+                        style={{ color: 'var(--gray3)', textAlign: isStaffSide ? 'right' : 'left' }}>
                         {new Date(msg.created_at).toLocaleTimeString('lo-LA', { hour: '2-digit', minute: '2-digit' })}
                       </div>
                     </div>
                   </div>
-                ))}
+                  )
+                })}
                 <div ref={chatBottomRef} />
               </div>
               <div className="p-3 flex gap-2 flex-shrink-0 border-t border-[#e8d5c0]" style={{ background: 'white' }}>
