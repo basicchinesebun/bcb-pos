@@ -184,6 +184,12 @@ export default function StaffPage() {
           return [{ phone: msg.phone, name: msg.name, lastMsg: msg.text, lastAt: msg.created_at, unread: newUnread }, ...prev]
         })
       })
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'ai_chat_paused' }, payload => {
+        setAiPausedPhones(prev => new Set([...prev, payload.new.phone]))
+      })
+      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'ai_chat_paused' }, payload => {
+        setAiPausedPhones(prev => { const n = new Set(prev); n.delete(payload.old.phone); return n })
+      })
       .subscribe()
     return () => supabase.removeChannel(ch)
   }, [])
@@ -2205,20 +2211,32 @@ export default function StaffPage() {
                   ຍັງບໍ່ມີຂໍ້ຄວາມ
                 </div>
               )}
-              {chatConvos.map(c => (
+              {[...chatConvos].sort((a, b) => {
+                const aNeeds = aiPausedPhones.has(a.phone) && a.unread > 0
+                const bNeeds = aiPausedPhones.has(b.phone) && b.unread > 0
+                if (aNeeds !== bNeeds) return aNeeds ? -1 : 1
+                if (a.unread !== b.unread) return b.unread - a.unread
+                return new Date(b.lastAt) - new Date(a.lastAt)
+              }).map(c => {
+                const needsStaff = aiPausedPhones.has(c.phone) && c.unread > 0
+                return (
                 <button key={c.phone} onClick={() => openConvo(c.phone)}
                   className="w-full flex items-center gap-3 px-4 py-3 text-left border-b border-[#f5ebe0]"
-                  style={{ background: c.unread > 0 ? 'rgba(61,31,10,0.04)' : 'transparent' }}>
+                  style={{ background: needsStaff ? 'rgba(251,191,36,0.10)' : c.unread > 0 ? 'rgba(61,31,10,0.04)' : 'transparent' }}>
                   <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 font-black text-lg"
-                    style={{ background: 'var(--cream2)', color: 'var(--brown)' }}>
+                    style={{ background: needsStaff ? '#fef3c7' : 'var(--cream2)', color: 'var(--brown)' }}>
                     {c.name?.[0]?.toUpperCase() || '?'}
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between gap-2">
                       <span className="font-black text-sm truncate" style={{ color: 'var(--brown)' }}>{c.name}</span>
-                      <span className="text-[10px] font-bold flex-shrink-0" style={{ color: 'var(--gray3)' }}>
-                        {new Date(c.lastAt).toLocaleTimeString('lo-LA', { hour: '2-digit', minute: '2-digit' })}
-                      </span>
+                      {needsStaff ? (
+                        <span className="flex-shrink-0 text-[10px] font-black px-1.5 py-0.5 rounded-full" style={{ background: '#f59e0b', color: 'white' }}>ລໍພະນັກງານ</span>
+                      ) : (
+                        <span className="text-[10px] font-bold flex-shrink-0" style={{ color: 'var(--gray3)' }}>
+                          {new Date(c.lastAt).toLocaleTimeString('lo-LA', { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      )}
                     </div>
                     <div className="flex items-center justify-between gap-2">
                       <span className="text-xs font-bold truncate" style={{ color: 'var(--gray3)' }}>{c.phone}</span>
@@ -2229,7 +2247,8 @@ export default function StaffPage() {
                     <div className="text-xs truncate mt-0.5" style={{ color: 'var(--brown2)' }}>{c.lastMsg}</div>
                   </div>
                 </button>
-              ))}
+                )
+              })}
             </div>
           ) : (
             // Conversation messages
