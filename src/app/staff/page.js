@@ -69,6 +69,8 @@ export default function StaffPage() {
   const [chatSending, setChatSending] = useState(false)
   const [unreadChat, setUnreadChat] = useState(0)
   const [aiPausedPhones, setAiPausedPhones] = useState(new Set())
+  const [chatLabels, setChatLabels] = useState({})
+  const [labelFilter, setLabelFilter] = useState(null)
   const [payingId, setPayingId] = useState(null)
   const [editOrder, setEditOrder] = useState(null)
   const [editItems, setEditItems] = useState({})
@@ -189,6 +191,9 @@ export default function StaffPage() {
       })
       .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'ai_chat_paused' }, payload => {
         setAiPausedPhones(prev => { const n = new Set(prev); n.delete(payload.old.phone); return n })
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_labels' }, payload => {
+        if (payload.new) setChatLabels(prev => ({ ...prev, [payload.new.phone]: payload.new.label }))
       })
       .subscribe()
     return () => supabase.removeChannel(ch)
@@ -379,7 +384,13 @@ export default function StaffPage() {
   async function loadChatConvos() {
     if (!supabase) return
     loadAiPausedPhones()
-    const { data } = await supabase.from('messages').select('*').order('created_at', { ascending: false })
+    const [{ data }, { data: labelsData }] = await Promise.all([
+      supabase.from('messages').select('*').order('created_at', { ascending: false }),
+      supabase.from('chat_labels').select('phone, label'),
+    ])
+    const labelsMap = {}
+    labelsData?.forEach(r => { labelsMap[r.phone] = r.label })
+    setChatLabels(labelsMap)
     if (!data) return
     const map = {}
     data.forEach(m => {
@@ -2206,12 +2217,30 @@ export default function StaffPage() {
               <div className="px-4 py-3 font-black text-sm" style={{ color: 'var(--brown)', borderBottom: '1px solid var(--cream3)' }}>
                 💬 ຂໍ້ຄວາມຈາກລູກຄ້າ
               </div>
+              <div className="flex gap-1.5 px-3 py-2 overflow-x-auto" style={{ borderBottom: '1px solid var(--cream3)', background: 'var(--cream)' }}>
+                {[
+                  { key: null,        icon: '💬', label: 'ທັງໝົດ' },
+                  { key: 'order',     icon: '🛒', label: 'ຢາກສັ່ງ' },
+                  { key: 'question',  icon: '❓', label: 'ຖາມ' },
+                  { key: 'problem',   icon: '⚠️', label: 'ບັນຫາ' },
+                  { key: 'staff',     icon: '👤', label: 'ຮຽກ' },
+                ].map(t => (
+                  <button key={String(t.key)} onClick={() => setLabelFilter(t.key)}
+                    className="flex-shrink-0 flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-black transition-all"
+                    style={{
+                      background: labelFilter === t.key ? 'var(--brown)' : 'var(--cream2)',
+                      color: labelFilter === t.key ? 'var(--cream)' : 'var(--brown)',
+                    }}>
+                    {t.icon} {t.label}
+                  </button>
+                ))}
+              </div>
               {chatConvos.length === 0 && (
                 <div className="text-center py-16 text-sm font-bold" style={{ color: 'var(--cream3)' }}>
                   ຍັງບໍ່ມີຂໍ້ຄວາມ
                 </div>
               )}
-              {[...chatConvos].sort((a, b) => {
+              {[...chatConvos].filter(c => !labelFilter || chatLabels[c.phone] === labelFilter || (labelFilter === 'staff' && aiPausedPhones.has(c.phone))).sort((a, b) => {
                 const aNeeds = aiPausedPhones.has(a.phone) && a.unread > 0
                 const bNeeds = aiPausedPhones.has(b.phone) && b.unread > 0
                 if (aNeeds !== bNeeds) return aNeeds ? -1 : 1
@@ -2219,6 +2248,8 @@ export default function StaffPage() {
                 return new Date(b.lastAt) - new Date(a.lastAt)
               }).map(c => {
                 const needsStaff = aiPausedPhones.has(c.phone) && c.unread > 0
+                const label = chatLabels[c.phone]
+                const LABEL_META = { order: { icon: '🛒', color: '#16a34a' }, question: { icon: '❓', color: '#2563eb' }, problem: { icon: '⚠️', color: '#dc2626' }, staff: { icon: '👤', color: '#d97706' } }
                 return (
                 <button key={c.phone} onClick={() => openConvo(c.phone)}
                   className="w-full flex items-center gap-3 px-4 py-3 text-left border-b border-[#f5ebe0]"
@@ -2244,7 +2275,15 @@ export default function StaffPage() {
                         <span className="flex-shrink-0 bg-red-500 text-white text-[10px] font-black rounded-full w-5 h-5 flex items-center justify-center">{c.unread}</span>
                       )}
                     </div>
-                    <div className="text-xs truncate mt-0.5" style={{ color: 'var(--brown2)' }}>{c.lastMsg}</div>
+                    <div className="flex items-center gap-1.5 mt-0.5">
+                      {label && LABEL_META[label] && (
+                        <span className="text-[10px] font-black px-1.5 py-0.5 rounded-full flex-shrink-0"
+                          style={{ background: LABEL_META[label].color + '18', color: LABEL_META[label].color }}>
+                          {LABEL_META[label].icon} {label === 'order' ? 'ຢາກສັ່ງ' : label === 'question' ? 'ຖາມ' : label === 'problem' ? 'ບັນຫາ' : 'ຮຽກ'}
+                        </span>
+                      )}
+                      <span className="text-xs truncate" style={{ color: 'var(--brown2)' }}>{c.lastMsg}</span>
+                    </div>
                   </div>
                 </button>
                 )
