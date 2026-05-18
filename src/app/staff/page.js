@@ -43,7 +43,7 @@ export default function StaffPage() {
   const [receiptPreviewUrl, setReceiptPreviewUrl] = useState('')
   const [previewLoading, setPreviewLoading] = useState(false)
   const previewTimerRef = useRef(null)
-  const [settings, setSettings] = useState({ soundOn: true, walkinOn: true, onlineOn: true, autoprintOn: false, pickupTimeStart: '15:30', pickupTimeEnd: '19:00' })
+  const [settings, setSettings] = useState({ soundOn: true, walkinOn: true, onlineOn: true, aiOn: true, autoprintOn: false, pickupTimeStart: '15:30', pickupTimeEnd: '19:00' })
   const [branches, setBranches] = useState([
     { id: 'simeuang',  name: 'ສາຂາສີເມື່ອງ',  nameEn: 'Si Meuang Branch',  visible: true, schedule: 'ຈ · ພ · ສ (Mon / Wed / Fri)', mapUrl: '', facebookUrl: '', tiktokUrl: '', phone1: '', phone2: '', whatsapp: '' },
     { id: 'houayhong', name: 'ສາຂາຫວຍຫົງ', nameEn: 'Houay Hong Branch', visible: true, schedule: 'ຄ · ສກ · ອ (Tue / Thu / Sat)', mapUrl: '', facebookUrl: '', tiktokUrl: '', phone1: '', phone2: '', whatsapp: '' },
@@ -1432,6 +1432,7 @@ export default function StaffPage() {
                     ['soundOn', '🔊 ສຽງຮຽກຄິວ'],
                     ['walkinOn', '🏪 ເປີດ Walk-in'],
                     ['onlineOn', '🌐 ເປີດ Online'],
+                    ['aiOn', '🤖 AI ຕອບແຊັດ'],
                     ['autoprintOn', '🖨 ພິມອັດຕະໂນມັດ'],
                   ].map(([k, l]) => (
                     <div key={k} className="flex justify-between items-center py-2 border-b border-[#e8d5c0]">
