@@ -18,6 +18,10 @@
   -webkit-tap-highlight-color: transparent;
 }
 
+button, [role="button"] {
+  touch-action: manipulation;
+}
+
 html {
   background: #fdf6ee;
   color-scheme: only light;

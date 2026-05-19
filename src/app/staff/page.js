@@ -325,6 +325,14 @@ export default function StaffPage() {
       await supabase.from('shop_config').upsert({ key: 'stock_shop', value: JSON.stringify(newStock) })
       setQoQnum(qnumData); setQoStep(3)
       showToast(`✅ ຄິວ ${String(qnumData).padStart(4, '0')} · ${paymentMethod === 'cash' ? '💵 ສດ' : '📱 ໂອນ'}`, 'green')
+      if (settings.autoprintOn) {
+        const printObj = {
+          qnum: qnumData, type: 'walkin', items, total,
+          bag_label: packingLabel || null, payment_method: paymentMethod,
+          customer: qoName.trim() ? JSON.stringify({ name: qoName.trim() }) : null,
+        }
+        setTimeout(() => smartPrint(printObj), 300)
+      }
     } catch (e) { alert('❌ ' + (e.message || 'error')) }
     finally { setQoSubmitting(false) }
   }
