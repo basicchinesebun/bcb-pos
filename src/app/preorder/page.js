@@ -189,7 +189,6 @@ export default function PreOrderPage() {
       else n[i] = next
       return n
     })
-    if (document.activeElement) document.activeElement.blur()
   }
 
   function showPackToast(msg) {

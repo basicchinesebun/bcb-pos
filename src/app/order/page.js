@@ -133,7 +133,6 @@ export default function OrderPage() {
       else n[i] = next
       return n
     })
-    if (document.activeElement) document.activeElement.blur()
   }
 
   function showPackToast(msg) {
