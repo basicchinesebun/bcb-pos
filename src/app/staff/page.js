@@ -2490,7 +2490,19 @@ export default function StaffPage() {
                     <span className="text-sm font-black" style={{ color: 'var(--brown)' }}>🛍 {qoTotalItems} ກ້ອນ</span>
                     <span className="text-sm font-black" style={{ color: 'var(--brown)' }}>{qoTotalPrice.toLocaleString()} ກີບ</span>
                   </div>
-                  <button className="btn-primary" onClick={() => setQoStep(2)}>ຈັດຖົງ →</button>
+                  <div className="grid grid-cols-2 gap-2 mb-2">
+                    <button onClick={() => submitQuickOrder('cash')} disabled={qoSubmitting}
+                      className="py-4 rounded-2xl font-black text-base text-white active:scale-95 transition-all"
+                      style={{ background: '#15803d' }}>
+                      {qoSubmitting ? '...' : '💵 ສດ'}
+                    </button>
+                    <button onClick={() => submitQuickOrder('qr')} disabled={qoSubmitting}
+                      className="py-4 rounded-2xl font-black text-base text-white active:scale-95 transition-all"
+                      style={{ background: '#1d4ed8' }}>
+                      {qoSubmitting ? '...' : '📱 ໂອນ'}
+                    </button>
+                  </div>
+                  <button className="btn-outline py-2 text-xs w-full" onClick={() => setQoStep(2)}>ຈັດຖົງ / Pack bags →</button>
                 </div>
               )}
             </>
@@ -2620,7 +2632,12 @@ export default function StaffPage() {
                   </div>
                 </div>
               </div>
-              <button className="btn-primary mt-6 w-full max-w-sm" onClick={resetQo}>🛒 ສັ່ງໃໝ່</button>
+              <button
+                className="mt-6 w-full max-w-sm py-5 rounded-2xl font-black text-xl text-white active:scale-95 transition-all"
+                style={{ background: 'var(--brown)' }}
+                onClick={resetQo}>
+                🛒 ລູກຄ້າຕໍ່ໄປ
+              </button>
               <button className="btn-outline mt-2 w-full max-w-sm py-3" onClick={() => { setQoOpen(false); resetQo() }}>ປິດ</button>
             </div>
           )}
