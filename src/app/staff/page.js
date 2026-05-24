@@ -119,9 +119,13 @@ export default function StaffPage() {
     // Real-time orders — direct state mutations (instant UI) + status tracking
     const ch = supabase.channel('staff-orders')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'orders' },
-        payload => setOrders(prev => [payload.new, ...prev]))
+        payload => setOrders(prev => prev.some(o => o.id === payload.new.id) ? prev : [payload.new, ...prev]))
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'orders' },
-        payload => setOrders(prev => prev.map(o => o.id === payload.new.id ? payload.new : o)))
+        payload => setOrders(prev => {
+          const exists = prev.some(o => o.id === payload.new.id)
+          if (exists) return prev.map(o => o.id === payload.new.id ? payload.new : o)
+          return [payload.new, ...prev]
+        }))
       .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'orders' },
         payload => setOrders(prev => prev.filter(o => o.id !== payload.old.id)))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'shop_config' }, () => loadConfig())
@@ -1432,6 +1436,19 @@ export default function StaffPage() {
           <div className="flex flex-col md:grid md:grid-cols-[320px_1fr] max-w-6xl mx-auto">
             {/* Sidebar */}
             <div className="p-3 flex flex-col gap-3">
+              {/* QR Code shortcut */}
+              <a href="/qr" target="_blank" rel="noopener noreferrer"
+                className="card flex items-center gap-3 active:scale-95 transition-all"
+                style={{ textDecoration: 'none' }}>
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 text-xl"
+                  style={{ background: 'var(--cream2)' }}>📱</div>
+                <div className="flex-1">
+                  <div className="font-black text-sm" style={{ color: 'var(--brown)' }}>QR Code Pre-Order</div>
+                  <div className="text-xs font-bold" style={{ color: 'var(--gray3)' }}>ສະແດງ QR ໃຫ້ລູກຄ້າສະແກນ</div>
+                </div>
+                <div className="text-xs font-black px-2 py-1 rounded-lg" style={{ background: 'var(--brown)', color: 'var(--cream)' }}>ເປີດ →</div>
+              </a>
+
               {/* Settings */}
               <details className="card">
                 <summary className="font-black text-xs tracking-widest uppercase cursor-pointer" style={{ color: 'var(--brown3)' }}>⚙ ຕັ້ງຄ່າ</summary>
