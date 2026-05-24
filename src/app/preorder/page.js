@@ -526,12 +526,6 @@ export default function PreOrderPage() {
               setBagPacks([bag])
               setStep(3)
             }}>ຕໍ່ໄປ →</button>
-            <button className="btn-outline flex items-center justify-center gap-2" onClick={() => { setContactForm({ name: '', phone: '' }); setContactFormOpen(true) }}>
-              <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5 flex-shrink-0">
-                <path d="M12 2C6.477 2 2 6.145 2 11.243c0 2.906 1.404 5.503 3.601 7.23V22l3.324-1.827A11.13 11.13 0 0012 20.485c5.523 0 10-4.144 10-9.242C22 6.145 17.523 2 12 2zm1.088 12.45l-2.55-2.72-4.976 2.72 5.473-5.81 2.612 2.72 4.913-2.72-5.472 5.81z"/>
-              </svg>
-              ຕິດຕໍ່ເຮົາ
-            </button>
             <button className="text-xs font-black py-2" style={{ color: 'var(--gray3)', background: 'transparent', border: 'none' }}
               onClick={() => { setHistPhone(''); setHistory([]); setStep(6) }}>
               📜 ເບິ່ງປະຫວັດ Order
@@ -932,12 +926,6 @@ export default function PreOrderPage() {
             <ContactSection />
           </div>
           <div className="p-4 border-t-2 border-[#e8d5c0] flex flex-col gap-2 flex-shrink-0" style={{ background: 'var(--warm-white)' }}>
-            <button className="btn-primary" onClick={() => {
-              const c = typeof currentOrder.customer === 'string' ? JSON.parse(currentOrder.customer) : currentOrder.customer
-              openChat({ name: c.name, phone: c.phone, qnum: currentOrder.qnum })
-            }}>
-              💬 ຕິດຕໍ່ຮ້ານ
-            </button>
             <button className="btn-outline" onClick={() => {
               setSelected({})
               setBagPacks([{}])
@@ -954,116 +942,6 @@ export default function PreOrderPage() {
         </>
       )}
 
-      {/* Contact Form Modal */}
-      {contactFormOpen && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ background: 'rgba(61,31,10,0.6)' }}
-          onClick={() => setContactFormOpen(false)}>
-          <div className="w-full max-w-sm rounded-t-3xl p-6 pb-10 flex flex-col gap-4"
-            style={{ background: 'var(--cream)' }} onClick={e => e.stopPropagation()}>
-            <div className="w-10 h-1 rounded-full mx-auto mb-1" style={{ background: 'var(--cream3)' }} />
-            <div className="font-serif font-black text-xl text-center" style={{ color: 'var(--brown)' }}>
-              💬 ຕິດຕໍ່ເຮົາ
-            </div>
-            <div className="text-sm font-bold text-center" style={{ color: 'var(--gray3)' }}>
-              ໃສ່ຂໍ້ມູນຂ້າງລຸ່ມ ເພື່ອ chat ກັບຮ້ານ
-            </div>
-            <input
-              value={contactForm.name}
-              onChange={e => setContactForm(p => ({ ...p, name: e.target.value }))}
-              placeholder="ຊື່ຂອງທ່ານ"
-              className="input-field"
-            />
-            <input
-              value={contactForm.phone}
-              onChange={e => setContactForm(p => ({ ...p, phone: e.target.value }))}
-              placeholder="ເບີໂທ (020 XXXX XXXX)"
-              type="tel"
-              className="input-field"
-            />
-            <button
-              disabled={!contactForm.name.trim() || !contactForm.phone.trim()}
-              onClick={() => {
-                setContactFormOpen(false)
-                openChat({ name: contactForm.name.trim(), phone: contactForm.phone.trim(), qnum: null })
-              }}
-              className="btn-primary py-3 text-base">
-              ເລີ່ມ Chat →
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Chat Modal */}
-      {chatOpen && chatCustomer && (
-        <div className="fixed inset-x-0 bottom-0 z-50 flex flex-col" style={{ background: 'var(--cream)', height: chatVH ?? '100dvh' }}>
-          <div className="flex items-center gap-3 px-4 py-3 flex-shrink-0" style={{ background: 'var(--brown)' }}>
-            <button onClick={() => setChatOpen(false)} className="text-xl font-black" style={{ color: 'var(--cream)' }}>←</button>
-            <div>
-              <div className="font-black text-base" style={{ color: 'var(--cream)' }}>💬 ຕິດຕໍ່ຮ້ານ</div>
-              <div className="text-xs font-bold" style={{ color: 'rgba(253,246,238,0.6)' }}>
-                {chatCustomer.qnum ? `Order #${String(chatCustomer.qnum).padStart(4, '0')}` : chatCustomer.phone}
-              </div>
-            </div>
-          </div>
-          {!chatCustomer.name && (
-            <div className="px-4 pt-3 flex gap-2 flex-shrink-0">
-              <input value={chatCustomer.name}
-                onChange={e => setChatCustomer(prev => ({ ...prev, name: e.target.value }))}
-                placeholder="ຊື່ຂອງທ່ານ..."
-                className="input-field flex-1 py-2 text-sm" />
-            </div>
-          )}
-          <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3">
-            {chatMessages.length === 0 && (
-              <div className="text-center text-sm font-bold py-8" style={{ color: 'var(--gray3)' }}>
-                ສົ່ງຂໍ້ຄວາມຫາຮ້ານໄດ້ເລີຍ 👋
-              </div>
-            )}
-            {chatMessages.map(msg => (
-              <div key={msg.id} className={`flex ${msg.sender === 'customer' ? 'justify-end' : 'justify-start'}`}>
-                {msg.sender === 'staff' && (
-                  <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs mr-2 flex-shrink-0 self-end mb-1"
-                    style={{ background: 'var(--brown)', color: 'var(--cream)' }}>🥟</div>
-                )}
-                <div className="max-w-[75%]">
-                  <div className="px-4 py-2.5 rounded-2xl text-sm font-bold leading-snug"
-                    style={{
-                      background: msg.sender === 'customer' ? 'var(--brown)' : 'white',
-                      color: msg.sender === 'customer' ? 'var(--cream)' : 'var(--brown)',
-                      border: msg.sender === 'staff' ? '1.5px solid var(--cream3)' : 'none',
-                      borderBottomRightRadius: msg.sender === 'customer' ? 4 : undefined,
-                      borderBottomLeftRadius: msg.sender === 'staff' ? 4 : undefined,
-                    }}>
-                    {msg.text}
-                  </div>
-                  <div className="text-[10px] font-bold mt-1 px-1"
-                    style={{ color: 'var(--gray3)', textAlign: msg.sender === 'customer' ? 'right' : 'left' }}>
-                    {new Date(msg.created_at).toLocaleTimeString('lo-LA', { hour: '2-digit', minute: '2-digit' })}
-                  </div>
-                </div>
-              </div>
-            ))}
-            <div ref={chatBottomRef} />
-          </div>
-          <div className="p-3 flex gap-2 flex-shrink-0 border-t border-[#e8d5c0]" style={{ background: 'white' }}>
-            <input
-              value={chatInput}
-              onChange={e => setChatInput(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && !e.shiftKey && sendChatMsg()}
-              placeholder="ພິມຂໍ້ຄວາມ..."
-              className="input-field flex-1 py-2.5 text-sm"
-            />
-            <button onClick={sendChatMsg} disabled={chatSending || !chatInput.trim()}
-              className="px-5 py-2.5 rounded-xl font-black text-sm flex-shrink-0"
-              style={{
-                background: chatInput.trim() ? 'var(--brown)' : 'var(--cream3)',
-                color: chatInput.trim() ? 'var(--cream)' : 'var(--gray3)',
-              }}>
-              ສົ່ງ
-            </button>
-          </div>
-        </div>
-      )}
 
       {/* ─── STEP 6: History ─── */}
       {step === 6 && (
@@ -1100,23 +978,12 @@ export default function PreOrderPage() {
                     </div>
                     <div className="flex items-center justify-between mt-2">
                       <span className="text-sm font-black" style={{ color: 'var(--brown)' }}>{o.total?.toLocaleString()} ກີບ</span>
-                      <button onClick={() => openChat({ name: c.name, phone: c.phone, qnum: o.qnum })}
-                        className="text-xs px-3 py-1.5 rounded-lg font-black"
-                        style={{ background: 'var(--brown)', color: 'var(--cream)' }}>
-                        💬 ຕິດຕໍ່
-                      </button>
                     </div>
                   </div>
                 )
               })}
               {history.length === 0 && histPhone.length >= 6 && (
                 <div className="text-center py-8 font-bold" style={{ color: 'var(--cream3)' }}>ບໍ່ພົບອໍເດີ</div>
-              )}
-              {history.length === 0 && histPhone.length >= 6 && (
-                <button onClick={() => openChat({ name: '', phone: histPhone, qnum: null })}
-                  className="btn-primary mt-2">
-                  💬 ຕິດຕໍ່ຮ້ານ (ໂດຍບໍ່ມີ Order)
-                </button>
               )}
             </div>
           </div>
