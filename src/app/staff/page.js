@@ -128,7 +128,14 @@ export default function StaffPage() {
         }))
       .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'orders' },
         payload => setOrders(prev => prev.filter(o => o.id !== payload.old.id)))
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'shop_config' }, () => loadConfig())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'shop_config' }, payload => {
+        const key = payload.new?.key
+        const val = payload.new?.value
+        if (key === 'stock_shop') { try { setStockShop(JSON.parse(val)) } catch { loadConfig() } }
+        else if (key === 'stock_online') { try { setStockOnline(JSON.parse(val)) } catch { loadConfig() } }
+        else if (key === 'stock_total') { try { setStockTotal(JSON.parse(val)) } catch { loadConfig() } }
+        else loadConfig()
+      })
       .subscribe(status => {
         if (status === 'SUBSCRIBED') setLiveStatus('live')
         else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
@@ -598,13 +605,13 @@ export default function StaffPage() {
 
   function rejectOrder(o) {
     showConfirm('ຢືນຢັນການຍົກເລີກອໍເດີນີ້ບໍ?', async () => {
-      // Optimistic update — vanish from active list immediately
       setOrders(prev => prev.map(ord => ord.id === o.id ? { ...ord, status: 'rejected' } : ord))
-      // Return stock
       const items = typeof o.items === 'string' ? JSON.parse(o.items) : o.items || []
-      const newStock = [...stockOnline]
-      items.forEach(it => { newStock[it.menuIdx] = (newStock[it.menuIdx] || 0) + it.qty })
-      await saveConfig('stock_online', newStock)
+      // Fetch fresh stock from DB to avoid stale closure
+      const { data: row } = await supabase.from('shop_config').select('value').eq('key', 'stock_online').single()
+      const freshStock = row ? JSON.parse(row.value) : [...stockOnline]
+      items.forEach(it => { freshStock[it.menuIdx] = (freshStock[it.menuIdx] || 0) + it.qty })
+      await saveConfig('stock_online', freshStock)
       await supabase.from('orders').update({ status: 'rejected' }).eq('id', o.id)
       showToast('✕ ປະຕິເສດ', 'orange')
     })
@@ -612,12 +619,15 @@ export default function StaffPage() {
 
   function cancelOrder(o) {
     showConfirm('ຢືນຢັນການຍົກເລີກອໍເດີນີ້ບໍ?', async () => {
-      // Optimistic update
       setOrders(prev => prev.map(ord => ord.id === o.id ? { ...ord, cancelled: true } : ord))
       const items = typeof o.items === 'string' ? JSON.parse(o.items) : o.items || []
-      const arr = o.type === 'online' ? [...stockOnline] : [...stockShop]
-      items.forEach(it => { arr[it.menuIdx] = (arr[it.menuIdx] || 0) + it.qty })
-      await saveConfig(o.type === 'online' ? 'stock_online' : 'stock_shop', arr)
+      const stockKey = o.type === 'online' ? 'stock_online' : 'stock_shop'
+      // Fetch fresh stock from DB to avoid stale closure
+      const { data: row } = await supabase.from('shop_config').select('value').eq('key', stockKey).single()
+      const fallback = o.type === 'online' ? stockOnline : stockShop
+      const freshStock = row ? JSON.parse(row.value) : [...fallback]
+      items.forEach(it => { freshStock[it.menuIdx] = (freshStock[it.menuIdx] || 0) + it.qty })
+      await saveConfig(stockKey, freshStock)
       await supabase.from('orders').update({ cancelled: true }).eq('id', o.id)
       showToast('ຍົກເລີກ', 'orange')
     })

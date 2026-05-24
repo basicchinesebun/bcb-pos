@@ -293,11 +293,13 @@ export default function PreOrderPage() {
       }).select().single()
       if (orderErr) throw orderErr
 
-      const newStock = [...stock]
+      // Fetch fresh stock from DB to avoid stale local state
+      const { data: stockRow } = await supabase.from('shop_config').select('value').eq('key', 'stock_online').single()
+      const freshStock = stockRow ? JSON.parse(stockRow.value) : [...stock]
       Object.entries(selected).forEach(([i, qty]) => {
-        newStock[+i] = Math.max(0, (newStock[+i] || 0) - qty)
+        freshStock[+i] = Math.max(0, (freshStock[+i] || 0) - qty)
       })
-      await supabase.from('shop_config').upsert({ key: 'stock_online', value: JSON.stringify(newStock) })
+      await supabase.from('shop_config').upsert({ key: 'stock_online', value: JSON.stringify(freshStock) })
 
       setCurrentOrder(order)
       setStep(5)
