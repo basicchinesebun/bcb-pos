@@ -2032,7 +2032,7 @@ export default function StaffPage() {
                         {/* Slip */}
                         {o.slip_url && (
                           <div className="mb-2 flex items-center gap-2">
-                            <div className="cursor-pointer" onClick={() => setSlipModal(o.slip_url)}>
+                            <div className="cursor-pointer" onClick={() => setSlipModal({ url: o.slip_url, qnum: o.qnum })}>
                               <img src={o.slip_url} className="w-20 rounded-lg border-2 border-[#e8d5c0]" alt="slip" />
                             </div>
                             {slipVerify[o.id]?.loading && (
@@ -2140,7 +2140,7 @@ export default function StaffPage() {
                                   {items.map((it, ii) => <span key={ii} className="mr-2">{it.name} ×{it.qty}</span>)}
                                 </div>
                                 {o.slip_url && (
-                                  <div className="mb-2 cursor-pointer" onClick={() => setSlipModal(o.slip_url)}>
+                                  <div className="mb-2 cursor-pointer" onClick={() => setSlipModal({ url: o.slip_url, qnum: o.qnum })}>
                                     <img src={o.slip_url} className="w-16 rounded-lg border border-[#e8d5c0]" alt="slip" />
                                   </div>
                                 )}
@@ -2738,12 +2738,24 @@ export default function StaffPage() {
 
       {/* Slip Modal */}
       {slipModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(61,31,10,0.85)' }} onClick={() => setSlipModal(null)}>
-          <div className="relative max-w-lg w-full" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 z-50 flex flex-col" style={{ background: 'var(--cream)' }}>
+          {/* Header */}
+          <div className="flex items-center gap-3 px-4 py-3 flex-shrink-0" style={{ background: 'var(--brown)' }}>
             <button onClick={() => setSlipModal(null)}
-              className="absolute -top-3 -right-3 z-10 w-9 h-9 rounded-full flex items-center justify-center font-black text-lg shadow-lg"
-              style={{ background: 'var(--brown)', color: 'var(--cream)', border: '2px solid var(--cream)' }}>✕</button>
-            <img src={slipModal} className="w-full rounded-2xl" alt="slip" />
+              className="flex items-center gap-1 font-black text-base active:opacity-70"
+              style={{ color: 'var(--cream)', background: 'none', border: 'none' }}>
+              ← ປິດ
+            </button>
+            <div className="flex-1 flex items-center gap-2">
+              <span className="text-lg">🧾</span>
+              <span className="font-black text-base" style={{ color: 'var(--cream)' }}>
+                ສລິບ {slipModal.qnum ? `#${String(slipModal.qnum).padStart(4, '0')}` : ''}
+              </span>
+            </div>
+          </div>
+          {/* Slip image — scrollable */}
+          <div className="flex-1 overflow-y-auto flex flex-col items-center p-4">
+            <img src={slipModal.url} className="w-full max-w-lg rounded-2xl" alt="slip" />
           </div>
         </div>
       )}
