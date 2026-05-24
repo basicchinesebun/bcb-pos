@@ -2738,10 +2738,12 @@ export default function StaffPage() {
 
       {/* Slip Modal */}
       {slipModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(61,31,10,0.7)' }} onClick={() => setSlipModal(null)}>
-          <div className="max-w-lg w-full rounded-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(61,31,10,0.85)' }} onClick={() => setSlipModal(null)}>
+          <div className="relative max-w-lg w-full" onClick={e => e.stopPropagation()}>
+            <button onClick={() => setSlipModal(null)}
+              className="absolute -top-3 -right-3 z-10 w-9 h-9 rounded-full flex items-center justify-center font-black text-lg shadow-lg"
+              style={{ background: 'var(--brown)', color: 'var(--cream)', border: '2px solid var(--cream)' }}>✕</button>
             <img src={slipModal} className="w-full rounded-2xl" alt="slip" />
-            <button onClick={() => setSlipModal(null)} className="btn-outline mt-2 text-sm py-3">ປິດ</button>
           </div>
         </div>
       )}
