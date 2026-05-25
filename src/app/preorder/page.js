@@ -299,7 +299,7 @@ export default function PreOrderPage() {
       Object.entries(selected).forEach(([i, qty]) => {
         freshStock[+i] = Math.max(0, (freshStock[+i] || 0) - qty)
       })
-      await supabase.from('shop_config').upsert({ key: 'stock_online', value: JSON.stringify(freshStock) })
+      await supabase.from('shop_config').upsert({ key: 'stock_online', value: JSON.stringify(freshStock) }, { onConflict: 'key' })
 
       setCurrentOrder(order)
       setStep(5)
