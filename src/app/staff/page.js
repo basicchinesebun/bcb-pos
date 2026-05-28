@@ -570,6 +570,16 @@ export default function StaffPage() {
   const waiting = orders.filter(o => !o.done && !o.cancelled && o.status !== 'rejected').length
   const done = orders.filter(o => o.done).length
   const pendingOnline = orders.filter(o => o.type === 'online' && o.status === 'pending' && !o.cancelled).length
+
+  const todayStr = new Date().toISOString().split('T')[0]
+  const todayMenuCount = {}
+  orders.filter(o => !o.cancelled && o.status !== 'rejected').forEach(o => {
+    const oDate = new Date(o.created_at).toISOString().split('T')[0]
+    if (oDate !== todayStr) return
+    const items = typeof o.items === 'string' ? JSON.parse(o.items) : o.items || []
+    items.forEach(it => { todayMenuCount[it.menuIdx] = (todayMenuCount[it.menuIdx] || 0) + it.qty })
+  })
+  const todayTotalItems = Object.values(todayMenuCount).reduce((s, v) => s + v, 0)
   const LOW_STOCK = 5
   const lowStockMenus = menus.map((m, i) => ({ name: m.lo, shop: stockShop[i] || 0, online: stockOnline[i] || 0 }))
     .filter(m => m.shop <= LOW_STOCK || m.online <= LOW_STOCK)
@@ -1458,6 +1468,34 @@ export default function StaffPage() {
                 </div>
                 <div className="text-xs font-black px-2 py-1 rounded-lg" style={{ background: 'var(--brown)', color: 'var(--cream)' }}>ເປີດ →</div>
               </a>
+
+              {/* Today's menu summary */}
+              <div className="card">
+                <div className="text-xs font-black uppercase tracking-widest mb-2.5 flex items-center justify-between" style={{ color: 'var(--brown3)' }}>
+                  <span>📦 ສ່ງວັນນີ້</span>
+                  <span className="text-base font-black" style={{ color: 'var(--brown)' }}>{todayTotalItems} ກ້ອນ</span>
+                </div>
+                {todayTotalItems === 0 ? (
+                  <div className="text-sm text-center py-1 font-bold" style={{ color: 'var(--cream3)' }}>ຍັງບໍ່ມີ</div>
+                ) : (
+                  <div className="flex flex-col gap-1.5">
+                    {menus.map((m, i) => {
+                      const qty = todayMenuCount[i] || 0
+                      if (!qty) return null
+                      return (
+                        <div key={i} className="flex items-center justify-between py-0.5">
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <span className="text-sm flex-shrink-0">{EMOJIS[i % EMOJIS.length]}</span>
+                            <span className="text-xs font-bold truncate" style={{ color: 'var(--brown)' }}>{m.lo || m}</span>
+                          </div>
+                          <span className="text-sm font-black flex-shrink-0 ml-2 px-2 py-0.5 rounded-lg"
+                            style={{ background: 'var(--cream2)', color: 'var(--brown)' }}>{qty}</span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
 
               {/* Settings */}
               <details className="card">
