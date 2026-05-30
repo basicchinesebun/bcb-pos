@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { supabase } from '../../lib/supabase'
+import HairClipAddon, { HAIR_CLIP_PRICE, HAIR_CLIP_DISCOUNT_THRESHOLD, HAIR_CLIP_DISCOUNT } from '../../components/HairClipAddon'
 
 const EMOJIS = ['🥟','🍫','🍵','🧁','🍞','🥐','🍮','🍡','🧆','🫕']
 
@@ -84,6 +85,7 @@ export default function StaffPage() {
   const [qoSubmitting, setQoSubmitting] = useState(false)
   const [qoPackToast, setQoPackToast] = useState(null)
   const [qoName, setQoName] = useState('')
+  const [qoHairClipQty, setQoHairClipQty] = useState(0)
   const [chatVH, setChatVH] = useState(null)
   const chatBottomRef = useRef(null)
   const activeChatPhoneRef = useRef(null)
@@ -238,7 +240,7 @@ export default function StaffPage() {
   }
 
   function resetQo() {
-    setQoBagMode('items'); setQoSelected({}); setQoBagPacks([{}]); setQoStep(1); setQoQnum(null); setQoName('')
+    setQoBagMode('items'); setQoSelected({}); setQoBagPacks([{}]); setQoStep(1); setQoQnum(null); setQoName(''); setQoHairClipQty(0)
   }
 
   function openEditOrder(o) {
@@ -319,11 +321,17 @@ export default function StaffPage() {
         ? qoBagPacks.reduce((acc, bag) => { Object.entries(bag).forEach(([idx, qty]) => { if (qty > 0) acc[idx] = (acc[idx] || 0) + qty }); return acc }, {})
         : qoSelected
       const items = Object.entries(effSel).map(([i, qty]) => ({ menuIdx: +i, name: menus[+i]?.lo || '', qty, price: prices[+i] || 0, sub: (prices[+i] || 0) * qty }))
+      const foodTotal = Object.entries(effSel).reduce((s, [i, q]) => s + (prices[+i] || 0) * q, 0)
+      const clipDiscountAmt = qoHairClipQty > 0 && foodTotal >= HAIR_CLIP_DISCOUNT_THRESHOLD ? HAIR_CLIP_DISCOUNT : 0
+      const clipSubtotal = qoHairClipQty * HAIR_CLIP_PRICE - clipDiscountAmt
+      if (qoHairClipQty > 0) {
+        items.push({ menuIdx: -1, name: 'ກິ໊ບຫນີບຜົມ', qty: qoHairClipQty, price: HAIR_CLIP_PRICE, sub: clipSubtotal, discount: clipDiscountAmt })
+      }
       const packingLabel = qoBagPacks.map((b, i) => {
         const t = Object.entries(b).filter(([, q]) => q > 0).map(([idx, q]) => `${menus[+idx]?.lo || ''} ×${q}`).join(', ')
         return t ? `ຖົງ ${i + 1}: ${t}` : null
       }).filter(Boolean).join(' | ')
-      const total = Object.entries(effSel).reduce((s, [i, q]) => s + (prices[+i] || 0) * q, 0)
+      const total = foodTotal + clipSubtotal
       const { error } = await supabase.from('orders').insert({
         qnum: qnumData, type: 'walkin', status: 'confirmed',
         items: JSON.stringify(items), total, bag_label: packingLabel,
@@ -539,6 +547,9 @@ export default function StaffPage() {
     : qoSelected
   const qoTotalItems = Object.values(qoEffSel).reduce((s, q) => s + q, 0)
   const qoTotalPrice = Object.entries(qoEffSel).reduce((s, [i, q]) => s + (prices[+i] || 0) * q, 0)
+  const qoHairClipDiscountAmt = qoHairClipQty > 0 && qoTotalPrice >= HAIR_CLIP_DISCOUNT_THRESHOLD ? HAIR_CLIP_DISCOUNT : 0
+  const qoHairClipSubtotal = qoHairClipQty * HAIR_CLIP_PRICE - qoHairClipDiscountAmt
+  const qoGrandTotal = qoTotalPrice + qoHairClipSubtotal
 
   // ─── Orders ───
   const filteredOrders = orders.filter(o => {
@@ -2558,9 +2569,14 @@ export default function StaffPage() {
               </div>
               {qoTotalItems > 0 && (
                 <div className="p-4 border-t-2 border-[#e8d5c0] flex-shrink-0" style={{ background: 'var(--warm-white)' }}>
-                  <div className="flex justify-between mb-3 px-1">
+                  <HairClipAddon
+                    foodTotal={qoTotalPrice}
+                    qty={qoHairClipQty}
+                    onChange={setQoHairClipQty}
+                  />
+                  <div className="flex justify-between mt-3 mb-2 px-1">
                     <span className="text-sm font-black" style={{ color: 'var(--brown)' }}>🛍 {qoTotalItems} ກ້ອນ</span>
-                    <span className="text-sm font-black" style={{ color: 'var(--brown)' }}>{qoTotalPrice.toLocaleString()} ກີບ</span>
+                    <span className="text-sm font-black" style={{ color: 'var(--brown)' }}>{qoGrandTotal.toLocaleString()} ກີບ</span>
                   </div>
                   <div className="grid grid-cols-2 gap-2 mb-2">
                     <button onClick={() => submitQuickOrder('cash')} disabled={qoSubmitting}
@@ -2670,9 +2686,14 @@ export default function StaffPage() {
 
               {!qoBagPacks.every(b => !Object.keys(b).length) && (
                 <div className="p-4 border-t-2 border-[#e8d5c0] flex-shrink-0" style={{ background: 'var(--warm-white)' }}>
-                  <div className="flex justify-between mb-3 px-1">
+                  <HairClipAddon
+                    foodTotal={qoTotalPrice}
+                    qty={qoHairClipQty}
+                    onChange={setQoHairClipQty}
+                  />
+                  <div className="flex justify-between mt-3 mb-3 px-1">
                     <span className="font-black" style={{ color: 'var(--brown)' }}>ລວມ {qoTotalItems} ກ້ອນ</span>
-                    <span className="font-black" style={{ color: 'var(--brown)' }}>{qoTotalPrice.toLocaleString()} ກີບ</span>
+                    <span className="font-black" style={{ color: 'var(--brown)' }}>{qoGrandTotal.toLocaleString()} ກີບ</span>
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <button onClick={() => submitQuickOrder('cash')} disabled={qoSubmitting}

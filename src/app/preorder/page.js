@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../../lib/supabase'
 import ContactSection from '../../components/ContactSection'
 import ClosedOverlay from '../../components/ClosedOverlay'
+import HairClipAddon, { HAIR_CLIP_PRICE, HAIR_CLIP_DISCOUNT_THRESHOLD, HAIR_CLIP_DISCOUNT } from '../../components/HairClipAddon'
 
 const EMOJIS = ['🥟','🍫','🍵','🧁','🍞','🥐','🍮']
 
@@ -56,6 +57,7 @@ export default function PreOrderPage() {
   const [chatSending, setChatSending] = useState(false)
   const [contactForm, setContactForm] = useState({ name: '', phone: '' })
   const [contactFormOpen, setContactFormOpen] = useState(false)
+  const [hairClipQty, setHairClipQty] = useState(0)
   const chatBottomRef = useRef(null)
 
   // Load saved customer info on mount
@@ -175,6 +177,9 @@ export default function PreOrderPage() {
   }
 
   const totalPrice = Object.entries(selected).reduce((s, [i, q]) => s + (prices[+i] || 0) * q, 0)
+  const hairClipDiscountAmt = hairClipQty > 0 && totalPrice >= HAIR_CLIP_DISCOUNT_THRESHOLD ? HAIR_CLIP_DISCOUNT : 0
+  const hairClipSubtotal = hairClipQty * HAIR_CLIP_PRICE - hairClipDiscountAmt
+  const grandTotal = totalPrice + hairClipSubtotal
   const totalOrdered = Object.values(selected).reduce((s, v) => s + v, 0)
   const totalPacked = bagPacks.reduce((s, bag) => s + Object.values(bag).reduce((ss, v) => ss + v, 0), 0)
 
@@ -273,6 +278,16 @@ export default function PreOrderPage() {
         price: prices[+i] || 0,
         sub: (prices[+i] || 0) * qty,
       }))
+      if (hairClipQty > 0) {
+        items.push({
+          menuIdx: -1,
+          name: 'ກິ໊ບຫນີບຜົມ',
+          qty: hairClipQty,
+          price: HAIR_CLIP_PRICE,
+          sub: hairClipSubtotal,
+          discount: hairClipDiscountAmt,
+        })
+      }
 
       const packingLabel = bagPacks
         .map((b, i) => { const t = bagText(b); return t ? `ຖົງ ${i + 1}: ${t}` : null })
@@ -284,7 +299,7 @@ export default function PreOrderPage() {
         type: 'online',
         status: 'pending',
         items: JSON.stringify(items),
-        total: totalPrice,
+        total: grandTotal,
         bag_label: packingLabel,
         customer: JSON.stringify(form),
         slip_url: slipUrl,
@@ -806,7 +821,14 @@ export default function PreOrderPage() {
               </div>
             </div>
 
-            {/* 2. Total price — large, above QR */}
+            {/* 2. Hair clip add-on */}
+            <HairClipAddon
+              foodTotal={totalPrice}
+              qty={hairClipQty}
+              onChange={setHairClipQty}
+            />
+
+            {/* 3. Total price — large, above QR */}
             <div className="rounded-2xl overflow-hidden border-2 border-[#3d1f0a]">
               <div className="px-5 py-5 flex items-center justify-between" style={{ background: 'var(--brown)' }}>
                 <div>
@@ -815,7 +837,7 @@ export default function PreOrderPage() {
                 </div>
                 <div className="text-right">
                   <div className="font-serif font-black leading-none" style={{ fontSize: 38, color: 'var(--cream)' }}>
-                    {totalPrice.toLocaleString()}
+                    {grandTotal.toLocaleString()}
                   </div>
                   <div className="text-sm font-black mt-1" style={{ color: 'rgba(253,246,238,0.65)' }}>ກີບ (LAK)</div>
                 </div>
@@ -936,6 +958,7 @@ export default function PreOrderPage() {
               setSlipPreview(null)
               setCurrentOrder(null)
               setChatMessages([])
+              setHairClipQty(0)
               setStep(1)
             }}>
               + ອໍເດີໃໝ່
