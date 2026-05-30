@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { supabase } from '../../lib/supabase'
-import HairClipAddon, { HAIR_CLIP_PRICE, HAIR_CLIP_DISCOUNT_THRESHOLD, HAIR_CLIP_DISCOUNT } from '../../components/HairClipAddon'
+import HairClipAddon, { DEFAULT_HAIR_CLIP_CONFIG, calcHairClip } from '../../components/HairClipAddon'
 
 const EMOJIS = ['🥟','🍫','🍵','🧁','🍞','🥐','🍮','🍡','🧆','🫕']
 
@@ -85,7 +85,9 @@ export default function StaffPage() {
   const [qoSubmitting, setQoSubmitting] = useState(false)
   const [qoPackToast, setQoPackToast] = useState(null)
   const [qoName, setQoName] = useState('')
-  const [qoHairClipQty, setQoHairClipQty] = useState(0)
+  const [qoHairClipSels, setQoHairClipSels] = useState({})
+  const [hairClipConfig, setHairClipConfig] = useState(DEFAULT_HAIR_CLIP_CONFIG)
+  const [hairClipNewType, setHairClipNewType] = useState({ name: '', price: 20000 })
   const [chatVH, setChatVH] = useState(null)
   const chatBottomRef = useRef(null)
   const activeChatPhoneRef = useRef(null)
@@ -240,7 +242,7 @@ export default function StaffPage() {
   }
 
   function resetQo() {
-    setQoBagMode('items'); setQoSelected({}); setQoBagPacks([{}]); setQoStep(1); setQoQnum(null); setQoName(''); setQoHairClipQty(0)
+    setQoBagMode('items'); setQoSelected({}); setQoBagPacks([{}]); setQoStep(1); setQoQnum(null); setQoName(''); setQoHairClipSels({})
   }
 
   function openEditOrder(o) {
@@ -322,10 +324,16 @@ export default function StaffPage() {
         : qoSelected
       const items = Object.entries(effSel).map(([i, qty]) => ({ menuIdx: +i, name: menus[+i]?.lo || '', qty, price: prices[+i] || 0, sub: (prices[+i] || 0) * qty }))
       const foodTotal = Object.entries(effSel).reduce((s, [i, q]) => s + (prices[+i] || 0) * q, 0)
-      const clipDiscountAmt = qoHairClipQty > 0 && foodTotal >= HAIR_CLIP_DISCOUNT_THRESHOLD ? HAIR_CLIP_DISCOUNT : 0
-      const clipSubtotal = qoHairClipQty * HAIR_CLIP_PRICE - clipDiscountAmt
-      if (qoHairClipQty > 0) {
-        items.push({ menuIdx: -1, name: 'ກິ໊ບຫນີບຜົມ', qty: qoHairClipQty, price: HAIR_CLIP_PRICE, sub: clipSubtotal, discount: clipDiscountAmt })
+      const { subtotal: clipSubtotal, discountAmt: clipDiscountAmt } = calcHairClip(hairClipConfig, qoHairClipSels, foodTotal)
+      if (hairClipConfig?.enabled && hairClipConfig.types) {
+        hairClipConfig.types.forEach(t => {
+          const qty = qoHairClipSels[t.id] || 0
+          if (qty > 0) items.push({ menuIdx: -1, name: t.name, qty, price: t.price, sub: qty * t.price, discount: 0 })
+        })
+        if (clipDiscountAmt > 0) {
+          const lastClip = items.findLast(it => it.menuIdx === -1)
+          if (lastClip) lastClip.discount = clipDiscountAmt, lastClip.sub -= clipDiscountAmt
+        }
       }
       const packingLabel = qoBagPacks.map((b, i) => {
         const t = Object.entries(b).filter(([, q]) => q > 0).map(([idx, q]) => `${menus[+idx]?.lo || ''} ×${q}`).join(', ')
@@ -520,6 +528,7 @@ export default function StaffPage() {
     if (cfg.branches) setBranches(JSON.parse(cfg.branches))
     if (cfg.staff_pin) setStaffPin(cfg.staff_pin)
     if (cfg.profit_pin) setProfitPin(cfg.profit_pin)
+    if (cfg.hair_clips) setHairClipConfig(JSON.parse(cfg.hair_clips))
 
     // ถ้ายังไม่มีข้อมูลใน Supabase ให้ save default ขึ้นไปก่อน
     if (!cfg.menus) {
@@ -547,8 +556,7 @@ export default function StaffPage() {
     : qoSelected
   const qoTotalItems = Object.values(qoEffSel).reduce((s, q) => s + q, 0)
   const qoTotalPrice = Object.entries(qoEffSel).reduce((s, [i, q]) => s + (prices[+i] || 0) * q, 0)
-  const qoHairClipDiscountAmt = qoHairClipQty > 0 && qoTotalPrice >= HAIR_CLIP_DISCOUNT_THRESHOLD ? HAIR_CLIP_DISCOUNT : 0
-  const qoHairClipSubtotal = qoHairClipQty * HAIR_CLIP_PRICE - qoHairClipDiscountAmt
+  const { subtotal: qoHairClipSubtotal, discountAmt: qoHairClipDiscountAmt } = calcHairClip(hairClipConfig, qoHairClipSels, qoTotalPrice)
   const qoGrandTotal = qoTotalPrice + qoHairClipSubtotal
 
   // ─── Orders ───
@@ -1514,6 +1522,110 @@ export default function StaffPage() {
                   </div>
                 )}
               </div>
+
+              {/* Hair Clip Settings */}
+              <details className="card">
+                <summary className="font-black text-xs tracking-widest uppercase cursor-pointer" style={{ color: 'var(--brown3)' }}>🎀 ກິ໊ບຫນີບຜົມ</summary>
+                <div className="mt-3 flex flex-col gap-3">
+                  {/* Enable toggle */}
+                  <div className="flex justify-between items-center py-2 border-b border-[#e8d5c0]">
+                    <div>
+                      <div className="text-sm font-bold" style={{ color: 'var(--brown)' }}>ເປີດຂາຍກິ໊ບ</div>
+                      <div className="text-xs font-bold mt-0.5" style={{ color: 'var(--gray3)' }}>
+                        {hairClipConfig.enabled ? '✅ ແສດງໃຫ້ລູກຄ້າ' : '⏸ ປິດໄວ້ກ່ອນ (ສຕ໋ອກຍັງບໍ່ມາ)'}
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => {
+                        const next = { ...hairClipConfig, enabled: !hairClipConfig.enabled }
+                        setHairClipConfig(next); saveConfig('hair_clips', next)
+                        showToast(next.enabled ? '🎀 ເປີດຂາຍກິ໊ບ ✅' : '🎀 ປິດຂາຍກິ໊ບ', 'green')
+                      }}
+                      className={`w-12 h-7 rounded-full transition-colors relative ${hairClipConfig.enabled ? 'bg-[#3d1f0a]' : 'bg-[#e8d5c0]'}`}
+                    >
+                      <span className={`absolute w-5 h-5 bg-white rounded-full top-1 transition-all ${hairClipConfig.enabled ? 'left-6' : 'left-1'}`} />
+                    </button>
+                  </div>
+
+                  {/* Discount settings */}
+                  <div className="flex flex-col gap-2">
+                    <div className="text-xs font-black uppercase tracking-widest" style={{ color: 'var(--brown3)' }}>ເງື່ອນໄຂສ່ວນລົດ</div>
+                    <div className="flex gap-2 items-end">
+                      <div className="flex-1">
+                        <div className="text-xs font-bold mb-1" style={{ color: 'var(--gray3)' }}>ຊື້ຄົບ (ກີບ)</div>
+                        <input type="number" value={hairClipConfig.discountThreshold ?? 100000}
+                          onChange={e => {
+                            const next = { ...hairClipConfig, discountThreshold: +e.target.value }
+                            setHairClipConfig(next); saveConfig('hair_clips', next)
+                          }}
+                          className="input-field text-sm py-2" />
+                      </div>
+                      <div className="text-sm font-black pb-2.5" style={{ color: 'var(--brown2)' }}>→</div>
+                      <div className="flex-1">
+                        <div className="text-xs font-bold mb-1" style={{ color: 'var(--gray3)' }}>ສ່ວນລົດ (ກີບ)</div>
+                        <input type="number" value={hairClipConfig.discountAmount ?? 5000}
+                          onChange={e => {
+                            const next = { ...hairClipConfig, discountAmount: +e.target.value }
+                            setHairClipConfig(next); saveConfig('hair_clips', next)
+                          }}
+                          className="input-field text-sm py-2" />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Types list */}
+                  <div className="flex flex-col gap-2">
+                    <div className="text-xs font-black uppercase tracking-widest" style={{ color: 'var(--brown3)' }}>ປະເພດກິ໊ບ</div>
+                    {(hairClipConfig.types || []).map(t => (
+                      <div key={t.id} className="flex items-center gap-2 py-1.5 border-b border-[#f5ebe0]">
+                        <div className="flex-1">
+                          <div className="text-sm font-bold" style={{ color: 'var(--brown)' }}>{t.name}</div>
+                          <div className="text-xs font-bold" style={{ color: 'var(--gray3)' }}>{t.price.toLocaleString()} ກີບ</div>
+                        </div>
+                        <button
+                          onClick={() => {
+                            const next = { ...hairClipConfig, types: hairClipConfig.types.filter(x => x.id !== t.id) }
+                            setHairClipConfig(next); saveConfig('hair_clips', next)
+                          }}
+                          className="text-xs px-2.5 py-1.5 rounded-lg font-black flex-shrink-0"
+                          style={{ background: '#fef2f2', color: '#dc2626', border: '1.5px solid #fca5a5' }}>
+                          ລຶບ
+                        </button>
+                      </div>
+                    ))}
+                    {/* Add new type */}
+                    <div className="flex gap-2 pt-1">
+                      <input
+                        type="text"
+                        placeholder="ຊື່ (ເຊັ່ນ: ກິ໊ບດອກ)"
+                        value={hairClipNewType.name}
+                        onChange={e => setHairClipNewType(p => ({ ...p, name: e.target.value }))}
+                        className="input-field text-sm py-2 flex-1 min-w-0"
+                      />
+                      <input
+                        type="number"
+                        placeholder="ລາຄາ"
+                        value={hairClipNewType.price}
+                        onChange={e => setHairClipNewType(p => ({ ...p, price: +e.target.value }))}
+                        className="input-field text-sm py-2 w-24"
+                      />
+                      <button
+                        onClick={() => {
+                          if (!hairClipNewType.name.trim()) return
+                          const newId = Date.now()
+                          const next = { ...hairClipConfig, types: [...(hairClipConfig.types || []), { id: newId, name: hairClipNewType.name.trim(), price: hairClipNewType.price || 20000 }] }
+                          setHairClipConfig(next); saveConfig('hair_clips', next)
+                          setHairClipNewType({ name: '', price: 20000 })
+                          showToast('ເພີ່ມປະເພດກິ໊ບ ✅', 'green')
+                        }}
+                        className="text-xs px-3 py-2 rounded-xl font-black flex-shrink-0"
+                        style={{ background: 'var(--brown)', color: 'var(--cream)' }}>
+                        ➕
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </details>
 
               {/* Settings */}
               <details className="card">
@@ -2570,9 +2682,10 @@ export default function StaffPage() {
               {qoTotalItems > 0 && (
                 <div className="p-4 border-t-2 border-[#e8d5c0] flex-shrink-0" style={{ background: 'var(--warm-white)' }}>
                   <HairClipAddon
+                    config={hairClipConfig}
+                    selections={qoHairClipSels}
+                    onChange={setQoHairClipSels}
                     foodTotal={qoTotalPrice}
-                    qty={qoHairClipQty}
-                    onChange={setQoHairClipQty}
                   />
                   <div className="flex justify-between mt-3 mb-2 px-1">
                     <span className="text-sm font-black" style={{ color: 'var(--brown)' }}>🛍 {qoTotalItems} ກ້ອນ</span>
@@ -2687,9 +2800,10 @@ export default function StaffPage() {
               {!qoBagPacks.every(b => !Object.keys(b).length) && (
                 <div className="p-4 border-t-2 border-[#e8d5c0] flex-shrink-0" style={{ background: 'var(--warm-white)' }}>
                   <HairClipAddon
+                    config={hairClipConfig}
+                    selections={qoHairClipSels}
+                    onChange={setQoHairClipSels}
                     foodTotal={qoTotalPrice}
-                    qty={qoHairClipQty}
-                    onChange={setQoHairClipQty}
                   />
                   <div className="flex justify-between mt-3 mb-3 px-1">
                     <span className="font-black" style={{ color: 'var(--brown)' }}>ລວມ {qoTotalItems} ກ້ອນ</span>

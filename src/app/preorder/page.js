@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../../lib/supabase'
 import ContactSection from '../../components/ContactSection'
 import ClosedOverlay from '../../components/ClosedOverlay'
-import HairClipAddon, { HAIR_CLIP_PRICE, HAIR_CLIP_DISCOUNT_THRESHOLD, HAIR_CLIP_DISCOUNT } from '../../components/HairClipAddon'
+import HairClipAddon, { DEFAULT_HAIR_CLIP_CONFIG, calcHairClip } from '../../components/HairClipAddon'
 
 const EMOJIS = ['🥟','🍫','🍵','🧁','🍞','🥐','🍮']
 
@@ -57,7 +57,8 @@ export default function PreOrderPage() {
   const [chatSending, setChatSending] = useState(false)
   const [contactForm, setContactForm] = useState({ name: '', phone: '' })
   const [contactFormOpen, setContactFormOpen] = useState(false)
-  const [hairClipQty, setHairClipQty] = useState(0)
+  const [hairClipConfig, setHairClipConfig] = useState(DEFAULT_HAIR_CLIP_CONFIG)
+  const [hairClipSels, setHairClipSels] = useState({})
   const chatBottomRef = useRef(null)
 
   // Load saved customer info on mount
@@ -159,6 +160,7 @@ export default function PreOrderPage() {
         setPickupTimeRange({ start: s.pickupTimeStart || '15:30', end: s.pickupTimeEnd || '19:00' })
       }
     }
+    if (cfg.hair_clips) setHairClipConfig(JSON.parse(cfg.hair_clips))
   }
 
   async function loadShopData() {
@@ -177,8 +179,7 @@ export default function PreOrderPage() {
   }
 
   const totalPrice = Object.entries(selected).reduce((s, [i, q]) => s + (prices[+i] || 0) * q, 0)
-  const hairClipDiscountAmt = hairClipQty > 0 && totalPrice >= HAIR_CLIP_DISCOUNT_THRESHOLD ? HAIR_CLIP_DISCOUNT : 0
-  const hairClipSubtotal = hairClipQty * HAIR_CLIP_PRICE - hairClipDiscountAmt
+  const { subtotal: hairClipSubtotal, discountAmt: hairClipDiscountAmt } = calcHairClip(hairClipConfig, hairClipSels, totalPrice)
   const grandTotal = totalPrice + hairClipSubtotal
   const totalOrdered = Object.values(selected).reduce((s, v) => s + v, 0)
   const totalPacked = bagPacks.reduce((s, bag) => s + Object.values(bag).reduce((ss, v) => ss + v, 0), 0)
@@ -278,15 +279,15 @@ export default function PreOrderPage() {
         price: prices[+i] || 0,
         sub: (prices[+i] || 0) * qty,
       }))
-      if (hairClipQty > 0) {
-        items.push({
-          menuIdx: -1,
-          name: 'ກິ໊ບຫນີບຜົມ',
-          qty: hairClipQty,
-          price: HAIR_CLIP_PRICE,
-          sub: hairClipSubtotal,
-          discount: hairClipDiscountAmt,
+      if (hairClipConfig?.enabled && hairClipConfig.types) {
+        hairClipConfig.types.forEach(t => {
+          const qty = hairClipSels[t.id] || 0
+          if (qty > 0) items.push({ menuIdx: -1, name: t.name, qty, price: t.price, sub: qty * t.price, discount: 0 })
         })
+        if (hairClipDiscountAmt > 0) {
+          const lastClip = items.findLast(it => it.menuIdx === -1)
+          if (lastClip) lastClip.discount = hairClipDiscountAmt, lastClip.sub -= hairClipDiscountAmt
+        }
       }
 
       const packingLabel = bagPacks
@@ -823,9 +824,10 @@ export default function PreOrderPage() {
 
             {/* 2. Hair clip add-on */}
             <HairClipAddon
+              config={hairClipConfig}
+              selections={hairClipSels}
+              onChange={setHairClipSels}
               foodTotal={totalPrice}
-              qty={hairClipQty}
-              onChange={setHairClipQty}
             />
 
             {/* 3. Total price — large, above QR */}
@@ -958,7 +960,7 @@ export default function PreOrderPage() {
               setSlipPreview(null)
               setCurrentOrder(null)
               setChatMessages([])
-              setHairClipQty(0)
+              setHairClipSels({})
               setStep(1)
             }}>
               + ອໍເດີໃໝ່
