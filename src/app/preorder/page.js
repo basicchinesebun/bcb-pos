@@ -5,6 +5,11 @@ import { supabase } from '../../lib/supabase'
 import ContactSection from '../../components/ContactSection'
 import ClosedOverlay from '../../components/ClosedOverlay'
 
+function imgSrc(url, width = 500, quality = 75) {
+  if (!url) return url
+  return url.replace('/storage/v1/object/', '/storage/v1/render/image/') + `?width=${width}&quality=${quality}`
+}
+
 const EMOJIS = ['🥟','🍫','🍵','🧁','🍞','🥐','🍮']
 
 const QUICK_BAGS = [
@@ -491,7 +496,7 @@ export default function PreOrderPage() {
                     className={`rounded-xl overflow-hidden cursor-pointer border-2 transition-all relative ${isOut ? 'opacity-50 cursor-not-allowed border-[#e8d5c0]' : isSel ? 'border-[#3d1f0a] shadow-[0_0_0_2px_#3d1f0a]' : 'border-[#e8d5c0]'}${loneClass}`}
                     style={{ background: 'var(--warm-white)' }}>
                     <div className="aspect-square relative overflow-hidden" style={{ background: 'var(--cream2)' }}>
-                      {img ? <img src={img} alt={m.lo} className="w-full h-full object-cover" /> :
+                      {img ? <img src={imgSrc(img, 500)} alt={m.lo} className="w-full h-full object-cover" loading="lazy" /> :
                         <div className="absolute inset-0 flex items-center justify-center text-2xl sm:text-3xl">{EMOJIS[i] || '🍱'}</div>}
                       {isOut && <div className="absolute inset-0 flex items-center justify-center" style={{ background: 'rgba(61,31,10,0.55)' }}>
                         <span className="text-white font-black text-xs px-1.5 py-0.5 rounded" style={{ background: 'rgba(185,28,28,0.9)' }}>ໝົດ</span>
@@ -665,7 +670,7 @@ export default function PreOrderPage() {
                               color: 'var(--brown)',
                             }}>
                             {img
-                              ? <img src={img} className="w-9 h-9 rounded-lg object-cover flex-shrink-0" alt={name} />
+                              ? <img src={imgSrc(img, 100)} className="w-9 h-9 rounded-lg object-cover flex-shrink-0" alt={name} loading="lazy" />
                               : <span className="text-2xl flex-shrink-0 leading-none">{EMOJIS[+idx] || '🍱'}</span>
                             }
                             <span className="font-black text-sm">{name}</span>
@@ -796,7 +801,7 @@ export default function PreOrderPage() {
                 {Object.entries(selected).map(([i, qty]) => (
                   <div key={i} className="flex items-center gap-3 px-4 py-3 border-b border-[#f5ebe0] last:border-0">
                     {images[+i]
-                      ? <img src={images[+i]} className="w-9 h-9 rounded-xl object-cover flex-shrink-0" alt="" />
+                      ? <img src={imgSrc(images[+i], 100)} className="w-9 h-9 rounded-xl object-cover flex-shrink-0" alt="" loading="lazy" />
                       : <span className="text-2xl flex-shrink-0 leading-none w-9 text-center">{EMOJIS[+i] || '🍱'}</span>}
                     <span className="flex-1 text-sm font-bold" style={{ color: 'var(--brown)' }}>{menus[+i]?.lo}</span>
                     <span className="text-sm font-black flex-shrink-0" style={{ color: 'var(--brown)' }}>×{qty}</span>
