@@ -544,14 +544,16 @@ export default function StaffPage() {
   const filteredOrders = orders.filter(o => {
     if (filter !== 'all' && o.type !== filter) return false
     if (!search.trim()) return true
-    const q = search.trim().toLowerCase()
-    if (String(o.qnum).includes(q)) return true
+    const q = search.trim().toLowerCase().replace(/\s+/g, ' ')
+    const qnum = String(o.qnum || '')
+    const qnumPad = qnum.padStart(4, '0')
+    if (qnum === q || qnumPad === q || qnum.includes(q)) return true
     const items = typeof o.items === 'string' ? JSON.parse(o.items) : o.items || []
     if (items.some(it => (it.name || '').toLowerCase().includes(q))) return true
     if (o.customer) {
       const c = typeof o.customer === 'string' ? JSON.parse(o.customer) : o.customer
-      if ((c.name || '').toLowerCase().includes(q)) return true
-      if ((c.phone || '').includes(q)) return true
+      if ((c.name || '').toLowerCase().replace(/\s+/g, ' ').includes(q)) return true
+      if ((c.phone || '').replace(/\s+/g, '').includes(q.replace(/\s+/g, ''))) return true
     }
     return false
   })
@@ -561,9 +563,14 @@ export default function StaffPage() {
   // ─── Customer Search ───
   const customerSearchResults = customerSearch.trim()
     ? orders.filter(o => {
-        const q = customerSearch.trim().toLowerCase()
+        const q = customerSearch.trim().toLowerCase().replace(/\s+/g, ' ')
         const c = (() => { try { return JSON.parse(o.customer || '{}') } catch { return {} } })()
-        return c.name?.toLowerCase().includes(q) || c.phone?.includes(q)
+        const qnum = String(o.qnum || '')
+        const qnumPad = qnum.padStart(4, '0')
+        if (qnum === q || qnumPad === q || qnum.includes(q)) return true
+        if ((c.name || '').toLowerCase().replace(/\s+/g, ' ').includes(q)) return true
+        if ((c.phone || '').replace(/\s+/g, '').includes(q.replace(/\s+/g, ''))) return true
+        return false
       })
     : []
 
@@ -1896,7 +1903,7 @@ export default function StaffPage() {
                   type="text"
                   value={customerSearch}
                   onChange={e => setCustomerSearch(e.target.value)}
-                  placeholder="ຄົ້ນຫາຊື່ / ເບີ... · Search name / phone"
+                  placeholder="ຊື່, ເບີໂທ, ເລກຄິວ (0001)..."
                   className="input-field w-full text-sm pl-8"
                 />
                 <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-sm" style={{ color: 'var(--gray3)' }}>👤</span>
