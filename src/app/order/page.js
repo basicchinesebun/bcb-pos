@@ -834,7 +834,21 @@ export default function OrderPage() {
             <ContactSection />
           </div>
 
-          <div className="p-4 border-t-2 border-[#e8d5c0]" style={{ background: 'var(--warm-white)' }}>
+          <div className="p-4 border-t-2 border-[#e8d5c0] flex flex-col gap-2" style={{ background: 'var(--warm-white)' }}>
+            <button
+              className="w-full py-3 rounded-2xl font-black text-sm active:scale-95 transition-all"
+              style={{ background: 'var(--cream2)', color: 'var(--brown)', border: '2px solid var(--cream3)' }}
+              onClick={async () => {
+                const itemLines = selectedItems.map(it => `${it.name} × ${it.qty}`).join('\n')
+                const text = `🥟 ${shopInfo.name || 'Basic Chinese Bun'}\n✅ ບັດຄິວ #${String(qnum).padStart(4, '0')}\n\n${itemLines}\n\nລວມ: ${totalPrice.toLocaleString()} ກີບ\n\n⏳ ກະລຸນາລໍຖ້າການຮຽກຄິວ`
+                if (navigator.share) {
+                  try { await navigator.share({ title: `ບັດຄິວ #${String(qnum).padStart(4, '0')}`, text }) } catch (_) {}
+                } else {
+                  try { await navigator.clipboard.writeText(text); alert('ຄັດລອກແລ້ວ ✅') } catch (_) {}
+                }
+              }}>
+              📤 ແຊຣ໌ / ບັນທຶກບັດຄິວ
+            </button>
             <button className="btn-primary" onClick={resetOrder}>+ ອໍເດີໃໝ່ · New Order</button>
           </div>
         </>
