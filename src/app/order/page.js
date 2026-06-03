@@ -28,6 +28,8 @@ export default function OrderPage() {
   // alias for clarity
   const stockShop = stock
   const [shopOpen, setShopOpen] = useState(true) // walkinOn flag
+  const [walkinCode, setWalkinCode] = useState('')
+  const [codeValid, setCodeValid] = useState(null) // null=checking, true=ok, false=blocked
   const [images, setImages] = useState({})
   const [qrImage, setQrImage] = useState(null)
   const [selected, setSelected] = useState({})
@@ -85,6 +87,14 @@ export default function OrderPage() {
     if (cfg.settings) {
       const s = JSON.parse(cfg.settings)
       setShopOpen(s.walkinOn !== false)
+    }
+    const code = cfg.walkin_code || ''
+    setWalkinCode(code)
+    if (code) {
+      const urlCode = new URLSearchParams(window.location.search).get('c') || ''
+      setCodeValid(urlCode.toUpperCase() === code.toUpperCase())
+    } else {
+      setCodeValid(true) // no code set = open access
     }
   }
 
@@ -271,6 +281,21 @@ export default function OrderPage() {
     qty,
     sub: (prices[+i] || 0) * qty,
   }))
+
+  if (codeValid === false) return (
+    <div className="min-h-dvh flex flex-col items-center justify-center px-6" style={{ background: '#3d1f0a' }}>
+      <div className="text-center flex flex-col items-center gap-4">
+        <div className="text-5xl">🔐</div>
+        <div className="font-serif text-2xl font-black" style={{ color: '#fdf6ee' }}>ລິ້ງໝົດອາຍຸແລ້ວ</div>
+        <div className="text-sm font-bold text-center max-w-xs" style={{ color: 'rgba(253,246,238,0.65)' }}>
+          ກະລຸນາໃຊ້ QR Code ທີ່ຢູ່ໜ້າຮ້ານ<br />ຫຼືຕິດຕໍ່ Staff ເພື່ອຂໍລິ້ງໃໝ່
+        </div>
+        <div className="text-xs font-bold px-4 py-2 rounded-full" style={{ background: 'rgba(255,255,255,0.08)', color: 'rgba(253,246,238,0.4)' }}>
+          Link expired · Please use in-store QR
+        </div>
+      </div>
+    </div>
+  )
 
   if (loading) return (
     <div className="min-h-dvh flex flex-col items-center justify-center" style={{ background: '#3d1f0a' }}>

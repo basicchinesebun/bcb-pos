@@ -51,6 +51,7 @@ export default function StaffPage() {
   const [previewLoading, setPreviewLoading] = useState(false)
   const previewTimerRef = useRef(null)
   const [settings, setSettings] = useState({ soundOn: true, walkinOn: true, onlineOn: true, aiOn: true, autoprintOn: false, pickupTimeStart: '15:30', pickupTimeEnd: '19:00' })
+  const [walkinCode, setWalkinCode] = useState('')
   const [branches, setBranches] = useState([
     { id: 'simeuang',  name: 'ສາຂາສີເມື່ອງ',  nameEn: 'Si Meuang Branch',  visible: true, schedule: 'ຈ · ພ · ສ (Mon / Wed / Fri)', mapUrl: '', facebookUrl: '', tiktokUrl: '', phone1: '', phone2: '', whatsapp: '' },
     { id: 'houayhong', name: 'ສາຂາຫວຍຫົງ', nameEn: 'Houay Hong Branch', visible: true, schedule: 'ຄ · ສກ · ອ (Tue / Thu / Sat)', mapUrl: '', facebookUrl: '', tiktokUrl: '', phone1: '', phone2: '', whatsapp: '' },
@@ -518,6 +519,7 @@ export default function StaffPage() {
     if (cfg.branches) setBranches(JSON.parse(cfg.branches))
     if (cfg.staff_pin) setStaffPin(cfg.staff_pin)
     if (cfg.profit_pin) setProfitPin(cfg.profit_pin)
+    if (cfg.walkin_code) setWalkinCode(cfg.walkin_code)
 
     // ถ้ายังไม่มีข้อมูลใน Supabase ให้ save default ขึ้นไปก่อน
     if (!cfg.menus) {
@@ -1591,6 +1593,47 @@ export default function StaffPage() {
                       </button>
                     </div>
                   </div>
+                  {/* Walk-in access code */}
+                  <div className="border-t border-[#e8d5c0] pt-3 mt-1 flex flex-col gap-2">
+                    <div className="text-xs font-black uppercase tracking-widest" style={{ color: 'var(--brown3)' }}>🔐 Code Walk-in</div>
+                    <div className="text-xs font-bold" style={{ color: 'var(--gray3)' }}>ສ້າງ Code ໃໝ່ທຸກເທື່ອເປີດຮ້ານ — QR ເກົ່າໃຊ້ບໍ່ໄດ້ທັນທີ</div>
+                    <div className="flex items-center gap-2">
+                      <div className="flex-1 px-3 py-2 rounded-xl font-black text-lg tracking-[0.2em] text-center"
+                        style={{ background: 'var(--cream2)', color: walkinCode ? 'var(--brown)' : 'var(--cream3)', border: '2px solid var(--cream3)', letterSpacing: '0.2em' }}>
+                        {walkinCode || '— — — — — —'}
+                      </div>
+                      <button
+                        onClick={async () => {
+                          const code = Math.random().toString(36).substring(2, 8).toUpperCase()
+                          setWalkinCode(code)
+                          await saveConfig('walkin_code', code)
+                          showToast(`🔐 Code ໃໝ່: ${code}`, 'green')
+                        }}
+                        className="px-3 py-2 rounded-xl font-black text-sm flex-shrink-0"
+                        style={{ background: 'var(--brown)', color: 'var(--cream)' }}>
+                        🔄 ສ້າງໃໝ່
+                      </button>
+                    </div>
+                    {walkinCode && (
+                      <div className="text-xs font-bold px-3 py-2 rounded-xl break-all"
+                        style={{ background: 'var(--cream2)', color: 'var(--brown2)' }}>
+                        🔗 {typeof window !== 'undefined' ? window.location.origin : ''}/order?c={walkinCode}
+                      </div>
+                    )}
+                    {walkinCode && (
+                      <button
+                        onClick={async () => {
+                          await saveConfig('walkin_code', '')
+                          setWalkinCode('')
+                          showToast('ປິດ Code Walk-in ແລ້ວ (ທຸກຄົນເຂົ້າໄດ້)', 'orange')
+                        }}
+                        className="text-xs px-3 py-1.5 rounded-lg font-black self-start"
+                        style={{ background: '#fef2f2', color: '#dc2626', border: '1.5px solid #fca5a5' }}>
+                        ປິດລະຫັດ (ບໍ່ຈຳກັດ)
+                      </button>
+                    )}
+                  </div>
+
                   {/* PIN Settings */}
                   <div className="border-t border-[#e8d5c0] pt-3 mt-1 flex flex-col gap-2">
                     <div className="text-xs font-black uppercase tracking-widest" style={{ color: 'var(--brown3)' }}>🔒 ລະຫັດຜ່ານ</div>
