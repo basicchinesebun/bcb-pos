@@ -330,8 +330,10 @@ export default function PreOrderPage() {
       .eq('type', 'online')
       .order('created_at', { ascending: false })
     if (!data) return
+    const normalize = p => (p || '').replace(/\s/g, '').replace(/^0+/, '')
+    const needle = normalize(histPhone)
     const filtered = data.filter(o => {
-      try { return JSON.parse(o.customer || '{}').phone === histPhone }
+      try { return normalize(JSON.parse(o.customer || '{}').phone) === needle }
       catch { return false }
     })
     setHistory(filtered)
