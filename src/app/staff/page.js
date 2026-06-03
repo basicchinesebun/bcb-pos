@@ -93,6 +93,7 @@ export default function StaffPage() {
   const [qoPackToast, setQoPackToast] = useState(null)
   const [qoName, setQoName] = useState('')
   const [chatVH, setChatVH] = useState(null)
+  const [sidebarOpen, setSidebarOpen] = useState(true)
   const chatBottomRef = useRef(null)
   const activeChatPhoneRef = useRef(null)
   const voicesRef = useRef([])
@@ -1475,9 +1476,9 @@ export default function StaffPage() {
           </div>
 
           {/* Sidebar + Orders layout */}
-          <div className="flex flex-col md:grid md:grid-cols-[320px_1fr] max-w-6xl mx-auto">
+          <div className={`flex flex-col md:grid max-w-6xl mx-auto transition-all duration-300 ${sidebarOpen ? 'md:grid-cols-[320px_1fr]' : 'md:grid-cols-[0px_1fr]'}`}>
             {/* Sidebar */}
-            <div className="p-3 flex flex-col gap-3">
+            <div className={`flex flex-col gap-3 overflow-hidden transition-all duration-300 ${sidebarOpen ? 'p-3 opacity-100 min-w-[280px]' : 'p-0 opacity-0 md:w-0 pointer-events-none'}`}>
               {/* QR Code shortcut */}
               <a href="/qr" target="_blank" rel="noopener noreferrer"
                 className="card flex items-center gap-3 active:scale-95 transition-all"
@@ -1942,6 +1943,14 @@ export default function StaffPage() {
             {/* Orders Main */}
             <div className="p-3">
               <div className="flex gap-2 items-center mb-2 flex-wrap">
+                <button
+                  onClick={() => setSidebarOpen(v => !v)}
+                  className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-black transition-all active:scale-95 flex-shrink-0"
+                  style={{ background: 'var(--cream2)', color: 'var(--brown2)', border: '1.5px solid var(--cream3)' }}
+                  title={sidebarOpen ? 'ເຊື່ອງ Sidebar' : 'ສະແດງ Sidebar'}
+                >
+                  ☰
+                </button>
                 <span className="text-xs font-black tracking-widest uppercase" style={{ color: 'var(--gray3)' }}>ລາຍການ</span>
                 <div className="flex gap-1 ml-auto">
                   {[['all','ທັງໝົດ'],['walkin','🏪'],['online','🌐']].map(([f,l]) => (
