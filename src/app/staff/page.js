@@ -2715,7 +2715,8 @@ export default function StaffPage() {
                               </button>
                             )
                           } else {
-                            if (s === 0) return null
+                            const sTotal = stockTotal[i] || 0
+                            if (s === 0 && sTotal === 0) return null
                             return (
                               <button key={i} onClick={() => qoAddItemToBag(n, i)}
                                 className="flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-black active:scale-95 transition-transform"
