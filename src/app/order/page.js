@@ -839,15 +839,64 @@ export default function OrderPage() {
               className="w-full py-3 rounded-2xl font-black text-sm active:scale-95 transition-all"
               style={{ background: 'var(--cream2)', color: 'var(--brown)', border: '2px solid var(--cream3)' }}
               onClick={async () => {
-                const itemLines = selectedItems.map(it => `${it.name} × ${it.qty}`).join('\n')
-                const text = `🥟 ${shopInfo.name || 'Basic Chinese Bun'}\n✅ ບັດຄິວ #${String(qnum).padStart(4, '0')}\n\n${itemLines}\n\nລວມ: ${totalPrice.toLocaleString()} ກີບ\n\n⏳ ກະລຸນາລໍຖ້າການຮຽກຄິວ`
-                if (navigator.share) {
-                  try { await navigator.share({ title: `ບັດຄິວ #${String(qnum).padStart(4, '0')}`, text }) } catch (_) {}
-                } else {
-                  try { await navigator.clipboard.writeText(text); alert('ຄັດລອກແລ້ວ ✅') } catch (_) {}
+                // Draw ticket as PNG on canvas
+                const W = 600
+                const lineH = 38
+                const boxH = selectedItems.length * lineH + 56
+                const H = 120 + 180 + boxH + 70
+                const canvas = document.createElement('canvas')
+                canvas.width = W; canvas.height = H
+                const ctx = canvas.getContext('2d')
+
+                // Background
+                ctx.fillStyle = '#fdf6ee'; ctx.fillRect(0, 0, W, H)
+
+                // Brown header
+                ctx.fillStyle = '#3d1f0a'; ctx.fillRect(0, 0, W, 120)
+                ctx.fillStyle = '#fdf6ee'; ctx.textAlign = 'center'
+                ctx.font = 'bold 30px serif'
+                ctx.fillText(shopInfo.name || 'Basic Chinese Bun', W / 2, 58)
+                ctx.font = '13px sans-serif'; ctx.fillStyle = 'rgba(253,246,238,0.5)'
+                ctx.fillText('QUEUE TICKET', W / 2, 88)
+
+                // Queue label
+                ctx.fillStyle = '#aaa'; ctx.font = 'bold 14px sans-serif'
+                ctx.fillText('ເລກຄິວ · QUEUE', W / 2, 148)
+
+                // Queue number
+                ctx.fillStyle = '#3d1f0a'; ctx.font = 'bold 110px serif'
+                ctx.fillText(String(qnum).padStart(4, '0'), W / 2, 268)
+
+                // Items box
+                const boxY = 300
+                ctx.fillStyle = '#f5ebe0'
+                ctx.beginPath()
+                ctx.roundRect ? ctx.roundRect(40, boxY, W - 80, boxH, 14) : ctx.rect(40, boxY, W - 80, boxH)
+                ctx.fill()
+                ctx.fillStyle = '#6b4226'; ctx.font = 'bold 20px sans-serif'; ctx.textAlign = 'left'
+                let y = boxY + 38
+                selectedItems.forEach(it => { ctx.fillText(`${it.name}  ×${it.qty}`, 64, y); y += lineH })
+                ctx.fillStyle = '#999'; ctx.font = '15px sans-serif'
+                ctx.fillText(`ລວມ: ${totalPrice.toLocaleString()} ກີບ`, 64, boxY + boxH - 16)
+
+                // Footer
+                ctx.fillStyle = '#f0e0cc'; ctx.fillRect(0, boxY + boxH + 14, W, H)
+                ctx.fillStyle = '#6b4226'; ctx.font = 'bold 18px sans-serif'; ctx.textAlign = 'center'
+                ctx.fillText('ກະລຸນາລໍຖ້າການຮຽກຄິວ', W / 2, boxY + boxH + 52)
+
+                const qstr = String(qnum).padStart(4, '0')
+                const blob = await new Promise(r => canvas.toBlob(r, 'image/png'))
+                const file = new File([blob], `queue-${qstr}.png`, { type: 'image/png' })
+
+                if (navigator.share && navigator.canShare?.({ files: [file] })) {
+                  try { await navigator.share({ files: [file], title: `ບັດຄິວ #${qstr}` }); return } catch (_) {}
                 }
+                // Fallback: download
+                const url = URL.createObjectURL(blob)
+                const a = document.createElement('a'); a.href = url; a.download = `queue-${qstr}.png`; a.click()
+                setTimeout(() => URL.revokeObjectURL(url), 1000)
               }}>
-              📤 ແຊຣ໌ / ບັນທຶກບັດຄິວ
+              🖼 ບັນທຶກຮູບບັດຄິວ
             </button>
             <button className="btn-primary" onClick={resetOrder}>+ ອໍເດີໃໝ່ · New Order</button>
           </div>
