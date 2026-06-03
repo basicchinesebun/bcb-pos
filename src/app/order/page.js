@@ -3,11 +3,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../../lib/supabase'
 import ContactSection from '../../components/ContactSection'
-
-function imgSrc(url, width = 500, quality = 75) {
-  if (!url) return url
-  return url.replace('/storage/v1/object/', '/storage/v1/render/image/') + `?width=${width}&quality=${quality}`
-}
 import ClosedOverlay from '../../components/ClosedOverlay'
 
 const EMOJIS = ['🥟','🍫','🍵','🧁','🍞','🥐','🍮']
@@ -393,7 +388,7 @@ export default function OrderPage() {
                         {/* Image */}
                         <div className="aspect-square relative overflow-hidden" style={{ background: 'var(--cream2)' }}>
                           {img ? (
-                            <img src={imgSrc(img, 500)} alt={m.lo} className="w-full h-full object-cover" loading="lazy" />
+                            <img src={img} alt={m.lo} className="w-full h-full object-cover" loading="lazy" />
                           ) : (
                             <div className="absolute inset-0 flex items-center justify-center text-4xl">
                               {EMOJIS[i] || '🍱'}
@@ -627,7 +622,7 @@ export default function OrderPage() {
                                 color: 'var(--brown)',
                               }}>
                               {img
-                                ? <img src={imgSrc(img, 100)} className="w-9 h-9 rounded-lg object-cover flex-shrink-0" alt={m.lo} loading="lazy" />
+                                ? <img src={img} className="w-9 h-9 rounded-lg object-cover flex-shrink-0" alt={m.lo} loading="lazy" />
                                 : <span className="text-2xl flex-shrink-0 leading-none">{EMOJIS[i] || '🍱'}</span>
                               }
                               <span className="font-black text-sm">{m.lo}</span>
@@ -662,7 +657,7 @@ export default function OrderPage() {
                                 color: 'var(--brown)',
                               }}>
                               {img
-                                ? <img src={imgSrc(img, 100)} className="w-9 h-9 rounded-lg object-cover flex-shrink-0" alt={name} loading="lazy" />
+                                ? <img src={img} className="w-9 h-9 rounded-lg object-cover flex-shrink-0" alt={name} loading="lazy" />
                                 : <span className="text-2xl flex-shrink-0 leading-none">{EMOJIS[+idx] || '🍱'}</span>
                               }
                               <span className="font-black text-sm">{name}</span>
@@ -736,7 +731,7 @@ export default function OrderPage() {
                 {Object.entries(effectiveSelected).map(([i, qty]) => (
                   <div key={i} className="flex items-center gap-3 px-4 py-3 border-b border-[#f5ebe0] last:border-0">
                     {images[+i]
-                      ? <img src={imgSrc(images[+i], 100)} className="w-9 h-9 rounded-xl object-cover flex-shrink-0" alt="" loading="lazy" />
+                      ? <img src={images[+i]} className="w-9 h-9 rounded-xl object-cover flex-shrink-0" alt="" loading="lazy" />
                       : <span className="text-2xl flex-shrink-0 leading-none w-9 text-center">{EMOJIS[+i] || '🍱'}</span>}
                     <span className="flex-1 text-sm font-bold" style={{ color: 'var(--brown)' }}>{menus[+i]?.lo}</span>
                     <span className="text-sm font-black flex-shrink-0" style={{ color: 'var(--brown)' }}>×{qty}</span>
