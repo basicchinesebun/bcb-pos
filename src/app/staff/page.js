@@ -3,6 +3,13 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { supabase } from '../../lib/supabase'
 
+async function nextWalkinQnum() {
+  const { data } = await supabase.from('shop_config').select('value').eq('key', 'next_queue_walkin').single()
+  const next = (parseInt(data?.value || '0') || 0) + 1
+  await supabase.from('shop_config').upsert({ key: 'next_queue_walkin', value: String(next) }, { onConflict: 'key' })
+  return next
+}
+
 const EMOJIS = ['🥟','🍫','🍵','🧁','🍞','🥐','🍮','🍡','🧆','🫕']
 
 const STATUS_COLORS = {
@@ -313,8 +320,7 @@ export default function StaffPage() {
   async function submitQuickOrder(paymentMethod) {
     setQoSubmitting(true)
     try {
-      const { data: qnumData, error: qErr } = await supabase.rpc('next_queue_number')
-      if (qErr) throw qErr
+      const qnumData = await nextWalkinQnum()
       const effSel = qoBagMode === 'bags'
         ? qoBagPacks.reduce((acc, bag) => { Object.entries(bag).forEach(([idx, qty]) => { if (qty > 0) acc[idx] = (acc[idx] || 0) + qty }); return acc }, {})
         : qoSelected
@@ -1556,13 +1562,28 @@ export default function StaffPage() {
                     <div className="text-xs font-black uppercase tracking-widest" style={{ color: 'var(--brown3)' }}>🔢 ເລກຄິວ</div>
                     <div className="flex items-center justify-between py-1">
                       <div>
-                        <div className="text-sm font-bold" style={{ color: 'var(--brown)' }}>ລີເຊັດຄິວເປັນ 0001</div>
-                        <div className="text-xs font-bold mt-0.5" style={{ color: 'var(--gray3)' }}>ຕັ້ງໃໝ່ທຸກມື້ຕອນເປີດຮ້ານ</div>
+                        <div className="text-sm font-bold" style={{ color: 'var(--brown)' }}>📱 ລີເຊັດຄິວ Preorder</div>
+                        <div className="text-xs font-bold mt-0.5" style={{ color: 'var(--gray3)' }}>ຕັ້ງໃໝ່ຄິວ Online ເປັນ 0001</div>
                       </div>
                       <button
-                        onClick={() => showConfirm('ລີເຊັດເລກຄິວເປັນ 0001 ແທ້ບໍ?', async () => {
+                        onClick={() => showConfirm('ລີເຊັດຄິວ Preorder ເປັນ 0001 ແທ້ບໍ?', async () => {
                           await saveConfig('next_queue', '0')
-                          showToast('ລີເຊັດຄິວເປັນ 0001 ແລ້ວ ✅', 'green')
+                          showToast('ລີເຊັດຄິວ Preorder ເປັນ 0001 ✅', 'green')
+                        })}
+                        className="text-xs px-3 py-2 rounded-xl font-black flex-shrink-0"
+                        style={{ background: '#fef2f2', color: '#dc2626', border: '1.5px solid #fca5a5' }}>
+                        ລີເຊັດ
+                      </button>
+                    </div>
+                    <div className="flex items-center justify-between py-1">
+                      <div>
+                        <div className="text-sm font-bold" style={{ color: 'var(--brown)' }}>🏪 ລີເຊັດຄິວ Walk-in</div>
+                        <div className="text-xs font-bold mt-0.5" style={{ color: 'var(--gray3)' }}>ຕັ້ງໃໝ່ຄິວໜ້າຮ້ານເປັນ 0001</div>
+                      </div>
+                      <button
+                        onClick={() => showConfirm('ລີເຊັດຄິວ Walk-in ເປັນ 0001 ແທ້ບໍ?', async () => {
+                          await saveConfig('next_queue_walkin', '0')
+                          showToast('ລີເຊັດຄິວ Walk-in ເປັນ 0001 ✅', 'green')
                         })}
                         className="text-xs px-3 py-2 rounded-xl font-black flex-shrink-0"
                         style={{ background: '#fef2f2', color: '#dc2626', border: '1.5px solid #fca5a5' }}>

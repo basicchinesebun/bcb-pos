@@ -5,6 +5,13 @@ import { supabase } from '../../lib/supabase'
 import ContactSection from '../../components/ContactSection'
 import ClosedOverlay from '../../components/ClosedOverlay'
 
+async function nextWalkinQnum() {
+  const { data } = await supabase.from('shop_config').select('value').eq('key', 'next_queue_walkin').single()
+  const next = (parseInt(data?.value || '0') || 0) + 1
+  await supabase.from('shop_config').upsert({ key: 'next_queue_walkin', value: String(next) }, { onConflict: 'key' })
+  return next
+}
+
 const EMOJIS = ['🥟','🍫','🍵','🧁','🍞','🥐','🍮']
 
 const QUICK_BAGS = [
@@ -176,10 +183,7 @@ export default function OrderPage() {
     if (bagPacks.every(b => !Object.keys(b).length)) return
     setSubmitting(true)
     try {
-      // Get next queue number using RPC
-      const { data: qnumData, error: qErr } = await supabase.rpc('next_queue_number')
-      if (qErr) throw qErr
-      const nextQ = qnumData
+      const nextQ = await nextWalkinQnum()
 
       const items = Object.entries(effectiveSelected).map(([i, qty]) => ({
         menuIdx: +i,
