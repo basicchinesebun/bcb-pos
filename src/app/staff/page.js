@@ -94,6 +94,8 @@ export default function StaffPage() {
   const [qoName, setQoName] = useState('')
   const [chatVH, setChatVH] = useState(null)
   const [sidebarOpen, setSidebarOpen] = useState(true)
+  const [batchOpen, setBatchOpen] = useState(false)
+  const [batchSelected, setBatchSelected] = useState(new Set())
   const chatBottomRef = useRef(null)
   const activeChatPhoneRef = useRef(null)
   const voicesRef = useRef([])
@@ -660,6 +662,21 @@ export default function StaffPage() {
       showToast(`✅ ຢືນຢັນ ${toConfirm.length} ໃບ`, 'green')
       if (settings.autoprintOn) toConfirm.forEach((o, i) => setTimeout(() => smartPrint(o), 400 * i))
     })
+  }
+
+  async function confirmBatch() {
+    if (batchSelected.size === 0) { showToast('ກະລຸນາເລືອກລາຍການ', 'orange'); return }
+    const toConfirm = orders.filter(o => batchSelected.has(o.id))
+    const doneAt = new Date().toISOString()
+    const ids = toConfirm.map(o => o.id)
+    setOrders(prev => prev.map(o =>
+      ids.includes(o.id) ? { ...o, status: 'confirmed', done: true, done_at: doneAt } : o
+    ))
+    await supabase.from('orders').update({ status: 'confirmed', done: true, done_at: doneAt }).in('id', ids)
+    showToast(`✅ ຢືນຢັນ ${toConfirm.length} ໃບ`, 'green')
+    setBatchSelected(new Set())
+    setBatchOpen(false)
+    if (settings.autoprintOn) toConfirm.forEach((o, i) => setTimeout(() => smartPrint(o), 400 * i))
   }
 
   async function confirmWalkin(o) {
@@ -1988,17 +2005,17 @@ export default function StaffPage() {
                 <span className="text-xs font-black tracking-widest uppercase" style={{ color: 'var(--gray3)' }}>ລາຍການ</span>
                 <div className="flex gap-1 ml-auto items-center">
                   {(() => {
-                    const confirmable = orders.filter(o =>
-                      o.type === 'online' && o.status === 'pending' && !o.done && !o.cancelled && o.slip_url
+                    const pendingOnline = orders.filter(o =>
+                      o.type === 'online' && o.status === 'pending' && !o.done && !o.cancelled
                     ).length
-                    return confirmable > 0 ? (
+                    return pendingOnline > 0 ? (
                       <button
-                        onClick={confirmAllPending}
+                        onClick={() => { setBatchOpen(true); setBatchSelected(new Set()) }}
                         className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-black active:scale-95 transition-all"
                         style={{ background: '#15803d', color: 'white' }}
                       >
-                        ✓ ຢືນຢັນທັງໝົດ
-                        <span className="px-1.5 py-0.5 rounded-full text-xs font-black" style={{ background: 'rgba(255,255,255,0.25)' }}>{confirmable}</span>
+                        ✓ ເລືອກຢືນຢັນ
+                        <span className="px-1.5 py-0.5 rounded-full text-xs font-black" style={{ background: 'rgba(255,255,255,0.25)' }}>{pendingOnline}</span>
                       </button>
                     ) : null
                   })()}
@@ -2845,6 +2862,111 @@ export default function StaffPage() {
           )}
         </div>
       )}
+
+      {/* Batch Confirm Modal */}
+      {batchOpen && (() => {
+        const pendingOnline = orders.filter(o =>
+          o.type === 'online' && o.status === 'pending' && !o.done && !o.cancelled
+        ).sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
+        const withSlip = pendingOnline.filter(o => o.slip_url)
+        const allSlipSelected = withSlip.length > 0 && withSlip.every(o => batchSelected.has(o.id))
+        return (
+          <div className="fixed inset-0 z-50 flex flex-col" style={{ background: 'var(--cream)' }}>
+            {/* Header */}
+            <div className="flex items-center gap-3 px-4 py-3 flex-shrink-0" style={{ background: 'var(--brown)' }}>
+              <button onClick={() => setBatchOpen(false)} className="text-xl font-black w-8" style={{ color: 'var(--cream)' }}>✕</button>
+              <div className="flex-1 font-serif font-black text-lg" style={{ color: 'var(--cream)' }}>📋 ເລືອກ Preorder</div>
+              <button
+                onClick={() => {
+                  if (allSlipSelected) setBatchSelected(new Set())
+                  else setBatchSelected(new Set(withSlip.map(o => o.id)))
+                }}
+                className="px-3 py-1.5 rounded-lg text-xs font-black active:scale-95 transition-all"
+                style={{ background: allSlipSelected ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.25)', color: 'var(--cream)' }}
+              >
+                {allSlipSelected ? '☐ ຍົກເລີກທັງໝົດ' : '☑ ເລືອກທີ່ມີສລິບ'}
+              </button>
+            </div>
+
+            {/* Order list */}
+            <div className="flex-1 overflow-y-auto p-3 flex flex-col gap-2">
+              {pendingOnline.length === 0 && (
+                <div className="text-center py-16 font-bold" style={{ color: 'var(--gray3)' }}>ບໍ່ມີ Preorder ຄ້າງ</div>
+              )}
+              {pendingOnline.map(o => {
+                const customer = (() => { try { return JSON.parse(o.customer || '{}') } catch { return {} } })()
+                const selected = batchSelected.has(o.id)
+                const hasSlip = !!o.slip_url
+                return (
+                  <button
+                    key={o.id}
+                    onClick={() => {
+                      if (!hasSlip) return
+                      setBatchSelected(prev => {
+                        const n = new Set(prev)
+                        n.has(o.id) ? n.delete(o.id) : n.add(o.id)
+                        return n
+                      })
+                    }}
+                    className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-left transition-all active:scale-[0.98]"
+                    style={{
+                      background: selected ? '#dcfce7' : 'var(--warm-white)',
+                      border: `2px solid ${selected ? '#16a34a' : hasSlip ? 'var(--cream3)' : '#f3e8e0'}`,
+                      opacity: hasSlip ? 1 : 0.5,
+                    }}
+                  >
+                    {/* Checkbox */}
+                    <div className="w-6 h-6 rounded-lg flex items-center justify-center flex-shrink-0"
+                      style={{ background: selected ? '#16a34a' : 'var(--cream2)', border: `2px solid ${selected ? '#16a34a' : 'var(--cream3)'}` }}>
+                      {selected && <span className="text-white text-xs font-black">✓</span>}
+                    </div>
+                    {/* Queue number */}
+                    <div className="w-14 flex-shrink-0 font-black text-lg text-center" style={{ color: 'var(--brown)', fontVariantNumeric: 'tabular-nums' }}>
+                      {String(o.qnum).padStart(4, '0')}
+                    </div>
+                    {/* Customer info */}
+                    <div className="flex-1 min-w-0">
+                      <div className="font-bold text-sm truncate" style={{ color: 'var(--brown)' }}>
+                        {customer.name || '—'}
+                      </div>
+                      <div className="text-xs font-bold" style={{ color: 'var(--gray3)' }}>
+                        {customer.phone || ''}
+                      </div>
+                    </div>
+                    {/* Total */}
+                    <div className="text-sm font-black flex-shrink-0" style={{ color: 'var(--brown2)' }}>
+                      {(o.total || 0).toLocaleString()}
+                    </div>
+                    {/* Slip indicator */}
+                    <div className="w-7 flex-shrink-0 text-center text-base">
+                      {hasSlip ? '📎' : '—'}
+                    </div>
+                  </button>
+                )
+              })}
+            </div>
+
+            {/* Footer */}
+            <div className="flex-shrink-0 p-4 flex gap-3" style={{ borderTop: '1px solid var(--cream3)', background: 'var(--warm-white)' }}>
+              <button
+                onClick={() => setBatchOpen(false)}
+                className="flex-1 py-4 rounded-2xl font-black text-base border-2"
+                style={{ borderColor: 'var(--cream3)', color: 'var(--brown2)' }}
+              >
+                ຍົກເລີກ
+              </button>
+              <button
+                onClick={confirmBatch}
+                disabled={batchSelected.size === 0}
+                className="flex-[3] py-4 rounded-2xl font-black text-base text-white transition-all active:scale-95"
+                style={{ background: batchSelected.size > 0 ? '#15803d' : '#a3a3a3' }}
+              >
+                ✓ ຢືນຢັນ {batchSelected.size > 0 ? `${batchSelected.size} ລາຍການ` : ''}
+              </button>
+            </div>
+          </div>
+        )
+      })()}
 
       {/* Edit Order Modal */}
       {editOrder && (
