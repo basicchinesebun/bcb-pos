@@ -762,7 +762,7 @@ export default function StaffPage() {
     const { error } = await supabase.storage.from('bcb - upload').upload(`menu/${i}.${ext}`, file, { upsert: true, contentType })
     if (error) { console.error('uploadMenuImg error:', error); showToast('❌ ' + (error.message || 'ອັບໂຫລດຜິດ'), 'red'); setImgPreviews(prev => { const n = {...prev}; delete n[i]; return n }); return }
     const { data } = supabase.storage.from('bcb - upload').getPublicUrl(`menu/${i}.${ext}`)
-    const newImg = { ...images, [i]: data.publicUrl }
+    const newImg = { ...images, [i]: data.publicUrl + '?t=' + Date.now() }
     setImages(newImg)
     setImgPreviews(prev => { const n = {...prev}; delete n[i]; return n })
     await saveConfig('menu_images', newImg)
@@ -787,9 +787,10 @@ export default function StaffPage() {
     const { error } = await supabase.storage.from('bcb - upload').upload('qr/payment.jpg', file, { upsert: true, contentType })
     if (error) { console.error('uploadQR error:', error); showToast('❌ ' + (error.message || 'ຜິດ'), 'red'); setQrPreview(null); return }
     const { data } = supabase.storage.from('bcb - upload').getPublicUrl('qr/payment.jpg')
-    setQrImage(data.publicUrl)
+    const qrUrl = data.publicUrl + '?t=' + Date.now()
+    setQrImage(qrUrl)
     setQrPreview(null)
-    await saveConfig('qr_image', data.publicUrl)
+    await saveConfig('qr_image', qrUrl)
     showToast('ອັບໂຫລດ QR ✅', 'green')
   }
 
@@ -825,7 +826,7 @@ export default function StaffPage() {
     const { error } = await supabase.storage.from('bcb - upload').upload('shop/logo.jpg', file, { upsert: true, contentType })
     if (error) { console.error('uploadLogo error:', error); showToast('❌ ' + (error.message || 'ອັບໂຫລດຜິດ'), 'red'); setLogoPreview(null); return }
     const { data } = supabase.storage.from('bcb - upload').getPublicUrl('shop/logo.jpg')
-    const newInfo = { ...receiptDraft, logo: data.publicUrl }
+    const newInfo = { ...receiptDraft, logo: data.publicUrl + '?t=' + Date.now() }
     setShopInfo(newInfo); setReceiptDraft(newInfo)
     setLogoPreview(null)
     await saveConfig('shop_info', newInfo)
