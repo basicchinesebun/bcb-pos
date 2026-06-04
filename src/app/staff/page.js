@@ -93,7 +93,7 @@ export default function StaffPage() {
   const [qoPackToast, setQoPackToast] = useState(null)
   const [qoName, setQoName] = useState('')
   const [chatVH, setChatVH] = useState(null)
-  const [sidebarOpen, setSidebarOpen] = useState(true)
+  const [sidebarOpen, setSidebarOpen] = useState(false)
   const [batchOpen, setBatchOpen] = useState(false)
   const [batchSelected, setBatchSelected] = useState(new Set())
   const chatBottomRef = useRef(null)
@@ -1466,7 +1466,7 @@ export default function StaffPage() {
   )
 
   return (
-    <div className="min-h-screen" style={{ background: 'var(--cream)', paddingBottom: 64 }}>
+    <div className="h-dvh flex flex-col overflow-hidden" style={{ background: 'var(--cream)' }}>
       {/* Toast */}
       <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-50 flex flex-col gap-2 items-center pointer-events-none">
         {toast.map(t => (
@@ -1488,8 +1488,8 @@ export default function StaffPage() {
 
       {/* ─── ORDERS TAB ─── */}
       {tab === 'orders' && (
-        <>
-          <div className="sticky top-0 z-10 flex items-center justify-between px-4 py-3" style={{ background: 'var(--brown)' }}>
+        <div className="flex-1 flex flex-col overflow-hidden">
+          <div className="flex-shrink-0 flex items-center justify-between px-4 py-3" style={{ background: 'var(--brown)' }}>
             <div className="flex items-center gap-2">
               <div className="font-serif text-lg font-black" style={{ color: 'var(--cream)' }}>
                 {shopInfo.name}
@@ -1517,19 +1517,19 @@ export default function StaffPage() {
             </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-2 p-3">
+          <div className="flex-shrink-0 grid grid-cols-3 gap-2 p-3">
             {[['ລໍຖ້າ', waiting, 'var(--brown)'], ['ສຳເລັດ', done, 'var(--green,#2d6a2d)'], ['ທັງໝົດ', orders.length, 'var(--gray3)']].map(([l, n, c]) => (
-              <div key={l} className="card text-center">
-                <div className="text-3xl font-black" style={{ color: c }}>{n}</div>
-                <div className="text-xs font-bold mt-1" style={{ color: 'var(--gray3)' }}>{l}</div>
+              <div key={l} className="card text-center py-2">
+                <div className="text-2xl font-black" style={{ color: c }}>{n}</div>
+                <div className="text-xs font-bold mt-0.5" style={{ color: 'var(--gray3)' }}>{l}</div>
               </div>
             ))}
           </div>
 
           {/* Sidebar + Orders layout */}
-          <div className={`flex flex-col md:grid max-w-6xl mx-auto transition-all duration-300 ${sidebarOpen ? 'md:grid-cols-[320px_1fr]' : 'md:grid-cols-[0px_1fr]'}`}>
+          <div className={`flex-1 overflow-hidden flex flex-col md:grid max-w-6xl mx-auto w-full transition-all duration-300 ${sidebarOpen ? 'md:grid-cols-[300px_1fr]' : 'md:grid-cols-[0px_1fr]'}`}>
             {/* Sidebar */}
-            <div className={`flex flex-col gap-3 overflow-hidden transition-all duration-300 ${sidebarOpen ? 'p-3 opacity-100 min-w-[280px]' : 'p-0 opacity-0 md:w-0 pointer-events-none'}`}>
+            <div className={`flex flex-col gap-3 overflow-y-auto overflow-x-hidden transition-all duration-300 ${sidebarOpen ? 'p-3 opacity-100 max-h-[50vh] md:max-h-none' : 'max-h-0 p-0 opacity-0 md:w-0 pointer-events-none'}`}>
               {/* QR Code shortcut */}
               <a href="/qr" target="_blank" rel="noopener noreferrer"
                 className="card flex items-center gap-3 active:scale-95 transition-all"
@@ -1992,8 +1992,9 @@ export default function StaffPage() {
             </div>
 
             {/* Orders Main */}
-            <div className="p-3">
-              <div className="flex gap-2 items-center mb-2 flex-wrap">
+            <div className="flex-1 flex flex-col overflow-hidden min-w-0">
+              <div className="flex-shrink-0 px-3 pt-3 pb-1">
+              <div className="flex gap-2 items-center mb-2">
                 <button
                   onClick={() => setSidebarOpen(v => !v)}
                   className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-black transition-all active:scale-95 flex-shrink-0"
@@ -2052,7 +2053,9 @@ export default function StaffPage() {
                   </button>
                 )}
               </div>
+              </div>{/* end fixed header */}
 
+              <div className="flex-1 overflow-y-auto px-3 pb-20">
               {/* Customer search results */}
               {customerSearch.trim() && (
                 <div className="mb-4">
@@ -2349,14 +2352,15 @@ export default function StaffPage() {
                   )}
                 </div>
               )}
-            </div>
-          </div>
-        </>
+              </div>{/* end scroll area */}
+            </div>{/* end Orders Main */}
+          </div>{/* end sidebar+orders grid */}
+        </div>{/* end orders tab */}
       )}
 
       {/* ─── SALES TAB ─── */}
       {tab === 'sales' && (
-        <>
+        <div className="flex-1 overflow-y-auto pb-16">
           <div className="sticky top-0 z-10 px-4 py-3" style={{ background: 'var(--brown)' }}>
             <div className="font-serif text-lg font-black" style={{ color: 'var(--cream)' }}>ຍອດຂາຍ · Sales</div>
           </div>
@@ -2432,12 +2436,12 @@ export default function StaffPage() {
               {Object.keys(menuCount).length === 0 && <div className="text-center py-4 text-sm font-bold" style={{ color: 'var(--cream3)' }}>ຍັງບໍ່ມີຍອດ</div>}
             </div>
           </div>
-        </>
+        </div>
       )}
 
       {/* ─── CHAT TAB ─── */}
       {tab === 'chat' && (
-        <div className="flex flex-col" style={{ minHeight: 'calc(100dvh - 56px)' }}>
+        <div className="flex-1 flex flex-col overflow-hidden">
           {!activeChatPhone ? (
             // Conversation list
             <div className="flex-1 overflow-y-auto">
@@ -2608,7 +2612,7 @@ export default function StaffPage() {
       )}
 
       {/* Bottom Nav */}
-      <div className="fixed bottom-0 left-0 right-0 flex" style={{ background: 'var(--brown)', borderTop: '2px solid var(--brown2)' }}>
+      <div className="flex flex-shrink-0" style={{ background: 'var(--brown)', borderTop: '2px solid var(--brown2)' }}>
         {[['orders','📋','ອໍເດີ'],['sales','📊','ຍອດຂາຍ']].map(([t,icon,l]) => (
           <button key={t} onClick={() => setTab(t)} className={`flex-1 flex flex-col items-center py-3 gap-1 border-none text-xs font-bold ${tab===t ? 'text-[#fdf6ee]' : 'text-[rgba(253,246,238,0.45)]'}`} style={{ background: 'transparent' }}>
             <span className="text-2xl">{icon}</span>{l}
