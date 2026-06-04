@@ -469,7 +469,23 @@ export default function StaffPage() {
   async function loadOrders() {
     if (!supabase) return
     const { data } = await supabase.from('orders').select('*').order('created_at', { ascending: false })
-    if (data) setOrders(data)
+    if (!data) return
+    setOrders(prev => {
+      const localMap = new Map(prev.map(o => [o.id, o]))
+      const merged = data.map(server => {
+        const local = localMap.get(server.id)
+        if (!local) return server
+        // Keep local if it's "more final" — prevents polling from reverting optimistic updates
+        if (local.done && !server.done) return local
+        if (local.cancelled && !server.cancelled) return local
+        if (local.status === 'confirmed' && server.status === 'pending') return local
+        if (local.status === 'rejected' && server.status !== 'rejected') return local
+        return server
+      })
+      // Add any local-only orders not yet in server response
+      prev.forEach(o => { if (!data.some(s => s.id === o.id)) merged.push(o) })
+      return merged
+    })
   }
 
   const DEFAULT_MENUS = [
