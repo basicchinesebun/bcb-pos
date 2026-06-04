@@ -645,6 +645,23 @@ export default function StaffPage() {
     if (settings.autoprintOn) setTimeout(() => smartPrint(o), 300)
   }
 
+  async function confirmAllPending() {
+    const toConfirm = orders.filter(o =>
+      o.type === 'online' && o.status === 'pending' && !o.done && !o.cancelled && o.slip_url
+    )
+    if (toConfirm.length === 0) { showToast('ບໍ່ມີ preorder ທີ່ຍືນຢັນໄດ້', 'orange'); return }
+    showConfirm(`ຢືນຢັນ Preorder ທັງໝົດ ${toConfirm.length} ໃບ ທີ່ມີສລິບແລ້ວ?`, async () => {
+      const doneAt = new Date().toISOString()
+      const ids = toConfirm.map(o => o.id)
+      setOrders(prev => prev.map(o =>
+        ids.includes(o.id) ? { ...o, status: 'confirmed', done: true, done_at: doneAt } : o
+      ))
+      await supabase.from('orders').update({ status: 'confirmed', done: true, done_at: doneAt }).in('id', ids)
+      showToast(`✅ ຢືນຢັນ ${toConfirm.length} ໃບ`, 'green')
+      if (settings.autoprintOn) toConfirm.forEach((o, i) => setTimeout(() => smartPrint(o), 400 * i))
+    })
+  }
+
   async function confirmWalkin(o) {
     setOrders(prev => prev.map(ord => ord.id === o.id ? { ...ord, status: 'confirmed' } : ord))
     await supabase.from('orders').update({ status: 'confirmed' }).eq('id', o.id)
@@ -1969,7 +1986,22 @@ export default function StaffPage() {
                   ☰
                 </button>
                 <span className="text-xs font-black tracking-widest uppercase" style={{ color: 'var(--gray3)' }}>ລາຍການ</span>
-                <div className="flex gap-1 ml-auto">
+                <div className="flex gap-1 ml-auto items-center">
+                  {(() => {
+                    const confirmable = orders.filter(o =>
+                      o.type === 'online' && o.status === 'pending' && !o.done && !o.cancelled && o.slip_url
+                    ).length
+                    return confirmable > 0 ? (
+                      <button
+                        onClick={confirmAllPending}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-black active:scale-95 transition-all"
+                        style={{ background: '#15803d', color: 'white' }}
+                      >
+                        ✓ ຢືນຢັນທັງໝົດ
+                        <span className="px-1.5 py-0.5 rounded-full text-xs font-black" style={{ background: 'rgba(255,255,255,0.25)' }}>{confirmable}</span>
+                      </button>
+                    ) : null
+                  })()}
                   {[['all','ທັງໝົດ'],['walkin','🏪'],['online','🌐']].map(([f,l]) => (
                     <button key={f} onClick={() => setFilter(f)} className={`px-3 py-1 rounded-lg text-xs font-black border ${filter===f ? 'bg-[#3d1f0a] text-[#fdf6ee] border-[#3d1f0a]' : 'border-[#e8d5c0] text-[#8a6a55]'}`}>{l}</button>
                   ))}
