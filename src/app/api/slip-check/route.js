@@ -63,23 +63,32 @@ Use null for any field you cannot determine.` },
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
     )
 
-    const { data: existing } = await supabase
+    const { data: existing, error: selectErr } = await supabase
       .from('slip_records')
       .select('id, created_at, sender_name, amount')
       .eq('transaction_id', slipInfo.transaction_id)
       .single()
 
+    // Table doesn't exist yet — return AI result with a setup warning
+    if (selectErr?.code === '42P01') {
+      return Response.json({ ok: true, duplicate: false, slipInfo, warning: 'slip_records table not created yet — duplicate detection disabled' })
+    }
+
     if (existing) {
       return Response.json({ ok: true, duplicate: true, slipInfo, first_seen: existing.created_at, first_sender: existing.sender_name, first_amount: existing.amount })
     }
 
-    await supabase.from('slip_records').insert({
+    const { error: insertErr } = await supabase.from('slip_records').insert({
       transaction_id: slipInfo.transaction_id,
       amount: slipInfo.amount,
       transfer_date: slipInfo.transfer_date,
       sender_name: slipInfo.sender_name,
       raw_text: slipInfo.raw_text,
     })
+
+    if (insertErr) {
+      return Response.json({ ok: true, duplicate: false, slipInfo, warning: 'Could not save slip record: ' + insertErr.message })
+    }
 
     return Response.json({ ok: true, duplicate: false, slipInfo })
   } catch (err) {
