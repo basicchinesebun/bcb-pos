@@ -75,9 +75,24 @@ CREATE INDEX IF NOT EXISTS idx_orders_type ON orders(type);
 CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);
 CREATE INDEX IF NOT EXISTS idx_orders_done ON orders(done);
 
+-- 8. ตาราง slip_records (Slip Checker — ตรวจสลิปซ้ำ)
+CREATE TABLE IF NOT EXISTS slip_records (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  transaction_id TEXT UNIQUE NOT NULL,
+  amount DECIMAL(12,2),
+  transfer_date TEXT,
+  sender_name TEXT,
+  raw_text TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS slip_records_txn_idx ON slip_records(transaction_id);
+ALTER TABLE slip_records ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "anon_all" ON slip_records FOR ALL TO anon USING (true) WITH CHECK (true);
+
 -- ═══════════════════════════════════════════════════
 -- หลัง setup เสร็จ ทดสอบด้วย:
 -- SELECT * FROM shop_config;
 -- SELECT next_queue_number();
 -- SELECT * FROM orders;
+-- SELECT * FROM slip_records;
 -- ═══════════════════════════════════════════════════
