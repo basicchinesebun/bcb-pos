@@ -119,10 +119,22 @@ function IsoBuilding({ active, onSelect, roomStatus }) {
             50%{opacity:0.75;filter:drop-shadow(0 0 3px #fde68a)}
           }
           @keyframes screenFlicker {
-            0%,100%{opacity:0.55} 45%{opacity:0.70} 55%{opacity:0.60}
+            0%,100%{opacity:0.55} 45%{opacity:0.72} 55%{opacity:0.60}
+          }
+          @keyframes charBob {
+            0%,100%{transform:translateY(0px)} 50%{transform:translateY(-2.5px)}
+          }
+          @keyframes charIdle {
+            0%,100%{transform:translateY(0px)} 50%{transform:translateY(-1px)}
+          }
+          @keyframes warnShake {
+            0%,100%{transform:translateX(0)} 20%{transform:translateX(-2px)} 40%{transform:translateX(2px)} 60%{transform:translateX(-2px)} 80%{transform:translateX(2px)}
           }
           .neon-sign{animation:neonPulse 3s ease-in-out infinite}
           .mon-screen{animation:screenFlicker 3.5s ease-in-out infinite}
+          .char-work{animation:charBob 1.8s ease-in-out infinite}
+          .char-idle{animation:charIdle 3.5s ease-in-out infinite}
+          .char-warn{animation:warnShake 0.6s ease-in-out infinite}
         `}</style>
         <filter id="glow">
           <feGaussianBlur stdDeviation="3.5" result="b"/>
@@ -278,73 +290,135 @@ function IsoBuilding({ active, onSelect, roomStatus }) {
       ))}
 
       {/* ── DESKS + CHARACTERS ── */}
-      {sortedDesks.map(({ id, fx, fy, s }) => {
+      {sortedDesks.map(({ id, fx, fy, s }, deskIdx) => {
         const room = ROOM_DEFS.find(r => r.id === id)
         if (!room) return null
         const { icon, label, hairC, shirtC, monC, skinC } = room
         const [cx, cy] = fp(fx, fy)
         const isActive = active === id
         const status = roomStatus?.[id]
-        const dotC = status==='ok'?'#4ade80':status==='warn'?'#fb923c':'#475569'
+        const isWorking = status === 'ok'
+        const isWarn = status === 'warn'
+        const dotC = isWorking ? '#4ade80' : isWarn ? '#fb923c' : '#475569'
+        const charClass = isWorking ? 'char-work' : isWarn ? 'char-warn' : 'char-idle'
+        const delay = `${deskIdx * 0.38}s`
 
         // Sizes (scaled by s)
-        const dw=50*s, dh=6*s, df=14*s   // desk width, surface h, front h
-        const mw=32*s, mh=18*s            // monitor
-        const hw=12*s, hh=7*s             // hair
-        const cw=10*s, ch=9*s             // head
-        const bw=12*s, bh=11*s            // body
+        const dw=50*s, dh=6*s, df=14*s
+        const mw=32*s, mh=18*s
+        const hw=12*s, hh=7*s
+        const cw=10*s, ch=9*s
+        const bw=12*s, bh=11*s
 
-        // Y reference: cy = desk surface top
         const bodyTop = cy - bh
         const headTop = bodyTop - ch
         const hairTop = headTop - hh
 
+        // Activity label per department
+        const actMap = { walkin:'ຮ້ານ Open', pos:'ຮັບ Order', chatbot:'AI Reply',
+                         content:'Post…', finance:'Count ₭', slip:'Check Slip' }
+        const actText = isWarn ? '⚠ Alert!' : isWorking ? (actMap[id]||'Working') : 'Idle…'
+        const bubW = Math.max(38, actText.length * 5.5 * s)
+
         return (
           <g key={id} onClick={() => onSelect(id===active?null:id)} style={{cursor:'pointer'}}>
-            {/* ── CHARACTER (behind desk) ── */}
-            {/* Hair */}
-            <rect x={cx-hw/2} y={hairTop} width={hw} height={hh} fill={hairC}/>
-            {/* Head */}
-            <rect x={cx-cw/2} y={headTop} width={cw} height={ch} fill={skinC}/>
-            {/* Eyes */}
-            <rect x={cx-cw*0.3} y={headTop+ch*0.35} width={cw*0.18} height={ch*0.28} fill="#2d1a08"/>
-            <rect x={cx+cw*0.08} y={headTop+ch*0.35} width={cw*0.18} height={ch*0.28} fill="#2d1a08"/>
-            {/* Body */}
-            <rect x={cx-bw/2} y={bodyTop} width={bw} height={bh} fill={shirtC}/>
-            {/* Arms */}
-            <rect x={cx-bw/2-4*s} y={bodyTop} width={4*s} height={8*s} fill={shirtC}/>
-            <rect x={cx+bw/2}     y={bodyTop} width={4*s} height={8*s} fill={shirtC}/>
 
-            {/* ── MONITOR (on desk, in front of character) ── */}
-            {/* Stand */}
+            {/* ── CHARACTER (animated) ── */}
+            <g className={charClass} style={{animationDelay: delay}}>
+              {/* Hair */}
+              <rect x={cx-hw/2} y={hairTop} width={hw} height={hh} fill={hairC}/>
+              {/* Head */}
+              <rect x={cx-cw/2} y={headTop} width={cw} height={ch} fill={skinC}/>
+              {/* Eyes — blink when idle */}
+              <rect x={cx-cw*0.30} y={headTop+ch*0.35} width={cw*0.18} height={ch*0.28} fill="#2d1a08"/>
+              <rect x={cx+cw*0.09} y={headTop+ch*0.35} width={cw*0.18} height={ch*0.28} fill="#2d1a08"/>
+              {/* Smile */}
+              <rect x={cx-cw*0.22} y={headTop+ch*0.72} width={cw*0.44} height={ch*0.12} rx="1" fill="#8b4513" opacity="0.4"/>
+              {/* Body */}
+              <rect x={cx-bw/2} y={bodyTop} width={bw} height={bh} fill={shirtC}/>
+              {/* Collar */}
+              <rect x={cx-bw*0.12} y={bodyTop} width={bw*0.24} height={bh*0.35} rx="1" fill="rgba(255,255,255,0.18)"/>
+            </g>
+
+            {/* ── ARMS (typing animation when working) ── */}
+            <g style={{animationDelay: delay}}>
+              {/* Left arm */}
+              <g>
+                {isWorking && <animateTransform attributeName="transform" type="translate"
+                  values={`0,0; 0,${2*s}; 0,0`} dur="0.38s" begin={delay} repeatCount="indefinite"/>}
+                <rect x={cx-bw/2-4*s} y={bodyTop} width={4*s} height={8*s} fill={shirtC}/>
+                {/* Hand */}
+                <rect x={cx-bw/2-4*s} y={bodyTop+7*s} width={4*s} height={2.5*s} rx="1" fill={skinC}/>
+              </g>
+              {/* Right arm (opposite phase) */}
+              <g>
+                {isWorking && <animateTransform attributeName="transform" type="translate"
+                  values={`0,${2*s}; 0,0; 0,${2*s}`} dur="0.38s" begin={delay} repeatCount="indefinite"/>}
+                <rect x={cx+bw/2} y={bodyTop} width={4*s} height={8*s} fill={shirtC}/>
+                <rect x={cx+bw/2} y={bodyTop+7*s} width={4*s} height={2.5*s} rx="1" fill={skinC}/>
+              </g>
+            </g>
+
+            {/* ── SPEECH BUBBLE ── */}
+            <g>
+              <animateTransform attributeName="transform" type="translate"
+                values="0,0;0,-1.5;0,0" dur="2s" begin={delay} repeatCount="indefinite"/>
+              {/* Bubble */}
+              <rect x={cx-bubW/2} y={hairTop-22} width={bubW} height={15}
+                rx="5" fill="#120801"
+                stroke={isWarn?'#fb923c':isWorking?shirtC:'#475569'}
+                strokeWidth="1" opacity="0.95"/>
+              {/* Bubble tail */}
+              <polygon points={`${cx-4},${hairTop-7} ${cx+4},${hairTop-7} ${cx},${hairTop-1}`}
+                fill="#120801"/>
+              {/* Working dots */}
+              {isWorking && [0,1,2].map(i => (
+                <circle key={i} cx={cx-5+i*5} cy={hairTop-14} r="0" fill={shirtC}>
+                  <animate attributeName="r" values="1;2.5;1" dur="1.1s"
+                    begin={`${parseFloat(delay)+i*0.28}s`} repeatCount="indefinite"/>
+                  <animate attributeName="opacity" values="0.4;1;0.4" dur="1.1s"
+                    begin={`${parseFloat(delay)+i*0.28}s`} repeatCount="indefinite"/>
+                </circle>
+              ))}
+              {/* Warning/idle text */}
+              {!isWorking && (
+                <text x={cx} y={hairTop-11} textAnchor="middle"
+                  fontSize={6.5*s} fontWeight="bold"
+                  fill={isWarn?'#fb923c':'#475569'}
+                  style={{userSelect:'none',fontFamily:'monospace'}}>
+                  {actText}
+                </text>
+              )}
+            </g>
+
+            {/* ── MONITOR ── */}
             <rect x={cx-2*s} y={cy-mh} width={4*s} height={mh} fill="#2a2a2a"/>
-            {/* Base */}
             <rect x={cx-7*s} y={cy-3*s} width={14*s} height={3*s} rx="0.5" fill="#2a2a2a"/>
-            {/* Monitor case */}
             <rect x={cx-mw/2} y={cy-mh-2*s} width={mw} height={mh} rx="1" fill="#1c1c1c" stroke="#333" strokeWidth="0.8"/>
-            {/* Screen */}
             <rect x={cx-mw/2+2*s} y={cy-mh} width={mw-4*s} height={mh-4*s}
               rx="0.5" fill={monC} opacity="0.55" className="mon-screen" filter="url(#sm)"/>
-            {/* Screen content */}
-            <rect x={cx-mw/2+4*s} y={cy-mh+3*s} width={mw*0.55} height={s*2} fill="rgba(255,255,255,0.3)" rx="0.3"/>
-            <rect x={cx-mw/2+4*s} y={cy-mh+7*s} width={mw*0.4}  height={s*2} fill="rgba(255,255,255,0.2)" rx="0.3"/>
-            <rect x={cx-mw/2+4*s} y={cy-mh+11*s} width={mw*0.5} height={s*2} fill="rgba(255,255,255,0.2)" rx="0.3"/>
-            {/* Status dot */}
+            {/* Scrolling screen lines */}
+            {[0,1,2,3].map(li => (
+              <rect key={li} x={cx-mw/2+4*s} y={cy-mh+3*s+li*(mh-6*s)/4} width={mw*(0.3+li*0.12)} height={s*1.8}
+                fill="rgba(255,255,255,0.25)" rx="0.3">
+                {isWorking && <animate attributeName="width" values={`${mw*(0.3+li*0.12)};${mw*0.85};${mw*(0.3+li*0.12)}`}
+                  dur={`${1.8+li*0.4}s`} begin={`${parseFloat(delay)+li*0.2}s`} repeatCount="indefinite"/>}
+              </rect>
+            ))}
             <circle cx={cx+mw/2-3*s} cy={cy-mh-s} r={2.5*s} fill={dotC} filter="url(#glow)"/>
 
-            {/* ── DESK (covers lower body) ── */}
-            {/* Surface */}
+            {/* ── DESK ── */}
             <rect x={cx-dw/2} y={cy-dh} width={dw} height={dh} fill="#7c4a1e" stroke="#5a3412" strokeWidth="0.8"/>
-            {/* Keyboard */}
             <rect x={cx-dw*0.28} y={cy-dh+s} width={dw*0.5} height={3.5*s}
-              rx="0.3" fill="#252525" stroke="#444" strokeWidth="0.4"/>
-            {/* Front face */}
+              rx="0.3" fill="#252525" stroke="#444" strokeWidth="0.4">
+              {/* Keyboard typing flicker */}
+              {isWorking && <animate attributeName="fill" values="#252525;#333;#252525"
+                dur="0.3s" begin={delay} repeatCount="indefinite"/>}
+            </rect>
             <rect x={cx-dw/2} y={cy} width={dw} height={df} fill="#6b3d16" stroke="#4a2a0d" strokeWidth="0.8"/>
-            {/* Drawer detail */}
             <rect x={cx-dw*0.18} y={cy+df*0.25} width={dw*0.36} height={df*0.5}
               rx="0.5" fill="rgba(0,0,0,0.12)" stroke="rgba(0,0,0,0.15)" strokeWidth="0.5"/>
             <circle cx={cx} cy={cy+df*0.5} r={1.6*s} fill="#c97d2a"/>
-            {/* Legs */}
             <rect x={cx-dw/2+2*s} y={cy+df} width={4*s} height={8*s} fill="#5a3412"/>
             <rect x={cx+dw/2-6*s} y={cy+df} width={4*s} height={8*s} fill="#5a3412"/>
 
@@ -355,7 +429,7 @@ function IsoBuilding({ active, onSelect, roomStatus }) {
             )}
 
             {/* Label */}
-            <text x={cx} y={cy+df+12*s} textAnchor="middle"
+            <text x={cx} y={cy+df+13*s} textAnchor="middle"
               fontSize={9*s} fontWeight="bold"
               fill={isActive?'#fde68a':'rgba(253,246,238,0.55)'}
               style={{userSelect:'none',fontFamily:'monospace,sans-serif'}}>
