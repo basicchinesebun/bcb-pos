@@ -41,7 +41,7 @@ function PinPad({ onSubmit, error }) {
     if (pin.length >= 6) return
     const next = pin + v
     setPin(next)
-    if (next.length >= 4) { setTimeout(() => { onSubmit(next); setPin('') }, 120) }
+    if (next.length === 6) { setTimeout(() => { onSubmit(next); setPin('') }, 120) }
   }
   return (
     <div className="h-dvh flex flex-col items-center justify-center" style={{ background: '#3d1f0a' }}>
@@ -51,7 +51,7 @@ function PinPad({ onSubmit, error }) {
         <div className="text-sm font-bold mt-1" style={{ color: 'rgba(253,246,238,0.5)' }}>ໃສ່ລະຫັດ Staff</div>
       </div>
       <div className="flex gap-3 mb-5">
-        {[0,1,2,3].map(i => (
+        {[0,1,2,3,4,5].map(i => (
           <div key={i} className="w-3.5 h-3.5 rounded-full transition-all" style={{ background: pin.length > i ? '#fdf6ee' : 'rgba(253,246,238,0.2)' }} />
         ))}
       </div>
