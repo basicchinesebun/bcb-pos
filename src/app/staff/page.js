@@ -2355,7 +2355,7 @@ export default function StaffPage() {
               </div>{/* end scroll area */}
             </div>{/* end Orders Main */}
           </div>{/* end sidebar+orders grid */}
-        </div>{/* end orders tab */}
+        </div>
       )}
 
       {/* ─── SALES TAB ─── */}
