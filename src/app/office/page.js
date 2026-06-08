@@ -117,56 +117,91 @@ function Card({ icon, title, accent = '#3d1f0a', status, children }) {
 }
 
 // ─── SLIP CHECKER CARD ───
-function SlipCard({ accent }) {
-  const [loading, setLoading] = useState(false)
-  const [result,  setResult]  = useState(null)
-  const [error,   setError]   = useState(null)
-  const inputRef = useRef()
+function SlipCard({ accent, orders, slipResults, todayCount, limit, onResult, onSaveLimit }) {
+  const [checking,     setChecking]     = useState({}) // orderId -> true
+  const [localResults, setLocalResults] = useState({})
+  const [limitInput,   setLimitInput]   = useState(String(limit || 100))
+  const [showSettings, setShowSettings] = useState(false)
+  const [error,        setError]        = useState(null)
 
-  async function handleFile(e) {
-    const file = e.target.files?.[0]
-    if (!file) return
-    setLoading(true); setResult(null); setError(null)
+  const allResults = { ...slipResults, ...localResults }
+
+  // online orders with slip that are still pending
+  const slipOrders = (orders || []).filter(o =>
+    o.type === 'online' && o.slip_url && !o.done && !o.cancelled
+  )
+
+  const warned = slipOrders.filter(o => {
+    const r = allResults[o.id]
+    return r && (r.suspicious || !r.amount_matches || !r.date_is_today)
+  })
+
+  async function checkOrder(o) {
+    if (checking[o.id]) return
+    setChecking(p => ({ ...p, [o.id]: true }))
+    setError(null)
     try {
-      const fd = new FormData()
-      fd.append('file', file)
-      const res  = await fetch('/api/slip-check', { method: 'POST', body: fd })
+      const res = await fetch('/api/verify-slip', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ slipUrl: o.slip_url, expectedAmount: o.total, orderId: o.id }),
+      })
       const data = await res.json()
-      if (!data.ok) throw new Error(data.error || 'ຜິດພາດ')
-      setResult(data)
+      if (data.limitReached) {
+        setError(`ຄົບ Limit ວັນນີ້ (${data.count}/${data.limit} ໃບ)`)
+      } else if (data.ok) {
+        setLocalResults(p => ({ ...p, [o.id]: data.result }))
+        onResult?.(o.id, data.result, data.count)
+      } else {
+        setError(data.error || 'ຜິດພາດ')
+      }
     } catch (err) {
       setError(err.message)
     } finally {
-      setLoading(false)
-      if (inputRef.current) inputRef.current.value = ''
+      setChecking(p => ({ ...p, [o.id]: false }))
     }
   }
 
-  // 3 states: 'ok' | 'suspicious' | 'duplicate'
-  const status = result
-    ? result.duplicate   ? 'duplicate'
-    : result.suspicious  ? 'suspicious'
-    : 'ok'
-    : null
-
-  const statusCfg = {
-    ok:         { bg: '#f0fdf4', border: '#86efac', color: '#16a34a', icon: '✅', label: 'ສລິບປົກກະຕິ' },
-    suspicious: { bg: '#fffbeb', border: '#fcd34d', color: '#d97706', icon: '⚠️', label: 'ໜ້າສົງໄສ' },
-    duplicate:  { bg: '#fef2f2', border: '#fca5a5', color: '#dc2626', icon: '❌', label: 'ສລິບຊ້ຳ!' },
+  async function checkAll() {
+    for (const o of slipOrders) {
+      if (!allResults[o.id]) await checkOrder(o)
+    }
   }
-  const cfg = status ? statusCfg[status] : null
+
+  function orderStatusColor(o) {
+    const r = allResults[o.id]
+    if (!r) return null
+    if (r.suspicious || !r.amount_matches || !r.date_is_today) return 'warn'
+    return 'ok'
+  }
+
+  const unchecked = slipOrders.filter(o => !allResults[o.id]).length
+  const dotStatus = warned.length > 0 ? false : slipOrders.length > 0 ? true : undefined
 
   return (
-    <Card icon="🧾" title="Slip Checker" accent={accent} status={result ? status === 'ok' : undefined}>
-      <div className="flex flex-col gap-3">
-        <input ref={inputRef} type="file" accept="image/*" className="hidden" onChange={handleFile} />
-        <button
-          onClick={() => inputRef.current?.click()}
-          disabled={loading}
-          className="w-full py-3 rounded-xl font-black text-sm transition-all active:scale-95"
-          style={{ background: loading ? '#e8d5c0' : '#3d1f0a', color: loading ? '#8a6a55' : '#fdf6ee' }}>
-          {loading ? '🔍 ກຳລັງກວດ...' : '📤 ອັບໂຫຼດສລິບ'}
-        </button>
+    <Card icon="🧾" title="Slip Checker" accent={accent} status={dotStatus}>
+      <div className="flex flex-col gap-2">
+
+        {/* Counter bar */}
+        <div className="flex items-center justify-between px-1">
+          <div className="text-xs font-bold" style={{ color: '#8a6a55' }}>
+            ວັນນີ້: <span style={{ color: '#3d1f0a' }}>{todayCount}</span>/{limit} ໃບ
+          </div>
+          {warned.length > 0 && (
+            <div className="text-xs font-black px-2 py-0.5 rounded-full" style={{ background: '#fef2f2', color: '#dc2626' }}>
+              ⚠ {warned.length} ໃບໜ້າສົງໄສ
+            </div>
+          )}
+        </div>
+
+        {/* Check all button */}
+        {unchecked > 0 && todayCount < limit && (
+          <button onClick={checkAll}
+            className="w-full py-2.5 rounded-xl font-black text-sm transition-all active:scale-95"
+            style={{ background: '#3d1f0a', color: '#fdf6ee' }}>
+            🔍 ກວດທັງໝົດ ({unchecked} ໃບ)
+          </button>
+        )}
 
         {error && (
           <div className="px-3 py-2 rounded-xl text-xs font-bold" style={{ background: '#fef2f2', color: '#dc2626', border: '1px solid #fca5a5' }}>
@@ -174,80 +209,90 @@ function SlipCard({ accent }) {
           </div>
         )}
 
-        {result && cfg && (
-          <div className="px-3 py-3 rounded-xl flex flex-col gap-2"
-            style={{ background: cfg.bg, border: `1.5px solid ${cfg.border}` }}>
+        {/* Orders list */}
+        {slipOrders.length === 0 ? (
+          <div className="text-xs font-bold text-center py-3" style={{ color: '#a0522d' }}>
+            ບໍ່ມີ Preorder ທີ່ລໍຖ້າກວດ
+          </div>
+        ) : (
+          <div className="flex flex-col gap-1.5">
+            {slipOrders.map(o => {
+              const r = allResults[o.id]
+              const statusColor = orderStatusColor(o)
+              const isChecking = checking[o.id]
+              const cust = o.customer ? (typeof o.customer === 'string' ? JSON.parse(o.customer) : o.customer) : null
 
-            {/* Status header */}
-            <div className="flex items-center justify-between">
-              <div className="font-black text-sm" style={{ color: cfg.color }}>
-                {cfg.icon} {cfg.label}
-              </div>
-              {result.slipInfo?.confidence && (
-                <div className="text-xs font-bold px-2 py-0.5 rounded-full"
+              return (
+                <div key={o.id} className="rounded-xl p-2.5 flex items-center gap-2"
                   style={{
-                    background: result.slipInfo.confidence === 'high'   ? '#dcfce7'
-                              : result.slipInfo.confidence === 'medium' ? '#fef9c3' : '#fee2e2',
-                    color:      result.slipInfo.confidence === 'high'   ? '#15803d'
-                              : result.slipInfo.confidence === 'medium' ? '#a16207' : '#b91c1c',
+                    background: statusColor === 'warn' ? '#fff7ed' : statusColor === 'ok' ? '#f0fdf4' : '#fffbf6',
+                    border: `1px solid ${statusColor === 'warn' ? '#fed7aa' : statusColor === 'ok' ? '#bbf7d0' : '#e8d5c0'}`,
                   }}>
-                  {result.slipInfo.confidence === 'high'   ? 'ຄວາມໝັ້ນໃຈ: ສູງ'
-                 : result.slipInfo.confidence === 'medium' ? 'ຄວາມໝັ້ນໃຈ: ກາງ'
-                 :                                           'ຄວາມໝັ້ນໃຈ: ຕ່ຳ'}
-                </div>
-              )}
-            </div>
+                  {/* Slip thumbnail */}
+                  <a href={o.slip_url} target="_blank" rel="noopener noreferrer" className="flex-shrink-0">
+                    <img src={o.slip_url} className="w-10 h-10 rounded-lg object-cover border border-[#e8d5c0]" alt="slip" />
+                  </a>
 
-            {/* Suspicious reason box */}
-            {status === 'suspicious' && result.slipInfo?.reason && (
-              <div className="px-2 py-1.5 rounded-lg text-xs font-bold"
-                style={{ background: '#fef3c7', color: '#92400e', border: '1px solid #fcd34d' }}>
-                ⚠ {result.slipInfo.reason}
-              </div>
-            )}
+                  {/* Info */}
+                  <div className="flex-1 min-w-0">
+                    <div className="text-xs font-black" style={{ color: '#3d1f0a' }}>
+                      #{String(o.qnum || 0).padStart(4,'0')} · {fmt(o.total)} ກີບ
+                    </div>
+                    {cust?.name && (
+                      <div className="text-xs font-bold truncate" style={{ color: '#8a6a55' }}>{cust.name}</div>
+                    )}
+                    {r && (
+                      <div className="text-xs font-bold mt-0.5" style={{ color: statusColor === 'warn' ? '#c2410c' : '#16a34a' }}>
+                        {statusColor === 'ok' ? '✅ ຜ່ານ' : (
+                          [
+                            !r.amount_matches && `❌ ຈຳນວນບໍ່ຕົງ (${fmt(r.amount_found)})`,
+                            !r.date_is_today  && `⚠ ວັນທີບໍ່ໃຊ່ມື້ນີ້`,
+                            r.suspicious      && `🚨 ໜ້າສົງໄສ`,
+                          ].filter(Boolean).join(' · ')
+                        )}
+                      </div>
+                    )}
+                  </div>
 
-            {/* Duplicate: when first seen */}
-            {status === 'duplicate' && result.first_seen && (
-              <div className="px-2 py-1.5 rounded-lg text-xs font-bold"
-                style={{ background: '#fee2e2', color: '#991b1b', border: '1px solid #fca5a5' }}>
-                ໃຊ້ແລ້ວເມື່ອ: {new Date(result.first_seen).toLocaleString('lo-LA')}
-                {result.first_sender && ` · ${result.first_sender}`}
-              </div>
-            )}
-
-            {/* Slip details */}
-            <div className="flex flex-col gap-1 pt-1" style={{ borderTop: `1px solid ${cfg.border}` }}>
-              {result.slipInfo?.transaction_id && (
-                <div className="text-xs font-bold" style={{ color: '#8a6a55' }}>
-                  Ref: {result.slipInfo.transaction_id}
+                  {/* Check button */}
+                  {!r && (
+                    <button onClick={() => checkOrder(o)} disabled={isChecking}
+                      className="flex-shrink-0 text-xs font-black px-2.5 py-1.5 rounded-lg transition-all active:scale-95"
+                      style={{ background: isChecking ? '#e8d5c0' : '#3d1f0a', color: isChecking ? '#8a6a55' : '#fdf6ee' }}>
+                      {isChecking ? '...' : 'ກວດ'}
+                    </button>
+                  )}
                 </div>
-              )}
-              {result.slipInfo?.amount && (
-                <div className="text-xs font-bold" style={{ color: '#3d1f0a' }}>
-                  ຈຳນວນ: {fmt(result.slipInfo.amount)} LAK
-                </div>
-              )}
-              {result.slipInfo?.sender_name && (
-                <div className="text-xs font-bold" style={{ color: '#3d1f0a' }}>
-                  ຜູ້ໂອນ: {result.slipInfo.sender_name}
-                </div>
-              )}
-              {result.slipInfo?.transfer_date && (
-                <div className="text-xs" style={{ color: '#8a6a55' }}>
-                  ວັນທີ: {result.slipInfo.transfer_date}
-                </div>
-              )}
-            </div>
-
-            {result.warning && (
-              <div className="text-xs" style={{ color: '#f59e0b' }}>⚠ {result.warning}</div>
-            )}
+              )
+            })}
           </div>
         )}
 
-        <div className="text-xs font-bold text-center" style={{ color: '#a0522d' }}>
-          AI ອ່ານ · ກວດຊ້ຳ · ກວດຄວາມໜ້າສົງໄສ
-        </div>
+        {/* Settings toggle */}
+        <button onClick={() => setShowSettings(v => !v)}
+          className="text-xs font-bold text-center pt-1"
+          style={{ color: '#a0522d' }}>
+          ⚙ ຕັ້ງຄ່າ Limit {showSettings ? '▲' : '▼'}
+        </button>
+
+        {showSettings && (
+          <div className="flex items-center gap-2 px-1">
+            <span className="text-xs font-bold" style={{ color: '#8a6a55' }}>Limit/ວັນ:</span>
+            <input
+              type="number" min="1" max="9999"
+              value={limitInput}
+              onChange={e => setLimitInput(e.target.value)}
+              className="w-20 px-2 py-1 rounded-lg text-xs font-black border text-center"
+              style={{ border: '1.5px solid #e8d5c0', color: '#3d1f0a' }}
+            />
+            <button
+              onClick={() => { const v = parseInt(limitInput); if (v > 0) onSaveLimit?.(v) }}
+              className="flex-1 py-1.5 rounded-lg text-xs font-black"
+              style={{ background: '#3d1f0a', color: '#fdf6ee' }}>
+              ບັນທຶກ
+            </button>
+          </div>
+        )}
       </div>
     </Card>
   )
@@ -262,14 +307,17 @@ export default function OfficePage() {
   const [lastUpdate, setLastUpdate] = useState(null)
 
   // Data
-  const [orders,     setOrders]     = useState([])
-  const [menus,      setMenus]      = useState([])
-  const [stockShop,  setStockShop]  = useState([])
-  const [stockOnline,setStockOnline]= useState([])
-  const [settings,   setSettings]   = useState({})
-  const [shopInfo,   setShopInfo]   = useState({ name: 'Basic Chinese Bun' })
-  const [branches,   setBranches]   = useState([])
-  const [msgCount,   setMsgCount]   = useState(0)
+  const [orders,        setOrders]        = useState([])
+  const [menus,         setMenus]         = useState([])
+  const [stockShop,     setStockShop]     = useState([])
+  const [stockOnline,   setStockOnline]   = useState([])
+  const [settings,      setSettings]      = useState({})
+  const [shopInfo,      setShopInfo]      = useState({ name: 'Basic Chinese Bun' })
+  const [branches,      setBranches]      = useState([])
+  const [msgCount,      setMsgCount]      = useState(0)
+  const [slipResults,   setSlipResults]   = useState({})
+  const [slipLimit,     setSlipLimit]     = useState(100)
+  const [slipTodayCount,setSlipTodayCount]= useState(0)
 
   // ─── Load config (same pattern as staff page) ───
   const loadConfig = useCallback(async () => {
@@ -285,12 +333,21 @@ export default function OfficePage() {
     if (cfg.shop_info)  setShopInfo(JSON.parse(cfg.shop_info))
     if (cfg.branches)   setBranches(JSON.parse(cfg.branches))
     if (cfg.staff_pin)  setStaffPin(cfg.staff_pin)
+    if (cfg.slip_verify_results) { try { setSlipResults(JSON.parse(cfg.slip_verify_results)) } catch {} }
+    if (cfg.slip_verify_limit)   setSlipLimit(parseInt(cfg.slip_verify_limit) || 100)
+    if (cfg.slip_verify_today) {
+      try {
+        const t = JSON.parse(cfg.slip_verify_today)
+        const todayISO = new Date().toISOString().split('T')[0]
+        setSlipTodayCount(t.date === todayISO ? (t.count || 0) : 0)
+      } catch {}
+    }
   }, [])
 
   // ─── Load orders ───
   const loadOrders = useCallback(async () => {
     if (!supabase) return
-    const { data } = await supabase.from('orders').select('id,type,status,total,done,cancelled,created_at,done_at').order('created_at', { ascending: false })
+    const { data } = await supabase.from('orders').select('id,qnum,type,status,total,done,cancelled,created_at,done_at,slip_url,customer').order('created_at', { ascending: false })
     if (data) setOrders(data)
   }, [])
 
@@ -456,7 +513,21 @@ export default function OfficePage() {
         </Card>
 
         {/* 6. Slip Checker */}
-        <SlipCard accent="#c2410c" />
+        <SlipCard
+          accent="#c2410c"
+          orders={orders}
+          slipResults={slipResults}
+          todayCount={slipTodayCount}
+          limit={slipLimit}
+          onResult={(orderId, result, newCount) => {
+            setSlipResults(prev => ({ ...prev, [orderId]: result }))
+            setSlipTodayCount(newCount)
+          }}
+          onSaveLimit={async (val) => {
+            setSlipLimit(val)
+            await supabase.from('shop_config').upsert({ key: 'slip_verify_limit', value: String(val) }, { onConflict: 'key' })
+          }}
+        />
 
       </div>
 

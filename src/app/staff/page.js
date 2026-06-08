@@ -539,6 +539,18 @@ export default function StaffPage() {
     if (cfg.staff_pin) setStaffPin(cfg.staff_pin)
     if (cfg.profit_pin) setProfitPin(cfg.profit_pin)
     if (cfg.walkin_code) setWalkinCode(cfg.walkin_code)
+    if (cfg.slip_verify_results) {
+      try {
+        const results = JSON.parse(cfg.slip_verify_results)
+        setSlipVerify(prev => {
+          const merged = { ...prev }
+          Object.keys(results).forEach(id => {
+            if (!merged[id]) merged[id] = { loading: false, result: results[id] }
+          })
+          return merged
+        })
+      } catch {}
+    }
 
     // ถ้ายังไม่มีข้อมูลใน Supabase ให้ save default ขึ้นไปก่อน
     if (!cfg.menus) {
@@ -727,7 +739,7 @@ export default function StaffPage() {
       const res = await fetch('/api/verify-slip', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ slipUrl: o.slip_url, expectedAmount: o.total }),
+        body: JSON.stringify({ slipUrl: o.slip_url, expectedAmount: o.total, orderId: o.id }),
       })
       const data = await res.json()
       if (!res.ok || data.error) throw new Error(data.error || 'ເກີດຂໍ້ຜິດພາດ')
