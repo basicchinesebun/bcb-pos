@@ -71,347 +71,325 @@ function Row({ label, value, sub, big }) {
 
 // ─── ROOM DEFINITIONS ───
 const ROOM_DEFS = [
-  { col:0, row:0, id:'walkin',  icon:'🏪', label:'Walk-in',
-    topC:'#c4b5fd', leftC:'#2e1065', rightC:'#6d28d9',
-    wallTop:'#7c3aed', wallBot:'#4c1d95' },
-  { col:1, row:0, id:'pos',     icon:'💻', label:'POS',
-    topC:'#93c5fd', leftC:'#1e3a8a', rightC:'#1d4ed8',
-    wallTop:'#2563eb', wallBot:'#1e40af' },
-  { col:2, row:0, id:'chatbot', icon:'🤖', label:'AI Chat',
-    topC:'#67e8f9', leftC:'#0c4a6e', rightC:'#0369a1',
-    wallTop:'#0891b2', wallBot:'#075985' },
-  { col:0, row:1, id:'content', icon:'📱', label:'Content',
-    topC:'#f9a8d4', leftC:'#4a044e', rightC:'#be185d',
-    wallTop:'#db2777', wallBot:'#9d174d' },
-  { col:1, row:1, id:'finance', icon:'💰', label:'Finance',
-    topC:'#86efac', leftC:'#052e16', rightC:'#15803d',
-    wallTop:'#16a34a', wallBot:'#14532d' },
-  { col:2, row:1, id:'slip',    icon:'🧾', label:'Slip',
-    topC:'#fdba74', leftC:'#431407', rightC:'#b45309',
-    wallTop:'#d97706', wallBot:'#92400e' },
+  { id:'walkin',  icon:'🏪', label:'Walk-in', hairC:'#c4b5fd', shirtC:'#7c3aed', monC:'#8b5cf6', skinC:'#f5c8a0' },
+  { id:'pos',     icon:'💻', label:'POS',     hairC:'#93c5fd', shirtC:'#1d4ed8', monC:'#60a5fa', skinC:'#f5c8a0' },
+  { id:'chatbot', icon:'🤖', label:'AI Chat', hairC:'#67e8f9', shirtC:'#0891b2', monC:'#22d3ee', skinC:'#e8b88a' },
+  { id:'content', icon:'📱', label:'Content', hairC:'#f9a8d4', shirtC:'#be185d', monC:'#f472b6', skinC:'#f5c8a0' },
+  { id:'finance', icon:'💰', label:'Finance', hairC:'#86efac', shirtC:'#15803d', monC:'#4ade80', skinC:'#e8b88a' },
+  { id:'slip',    icon:'🧾', label:'Slip',    hairC:'#fdba74', shirtC:'#b45309', monC:'#fbbf24', skinC:'#f5c8a0' },
 ]
 
-// ─── ISOMETRIC BUILDING ───
+// desk layout: 3 back (far), 3 front (near)
+const DESK_LAYOUT = [
+  { id:'walkin',  fx:0.13, fy:0.82, s:0.68 },
+  { id:'pos',     fx:0.50, fy:0.82, s:0.68 },
+  { id:'chatbot', fx:0.87, fy:0.82, s:0.68 },
+  { id:'content', fx:0.14, fy:0.28, s:0.90 },
+  { id:'finance', fx:0.50, fy:0.28, s:0.90 },
+  { id:'slip',    fx:0.87, fy:0.28, s:0.90 },
+]
+
+// ─── PIXEL ROOM ───
 function IsoBuilding({ active, onSelect, roomStatus }) {
-  const cx = 76, cy = 38, WH = 108, OX = 246, OY = 74
-
-  function iso(c, r) { return [OX + (c - r) * cx, OY + (c + r) * cy] }
-  function pts(arr) { return arr.map(([x,y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(' ') }
-
-  // Returns parallelogram window points on a wall
-  // e1,e2: start/end of top wall edge; t1,t2: along param; h1,h2: height offsets
-  function win(e1, e2, t1, t2, h1, h2) {
-    const dx = e2[0]-e1[0], dy = e2[1]-e1[1]
-    return [
-      [e1[0]+t1*dx, e1[1]+t1*dy+h1],
-      [e1[0]+t2*dx, e1[1]+t2*dy+h1],
-      [e1[0]+t2*dx, e1[1]+t2*dy+h2],
-      [e1[0]+t1*dx, e1[1]+t1*dy+h2],
-    ]
+  // ── Floor perspective ──
+  // fy=1 = far (back wall), fy=0 = near (bottom of screen)
+  function fp(fx, fy) {
+    const y  = 440 + fy * (182 - 440)
+    const x1 =   0 + fy * 100
+    const x2 = 640 + fy * (540 - 640)
+    return [x1 + fx * (x2 - x1), y]
   }
 
-  const sorted = [...ROOM_DEFS].sort((a,b) => (a.col+a.row) - (b.col+b.row) || a.col - b.col)
+  // City buildings on back wall windows (fixed positions)
+  const CITY = [[0,.60,.12],[.10,.40,.14],[.22,.55,.10],[.30,.25,.12],
+                [.40,.50,.08],[.46,.30,.13],[.57,.45,.10],[.65,.35,.09],
+                [.73,.52,.11],[.82,.20,.10],[.90,.42,.10]]
+  const WIN_LIGHTS = [[.05,.45],[.18,.35],[.32,.50],[.48,.28],[.62,.42],[.78,.55],[.92,.35],
+                      [.12,.65],[.28,.55],[.44,.70],[.60,.62],[.75,.67],[.88,.72]]
 
-  const PH = 10  // parapet height
-  const FL = WH * 0.48  // floor divider position
+  // Sort desks: far first (fy desc), so near desks render on top
+  const sortedDesks = [...DESK_LAYOUT].sort((a,b) => b.fy - a.fy)
 
   return (
-    <svg viewBox="0 0 580 480" className="w-full select-none" style={{ maxHeight:'440px' }}>
+    <svg viewBox="0 0 640 440" className="w-full select-none" style={{ maxHeight:'420px' }}>
       <defs>
         <style>{`
           @keyframes neonPulse {
-            0%,100% { opacity:1; filter:drop-shadow(0 0 8px #fde68a) drop-shadow(0 0 16px #f59e0b); }
-            50%      { opacity:0.75; filter:drop-shadow(0 0 4px #fde68a); }
+            0%,100%{opacity:1;filter:drop-shadow(0 0 8px #fde68a)drop-shadow(0 0 16px #f59e0b)}
+            50%{opacity:0.75;filter:drop-shadow(0 0 3px #fde68a)}
           }
-          @keyframes statusPulse {
-            0%,100% { r:5; opacity:1; }
-            50%      { r:7; opacity:0.6; }
+          @keyframes screenFlicker {
+            0%,100%{opacity:0.55} 45%{opacity:0.70} 55%{opacity:0.60}
           }
-          .neon-sign { animation: neonPulse 2.8s ease-in-out infinite; }
-          .status-ok { animation: statusPulse 2s ease-in-out infinite; }
+          .neon-sign{animation:neonPulse 3s ease-in-out infinite}
+          .mon-screen{animation:screenFlicker 3.5s ease-in-out infinite}
         `}</style>
-        <radialGradient id="bgG" cx="50%" cy="15%" r="75%">
-          <stop offset="0%" stopColor="#1c0e04" />
-          <stop offset="100%" stopColor="#050201" />
-        </radialGradient>
-        <radialGradient id="groundG" cx="50%" cy="40%" r="55%">
-          <stop offset="0%" stopColor="#2a1508" />
-          <stop offset="100%" stopColor="#0d0602" />
-        </radialGradient>
-        <radialGradient id="moonG" cx="38%" cy="38%" r="62%">
-          <stop offset="0%" stopColor="#fffde7" />
-          <stop offset="100%" stopColor="#fde68a" />
-        </radialGradient>
         <filter id="glow">
-          <feGaussianBlur stdDeviation="4" result="b"/>
+          <feGaussianBlur stdDeviation="3.5" result="b"/>
           <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
         </filter>
-        <filter id="winGlow">
-          <feGaussianBlur stdDeviation="2.5" result="b"/>
+        <filter id="lampGlow">
+          <feGaussianBlur stdDeviation="10" result="b"/>
           <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
         </filter>
-        <filter id="shadow">
-          <feDropShadow dx="2" dy="4" stdDeviation="6" floodColor="#000" floodOpacity="0.6"/>
+        <filter id="sm">
+          <feGaussianBlur stdDeviation="2" result="b"/>
+          <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
         </filter>
       </defs>
 
-      {/* Sky */}
-      <rect width="580" height="480" fill="url(#bgG)" rx="14"/>
+      {/* ── CEILING ── */}
+      <rect x="0" y="0" width="640" height="80" fill="#160a03"/>
+      {[60,160,260,360,460,560].map((x,i) => (
+        <rect key={i} x={x} y="0" width="2" height="80" fill="rgba(160,90,30,0.08)"/>
+      ))}
+      {/* Ceiling trim */}
+      <rect x="0" y="76" width="640" height="4" fill="#2a1408"/>
 
-      {/* Stars */}
-      {[[28,16],[72,28],[140,10],[210,22],[295,8],[370,19],[440,32],[510,15],[545,48],[60,55],[165,44],[480,62],[340,50],[90,75],[510,80]].map(([x,y],i) => (
-        <circle key={i} cx={x} cy={y} r={i%5===0?2.2:1.4} fill="white" opacity={0.2+((i*37)%60)/200}/>
+      {/* ── SIDE WALLS ── */}
+      <polygon points="0,78 100,182 0,182" fill="#3d1e08"/>
+      <polygon points="640,78 540,182 640,182" fill="#2d1608"/>
+      {/* Wall wood lines */}
+      <line x1="0" y1="108" x2="62" y2="148" stroke="rgba(160,90,30,0.12)" strokeWidth="1"/>
+      <line x1="0" y1="138" x2="40" y2="160" stroke="rgba(160,90,30,0.10)" strokeWidth="1"/>
+      <line x1="640" y1="108" x2="578" y2="148" stroke="rgba(160,90,30,0.10)" strokeWidth="1"/>
+
+      {/* ── BACK WALL ── */}
+      <rect x="100" y="78" width="440" height="104" fill="#e8d0a8"/>
+      {/* Wall texture lines */}
+      {[0.25,0.5,0.75].map((f,i) => (
+        <line key={i} x1={100+f*440} y1="78" x2={100+f*440} y2="182"
+          stroke="rgba(160,100,40,0.08)" strokeWidth="0.8"/>
+      ))}
+      {/* Wainscot rail */}
+      <rect x="100" y="170" width="440" height="5" fill="#c8a070" opacity="0.7"/>
+      <rect x="100" y="174" width="440" height="2" fill="#b08050" opacity="0.5"/>
+
+      {/* ── LEFT WINDOW ── */}
+      <rect x="112" y="88" width="108" height="80" rx="3" fill="#6b3d14" stroke="#4a2a0a" strokeWidth="2"/>
+      <rect x="117" y="93" width="98" height="70" fill="#1a2f50"/>
+      {/* Sky */}
+      <rect x="117" y="93" width="98" height="38" fill="#1e3a5f"/>
+      <rect x="117" y="131" width="98" height="32" fill="#0f1f3d"/>
+      {/* City silhouette */}
+      {CITY.map(([bx,bh,bw],i) => (
+        <rect key={i} x={117+bx*98} y={93+70*(1-bh-0.02)} width={bw*98} height={70*bh} fill="#08111e"/>
+      ))}
+      {/* Building lights */}
+      {WIN_LIGHTS.slice(0,7).map(([lx,ly],i) => (
+        <rect key={i} x={117+lx*98-1} y={93+ly*70} width="2.5" height="3" fill="#fde68a" opacity="0.75"/>
+      ))}
+      <circle cx="164" cy="103" r="7" fill="#fef9e7" opacity="0.85"/>
+      <circle cx="169" cy="99" r="5.5" fill="#1e3a5f"/>
+      {/* Window frame dividers */}
+      <line x1="164" y1="93" x2="164" y2="163" stroke="#6b3d14" strokeWidth="2"/>
+      <line x1="117" y1="131" x2="215" y2="131" stroke="#6b3d14" strokeWidth="2"/>
+      <rect x="108" y="163" width="116" height="6" rx="1" fill="#7c4a1e"/>
+
+      {/* ── RIGHT WINDOW ── */}
+      <rect x="420" y="88" width="108" height="80" rx="3" fill="#6b3d14" stroke="#4a2a0a" strokeWidth="2"/>
+      <rect x="425" y="93" width="98" height="70" fill="#1a2f50"/>
+      <rect x="425" y="93" width="98" height="38" fill="#1e3a5f"/>
+      <rect x="425" y="131" width="98" height="32" fill="#0f1f3d"/>
+      {CITY.map(([bx,bh,bw],i) => (
+        <rect key={i} x={425+bx*98} y={93+70*(1-bh-0.02)} width={bw*98} height={70*bh} fill="#08111e"/>
+      ))}
+      {WIN_LIGHTS.slice(7).map(([lx,ly],i) => (
+        <rect key={i} x={425+lx*98-1} y={93+ly*70} width="2.5" height="3" fill="#fde68a" opacity="0.75"/>
+      ))}
+      <circle cx="472" cy="103" r="7" fill="#fef9e7" opacity="0.85"/>
+      <circle cx="477" cy="99" r="5.5" fill="#1e3a5f"/>
+      <line x1="472" y1="93" x2="472" y2="163" stroke="#6b3d14" strokeWidth="2"/>
+      <line x1="425" y1="131" x2="523" y2="131" stroke="#6b3d14" strokeWidth="2"/>
+      <rect x="416" y="163" width="116" height="6" rx="1" fill="#7c4a1e"/>
+
+      {/* ── COMPANY SIGN (center back wall) ── */}
+      <g className="neon-sign">
+        <rect x="236" y="93" width="168" height="52" rx="4" fill="#120801" stroke="#c97d2a" strokeWidth="1.5"/>
+        <rect x="239" y="96" width="162" height="46" rx="3" fill="rgba(253,214,42,0.04)"/>
+        {/* Logo circle */}
+        <circle cx="262" cy="119" r="14" fill="#3d1f0a" stroke="#c97d2a" strokeWidth="1.2"/>
+        <text x="262" y="123" textAnchor="middle" fontSize="11" fill="#fde68a" style={{userSelect:'none'}}>☕</text>
+        {/* Text */}
+        <text x="330" y="112" textAnchor="middle" fontSize="8.5" fontWeight="900"
+          fill="#fde68a" style={{userSelect:'none',letterSpacing:'1.2px',fontFamily:'monospace'}}>
+          BASIC CHINESE BUN
+        </text>
+        <text x="330" y="124" textAnchor="middle" fontSize="7"
+          fill="#fdba74" opacity="0.7" style={{userSelect:'none',fontFamily:'monospace'}}>
+          ◇ Restaurant Office ◇
+        </text>
+        <text x="330" y="135" textAnchor="middle" fontSize="6.5"
+          fill="#fde68a" opacity="0.5" style={{userSelect:'none',fontFamily:'monospace'}}>
+          ● ONLINE ●
+        </text>
+      </g>
+
+      {/* ── BACK WALL PLANTS ── */}
+      <g><rect x="105" y="162" width="11" height="18" rx="2" fill="#5c3317"/>
+        <ellipse cx="111" cy="155" rx="13" ry="15" fill="#1a4d1f"/>
+        <ellipse cx="104" cy="148" rx="7" ry="9" fill="#1e5922"/>
+        <ellipse cx="118" cy="150" rx="6" ry="8" fill="#163d1a"/>
+      </g>
+      <g><rect x="524" y="162" width="11" height="18" rx="2" fill="#5c3317"/>
+        <ellipse cx="529" cy="155" rx="13" ry="15" fill="#1a4d1f"/>
+        <ellipse cx="522" cy="148" rx="7" ry="9" fill="#163d1a"/>
+        <ellipse cx="536" cy="150" rx="6" ry="8" fill="#1e5922"/>
+      </g>
+
+      {/* ── FLOOR ── */}
+      <polygon points="100,182 540,182 640,440 0,440" fill="#3d2009"/>
+      {/* Plank lines (horizontal, perspective) */}
+      {[.12,.24,.36,.48,.60,.72,.84,.95].map((f,i) => {
+        const y  = 182 + f*(440-182)
+        const xl = 100 - f*100
+        const xr = 540 + f*(640-540)
+        return <line key={i} x1={xl} y1={y} x2={xr} y2={y} stroke="#4e2c0f" strokeWidth={0.7+f*2}/>
+      })}
+      {/* Vertical plank dividers (converging) */}
+      {[.1,.2,.3,.4,.5,.6,.7,.8,.9].map((fx,i) => {
+        const [tx1] = fp(fx, 1.0); const [tx2] = fp(fx, 0.0)
+        return <line key={i} x1={tx1} y1={182} x2={Math.max(0,Math.min(640,tx2))} y2={440}
+          stroke="#4a2a0e" strokeWidth="0.6" opacity="0.4"/>
+      })}
+      {/* Floor light strip near back wall */}
+      <rect x="100" y="182" width="440" height="5" fill="rgba(255,200,100,0.12)"/>
+      {/* Floor rug */}
+      <ellipse cx="320" cy="310" rx="120" ry="60"
+        fill="none" stroke="#5c3317" strokeWidth="2" opacity="0.3"/>
+      <ellipse cx="320" cy="310" rx="100" ry="50"
+        fill="#2a1408" opacity="0.15"/>
+
+      {/* ── CEILING LAMPS ── */}
+      {[160, 320, 480].map((lx,i) => (
+        <g key={i}>
+          <line x1={lx} y1="0" x2={lx} y2="74" stroke="#5a3412" strokeWidth="2"/>
+          {/* Shade */}
+          <polygon points={`${lx-20},74 ${lx+20},74 ${lx+13},90 ${lx-13},90`}
+            fill="#7c4a1e" stroke="#4a2a0a" strokeWidth="1"/>
+          {/* Bulb glow */}
+          <circle cx={lx} cy={88} r={5} fill="#fef3c7" filter="url(#lampGlow)"/>
+          {/* Light cone */}
+          <polygon points={`${lx-13},90 ${lx+13},90 ${lx+70},320 ${lx-70},320`}
+            fill="rgba(253,243,199,0.04)"/>
+          {/* Lamp bottom circle */}
+          <ellipse cx={lx} cy={90} rx={13} ry={4} fill="#6b3d14" opacity="0.6"/>
+        </g>
       ))}
 
-      {/* Moon */}
-      <circle cx={510} cy={40} r={22} fill="url(#moonG)" opacity="0.88" filter="url(#glow)"/>
-      <circle cx={522} cy={33} r={17} fill="#0a0401"/>
-
-      {/* Ground */}
-      <polygon points={pts([iso(-1,-0.5),iso(4,-0.5),iso(4,3),iso(-1,3)])} fill="url(#groundG)"/>
-      {/* Ground grid lines */}
-      {[0,1,2,3].map(c => {
-        const a = iso(c,0), b = iso(c,3)
-        return <line key={'gc'+c} x1={a[0]} y1={a[1]} x2={b[0]} y2={b[1]} stroke="rgba(255,200,100,0.06)" strokeWidth="0.8"/>
-      })}
-      {[0,1,2,3].map(r => {
-        const a = iso(0,r), b = iso(3,r)
-        return <line key={'gr'+r} x1={a[0]} y1={a[1]} x2={b[0]} y2={b[1]} stroke="rgba(255,200,100,0.06)" strokeWidth="0.8"/>
-      })}
-
-      {/* Rooms */}
-      {sorted.map(room => {
-        const { col, row, id, topC, leftC, rightC, wallTop, wallBot } = room
-        const [nx,ny] = iso(col,   row)
-        const [ex,ey] = iso(col+1, row)
-        const [sx,sy] = iso(col+1, row+1)
-        const [wx,wy] = iso(col,   row+1)
+      {/* ── DESKS + CHARACTERS ── */}
+      {sortedDesks.map(({ id, fx, fy, s }) => {
+        const room = ROOM_DEFS.find(r => r.id === id)
+        if (!room) return null
+        const { icon, label, hairC, shirtC, monC, skinC } = room
+        const [cx, cy] = fp(fx, fy)
         const isActive = active === id
         const status = roomStatus?.[id]
-        const dotColor = status==='ok'?'#4ade80' : status==='warn'?'#fb923c' : '#475569'
+        const dotC = status==='ok'?'#4ade80':status==='warn'?'#fb923c':'#475569'
 
-        // Windows: 2 per wall per floor = 4 per wall
-        const E = [ex,ey], S = [sx,sy], W = [wx,wy]
-        // Right wall windows (E→S direction)
-        const rW = [
-          win(E,S, 0.06,0.42, WH*0.06,WH*0.40),
-          win(E,S, 0.58,0.94, WH*0.06,WH*0.40),
-          win(E,S, 0.06,0.42, WH*0.56,WH*0.90),
-          win(E,S, 0.58,0.94, WH*0.56,WH*0.90),
-        ]
-        // Left wall windows (W→S direction)
-        const lW = [
-          win(W,S, 0.08,0.44, WH*0.06,WH*0.40),
-          win(W,S, 0.56,0.92, WH*0.06,WH*0.40),
-          win(W,S, 0.08,0.44, WH*0.56,WH*0.90),
-          win(W,S, 0.56,0.92, WH*0.56,WH*0.90),
-        ]
+        // Sizes (scaled by s)
+        const dw=50*s, dh=6*s, df=14*s   // desk width, surface h, front h
+        const mw=32*s, mh=18*s            // monitor
+        const hw=12*s, hh=7*s             // hair
+        const cw=10*s, ch=9*s             // head
+        const bw=12*s, bh=11*s            // body
 
-        // Wall gradient: two-tone using floor divider
-        const floorDx_r = (sx-ex)*1, floorDy_r = (sy-ey)*1
-        const floorDx_l = (sx-wx)*1, floorDy_l = (sy-wy)*1
-
-        // Top floor belt (darker), bottom floor (lighter) for right wall
-        const rTop = [[ex,ey],[sx,sy],[sx,sy+FL],[ex,ey+FL]]
-        const rBot = [[ex,ey+FL],[sx,sy+FL],[sx,sy+WH],[ex,ey+WH]]
-        const lTop = [[wx,wy],[sx,sy],[sx,sy+FL],[wx,wy+FL]]
-        const lBot = [[wx,wy+FL],[sx,sy+FL],[sx,sy+WH],[wx,wy+WH]]
-
-        const tcx = (nx+sx)/2, tcy = (ny+sy)/2
+        // Y reference: cy = desk surface top
+        const bodyTop = cy - bh
+        const headTop = bodyTop - ch
+        const hairTop = headTop - hh
 
         return (
-          <g key={id} onClick={() => onSelect(id===active?null:id)} style={{cursor:'pointer'}} filter={isActive?'url(#shadow)':undefined}>
-            {/* LEFT WALL — upper floor */}
-            <polygon points={pts(lTop)} fill={leftC}/>
-            {/* LEFT WALL — lower floor (slightly lighter) */}
-            <polygon points={pts(lBot)} fill={leftC} opacity="0.78"/>
-            {/* Floor divider line on left wall */}
-            <line x1={wx + (sx-wx)*0} y1={wy + (sy-wy)*0+FL} x2={wx + (sx-wx)*1} y2={wy + (sy-wy)*1+FL}
-              stroke="rgba(255,255,255,0.12)" strokeWidth="1.2"/>
-            {/* Left wall edge highlight */}
-            <line x1={wx} y1={wy} x2={wx} y2={wy+WH} stroke="rgba(255,255,255,0.08)" strokeWidth="1"/>
-            {/* Left windows */}
-            {lW.map((w,i) => (
-              <g key={i}>
-                <polygon points={pts(w)} fill={isActive?'#fef3c7':'#fde68a'} opacity={isActive?0.72:0.35} filter="url(#winGlow)"/>
-                <polygon points={pts(w)} fill="none" stroke="#fde68a" strokeWidth="0.7" opacity="0.5"/>
-                {/* window pane divider */}
-                <line
-                  x1={(w[0][0]+w[1][0])/2} y1={(w[0][1]+w[1][1])/2}
-                  x2={(w[3][0]+w[2][0])/2} y2={(w[3][1]+w[2][1])/2}
-                  stroke="#fde68a" strokeWidth="0.5" opacity="0.4"/>
-              </g>
-            ))}
+          <g key={id} onClick={() => onSelect(id===active?null:id)} style={{cursor:'pointer'}}>
+            {/* ── CHARACTER (behind desk) ── */}
+            {/* Hair */}
+            <rect x={cx-hw/2} y={hairTop} width={hw} height={hh} fill={hairC}/>
+            {/* Head */}
+            <rect x={cx-cw/2} y={headTop} width={cw} height={ch} fill={skinC}/>
+            {/* Eyes */}
+            <rect x={cx-cw*0.3} y={headTop+ch*0.35} width={cw*0.18} height={ch*0.28} fill="#2d1a08"/>
+            <rect x={cx+cw*0.08} y={headTop+ch*0.35} width={cw*0.18} height={ch*0.28} fill="#2d1a08"/>
+            {/* Body */}
+            <rect x={cx-bw/2} y={bodyTop} width={bw} height={bh} fill={shirtC}/>
+            {/* Arms */}
+            <rect x={cx-bw/2-4*s} y={bodyTop} width={4*s} height={8*s} fill={shirtC}/>
+            <rect x={cx+bw/2}     y={bodyTop} width={4*s} height={8*s} fill={shirtC}/>
 
-            {/* RIGHT WALL — upper floor */}
-            <polygon points={pts(rTop)} fill={rightC}/>
-            {/* RIGHT WALL — lower floor */}
-            <polygon points={pts(rBot)} fill={rightC} opacity="0.82"/>
-            {/* Floor divider line on right wall */}
-            <line x1={ex + (sx-ex)*0} y1={ey + (sy-ey)*0+FL} x2={ex + (sx-ex)*1} y2={ey + (sy-ey)*1+FL}
-              stroke="rgba(255,255,255,0.15)" strokeWidth="1.2"/>
-            {/* Right wall edge highlight */}
-            <line x1={sx} y1={sy} x2={sx} y2={sy+WH} stroke="rgba(0,0,0,0.3)" strokeWidth="1"/>
-            {/* Right windows */}
-            {rW.map((w,i) => (
-              <g key={i}>
-                <polygon points={pts(w)} fill={isActive?'#fef3c7':'#fde68a'} opacity={isActive?0.72:0.4} filter="url(#winGlow)"/>
-                <polygon points={pts(w)} fill="none" stroke="#fde68a" strokeWidth="0.7" opacity="0.5"/>
-                <line
-                  x1={(w[0][0]+w[1][0])/2} y1={(w[0][1]+w[1][1])/2}
-                  x2={(w[3][0]+w[2][0])/2} y2={(w[3][1]+w[2][1])/2}
-                  stroke="#fde68a" strokeWidth="0.5" opacity="0.4"/>
-              </g>
-            ))}
+            {/* ── MONITOR (on desk, in front of character) ── */}
+            {/* Stand */}
+            <rect x={cx-2*s} y={cy-mh} width={4*s} height={mh} fill="#2a2a2a"/>
+            {/* Base */}
+            <rect x={cx-7*s} y={cy-3*s} width={14*s} height={3*s} rx="0.5" fill="#2a2a2a"/>
+            {/* Monitor case */}
+            <rect x={cx-mw/2} y={cy-mh-2*s} width={mw} height={mh} rx="1" fill="#1c1c1c" stroke="#333" strokeWidth="0.8"/>
+            {/* Screen */}
+            <rect x={cx-mw/2+2*s} y={cy-mh} width={mw-4*s} height={mh-4*s}
+              rx="0.5" fill={monC} opacity="0.55" className="mon-screen" filter="url(#sm)"/>
+            {/* Screen content */}
+            <rect x={cx-mw/2+4*s} y={cy-mh+3*s} width={mw*0.55} height={s*2} fill="rgba(255,255,255,0.3)" rx="0.3"/>
+            <rect x={cx-mw/2+4*s} y={cy-mh+7*s} width={mw*0.4}  height={s*2} fill="rgba(255,255,255,0.2)" rx="0.3"/>
+            <rect x={cx-mw/2+4*s} y={cy-mh+11*s} width={mw*0.5} height={s*2} fill="rgba(255,255,255,0.2)" rx="0.3"/>
+            {/* Status dot */}
+            <circle cx={cx+mw/2-3*s} cy={cy-mh-s} r={2.5*s} fill={dotC} filter="url(#glow)"/>
 
-            {/* TOP FACE (roof) */}
-            <polygon points={pts([[nx,ny],[ex,ey],[sx,sy],[wx,wy]])}
-              fill={isActive ? '#fffdf5' : topC}
-              stroke={isActive ? '#fdf6ee' : 'rgba(255,255,255,0.18)'} strokeWidth={isActive?2:0.8}/>
+            {/* ── DESK (covers lower body) ── */}
+            {/* Surface */}
+            <rect x={cx-dw/2} y={cy-dh} width={dw} height={dh} fill="#7c4a1e" stroke="#5a3412" strokeWidth="0.8"/>
+            {/* Keyboard */}
+            <rect x={cx-dw*0.28} y={cy-dh+s} width={dw*0.5} height={3.5*s}
+              rx="0.3" fill="#252525" stroke="#444" strokeWidth="0.4"/>
+            {/* Front face */}
+            <rect x={cx-dw/2} y={cy} width={dw} height={df} fill="#6b3d16" stroke="#4a2a0d" strokeWidth="0.8"/>
+            {/* Drawer detail */}
+            <rect x={cx-dw*0.18} y={cy+df*0.25} width={dw*0.36} height={df*0.5}
+              rx="0.5" fill="rgba(0,0,0,0.12)" stroke="rgba(0,0,0,0.15)" strokeWidth="0.5"/>
+            <circle cx={cx} cy={cy+df*0.5} r={1.6*s} fill="#c97d2a"/>
+            {/* Legs */}
+            <rect x={cx-dw/2+2*s} y={cy+df} width={4*s} height={8*s} fill="#5a3412"/>
+            <rect x={cx+dw/2-6*s} y={cy+df} width={4*s} height={8*s} fill="#5a3412"/>
 
-            {/* PARAPET — front edges only (N→E and N→W) */}
-            <polygon points={pts([[nx,ny-PH],[ex,ey-PH],[ex,ey],[nx,ny]])}
-              fill={rightC} opacity="0.6" stroke="rgba(255,255,255,0.1)" strokeWidth="0.5"/>
-            <polygon points={pts([[nx,ny-PH],[wx,wy-PH],[wx,wy],[nx,ny]])}
-              fill={leftC} opacity="0.55" stroke="rgba(255,255,255,0.08)" strokeWidth="0.5"/>
-            {/* Parapet top edge */}
-            <line x1={nx} y1={ny-PH} x2={ex} y2={ey-PH} stroke="rgba(255,255,255,0.25)" strokeWidth="1"/>
-            <line x1={nx} y1={ny-PH} x2={wx} y2={wy-PH} stroke="rgba(255,255,255,0.18)" strokeWidth="1"/>
-
-            {/* Roof edge outlines */}
-            <line x1={nx} y1={ny} x2={ex} y2={ey} stroke="rgba(255,255,255,0.22)" strokeWidth="1"/>
-            <line x1={nx} y1={ny} x2={wx} y2={wy} stroke="rgba(255,255,255,0.16)" strokeWidth="1"/>
-
-            {/* Status light on roof */}
-            <circle cx={tcx} cy={tcy-4} r={5} fill={dotColor} filter="url(#glow)" className={status==='ok'?'status-ok':''}/>
-            <circle cx={tcx} cy={tcy-4} r={2.2} fill="white" opacity="0.85"/>
-
-            {/* Room icon */}
-            <text x={tcx} y={tcy+14} textAnchor="middle" fontSize="13" style={{userSelect:'none'}}>{room.icon}</text>
-
-            {/* Active ring */}
+            {/* Active highlight */}
             {isActive && (
-              <polygon points={pts([[nx,ny],[ex,ey],[sx,sy],[wx,wy]])}
-                fill="none" stroke="#fdf6ee" strokeWidth="3" opacity="0.9"/>
+              <rect x={cx-dw/2-2} y={hairTop-2} width={dw+4} height={cy+df-hairTop+4}
+                fill="none" stroke="#fde68a" strokeWidth="1.5" strokeDasharray="4,2" rx="2"/>
             )}
-          </g>
-        )
-      })}
 
-      {/* Rooftop details — AC units on back row */}
-      {[0,1,2].map(col => {
-        const [rx,ry] = iso(col+0.3, col % 2 === 0 ? 0.15 : 0.2)
-        return (
-          <g key={col}>
-            <rect x={rx-5} y={ry-12} width={10} height={8} rx="1"
-              fill="#1a1a2e" stroke="rgba(255,255,255,0.15)" strokeWidth="0.5"/>
-            <rect x={rx-3} y={ry-13} width={6} height={3} rx="0.5" fill="#0f3460" opacity="0.8"/>
-          </g>
-        )
-      })}
-
-      {/* Trees */}
-      {[[-1.2, 2.2], [3.15, 0.8], [-0.8, 0.5], [3.0, 2.5]].map(([tc, tr], i) => {
-        const [tx, ty] = iso(tc, tr)
-        const h = 50+i*8
-        return (
-          <g key={i}>
-            <line x1={tx} y1={ty} x2={tx} y2={ty+h*0.45} stroke="#2d1b09" strokeWidth="3"/>
-            <ellipse cx={tx} cy={ty-h*0.2} rx={18+i*3} ry={28+i*4}
-              fill={['#1a4d1f','#1e5922','#163d1a','#1f5226'][i]} opacity="0.9"/>
-            <ellipse cx={tx} cy={ty-h*0.2} rx={18+i*3} ry={28+i*4}
-              fill="none" stroke="#2d6b2d" strokeWidth="0.8" opacity="0.5"/>
-            {/* Tree highlight */}
-            <ellipse cx={tx-4} cy={ty-h*0.2-5} rx={8+i} ry={10+i}
-              fill="#2d7a35" opacity="0.4"/>
-          </g>
-        )
-      })}
-
-      {/* Street lamp */}
-      {[[-0.1, 2.8], [3.1, 1.7]].map(([tc,tr],i) => {
-        const [lx,ly] = iso(tc,tr)
-        return (
-          <g key={i} filter="url(#glow)">
-            <line x1={lx} y1={ly} x2={lx} y2={ly-55} stroke="#b45309" strokeWidth="2"/>
-            <path d={`M ${lx} ${ly-55} Q ${lx+18} ${ly-62} ${lx+20} ${ly-50}`} fill="none" stroke="#b45309" strokeWidth="2"/>
-            <circle cx={lx+20} cy={ly-50} r={5} fill="#fde68a" opacity="0.9" filter="url(#glow)"/>
-            <ellipse cx={lx+20} cy={ly-42} rx={10} ry={5} fill="#fde68a" opacity="0.12"/>
-          </g>
-        )
-      })}
-
-      {/* Entrance — front arch */}
-      {(() => {
-        const [dx, dy] = iso(1.5, 2.05)
-        return (
-          <g>
-            {/* Steps */}
-            <polygon points={pts([[dx-18,dy+2],[dx+18,dy+2],[dx+16,dy+8],[dx-16,dy+8]])} fill="#1a0c06"/>
-            <polygon points={pts([[dx-16,dy+8],[dx+16,dy+8],[dx+13,dy+14],[dx-13,dy+14]])} fill="#150a04"/>
-            {/* Door frame */}
-            <rect x={dx-13} y={dy-42} width={26} height={44} rx="13" fill="#0a0503" stroke="#c97d2a" strokeWidth="2"/>
-            <rect x={dx-9} y={dy-40} width={18} height={36} rx="9" fill="#150a04"/>
-            {/* Door handle */}
-            <circle cx={dx+4} cy={dy-18} r={2.5} fill="#f59e0b"/>
-            {/* Frame glow */}
-            <rect x={dx-13} y={dy-42} width={26} height={44} rx="13" fill="none" stroke="#f59e0b" strokeWidth="0.8" opacity="0.5" filter="url(#glow)"/>
-          </g>
-        )
-      })()}
-
-      {/* NEON SIGN */}
-      {(() => {
-        const [sx2, sy2] = iso(1.5, 2.05)
-        return (
-          <g className="neon-sign">
-            {/* Sign board */}
-            <rect x={sx2-85} y={sy2+22} width={170} height={32} rx="6"
-              fill="#0d0602" stroke="#f59e0b" strokeWidth="1.5" opacity="0.95"/>
-            <rect x={sx2-82} y={sy2+25} width={164} height={26} rx="4"
-              fill="rgba(253,214,42,0.06)"/>
-            {/* Sign text */}
-            <text x={sx2} y={sy2+41}
-              textAnchor="middle"
-              fontFamily="Georgia, 'Times New Roman', serif"
-              fontSize="13" fontWeight="900"
-              fill="#fde68a"
-              letterSpacing="1.5"
-              style={{userSelect:'none'}}>
-              BASIC CHINESE BUN
+            {/* Label */}
+            <text x={cx} y={cy+df+12*s} textAnchor="middle"
+              fontSize={9*s} fontWeight="bold"
+              fill={isActive?'#fde68a':'rgba(253,246,238,0.55)'}
+              style={{userSelect:'none',fontFamily:'monospace,sans-serif'}}>
+              {icon} {label}
             </text>
-            {/* Corner ornaments */}
-            <text x={sx2-76} y={sy2+41} fontSize="9" fill="#f59e0b" opacity="0.7">✦</text>
-            <text x={sx2+70} y={sy2+41} fontSize="9" fill="#f59e0b" opacity="0.7">✦</text>
           </g>
         )
-      })()}
-
-      {/* Room labels under each room */}
-      {ROOM_DEFS.map(room => {
-        const [sx3, sy3] = iso(room.col+1, room.row+1)
-        const isActive = active === room.id
-        return (
-          <text key={room.id}
-            x={sx3} y={sy3+WH+18}
-            textAnchor="middle" fontSize="9.5" fontWeight="bold"
-            fill={isActive ? '#fde68a' : 'rgba(253,246,238,0.38)'}
-            style={{userSelect:'none'}}>
-            {room.label}
-          </text>
-        )
       })}
+
+      {/* ── FRONT CORNER PLANTS ── */}
+      <g>
+        <rect x="14" y="368" width="18" height="28" rx="3" fill="#5c3317"/>
+        <ellipse cx="23" cy="355" rx="22" ry="26" fill="#1a4d1f"/>
+        <ellipse cx="13" cy="344" rx="11" ry="13" fill="#163d1a"/>
+        <ellipse cx="34" cy="347" rx="10" ry="12" fill="#1e5922"/>
+        <ellipse cx="23" cy="336" rx="8" ry="10" fill="#2d7a35"/>
+      </g>
+      <g>
+        <rect x="608" y="368" width="18" height="28" rx="3" fill="#5c3317"/>
+        <ellipse cx="617" cy="355" rx="22" ry="26" fill="#1a4d1f"/>
+        <ellipse cx="607" cy="344" rx="11" ry="13" fill="#1e5922"/>
+        <ellipse cx="628" cy="347" rx="10" ry="12" fill="#163d1a"/>
+        <ellipse cx="617" cy="336" rx="8" ry="10" fill="#2d7a35"/>
+      </g>
+
+      {/* ── WALL CLOCK ── */}
+      <circle cx="320" cy="92" r="10" fill="#1a0c04" stroke="#c97d2a" strokeWidth="1.2"/>
+      <circle cx="320" cy="92" r="8" fill="#0d0602"/>
+      <line x1="320" y1="92" x2="320" y2="86" stroke="#fde68a" strokeWidth="1.2"/>
+      <line x1="320" y1="92" x2="324" y2="94" stroke="#fde68a" strokeWidth="1"/>
     </svg>
   )
 }
 
-function shiftLighten(hex) {
-  const n = parseInt(hex.slice(1), 16)
-  const r = Math.min(255, ((n >> 16) & 0xff) + 55)
-  const g = Math.min(255, ((n >>  8) & 0xff) + 45)
-  const b = Math.min(255, ((n      ) & 0xff) + 40)
-  return `rgb(${r},${g},${b})`
-}
 
 // ─── SLIP CHECKER ───
 function SlipCard({ orders, slipResults, todayCount, limit, onResult, onSaveLimit }) {
