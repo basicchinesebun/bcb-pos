@@ -118,9 +118,9 @@ function Card({ icon, title, accent = '#3d1f0a', status, children }) {
 
 // ─── SLIP CHECKER CARD ───
 function SlipCard({ accent }) {
-  const [loading, setLoading]   = useState(false)
-  const [result,  setResult]    = useState(null)
-  const [error,   setError]     = useState(null)
+  const [loading, setLoading] = useState(false)
+  const [result,  setResult]  = useState(null)
+  const [error,   setError]   = useState(null)
   const inputRef = useRef()
 
   async function handleFile(e) {
@@ -142,8 +142,22 @@ function SlipCard({ accent }) {
     }
   }
 
+  // 3 states: 'ok' | 'suspicious' | 'duplicate'
+  const status = result
+    ? result.duplicate   ? 'duplicate'
+    : result.suspicious  ? 'suspicious'
+    : 'ok'
+    : null
+
+  const statusCfg = {
+    ok:         { bg: '#f0fdf4', border: '#86efac', color: '#16a34a', icon: '✅', label: 'ສລິບປົກກະຕິ' },
+    suspicious: { bg: '#fffbeb', border: '#fcd34d', color: '#d97706', icon: '⚠️', label: 'ໜ້າສົງໄສ' },
+    duplicate:  { bg: '#fef2f2', border: '#fca5a5', color: '#dc2626', icon: '❌', label: 'ສລິບຊ້ຳ!' },
+  }
+  const cfg = status ? statusCfg[status] : null
+
   return (
-    <Card icon="🧾" title="Slip Checker" accent={accent} status={result ? !result.duplicate : undefined}>
+    <Card icon="🧾" title="Slip Checker" accent={accent} status={result ? status === 'ok' : undefined}>
       <div className="flex flex-col gap-3">
         <input ref={inputRef} type="file" accept="image/*" className="hidden" onChange={handleFile} />
         <button
@@ -151,7 +165,7 @@ function SlipCard({ accent }) {
           disabled={loading}
           className="w-full py-3 rounded-xl font-black text-sm transition-all active:scale-95"
           style={{ background: loading ? '#e8d5c0' : '#3d1f0a', color: loading ? '#8a6a55' : '#fdf6ee' }}>
-          {loading ? '🔍 ກຳລັງກວດ...' : '📤 ອັປໂຫລດສລິບ'}
+          {loading ? '🔍 ກຳລັງກວດ...' : '📤 ອັບໂຫຼດສລິບ'}
         </button>
 
         {error && (
@@ -160,32 +174,71 @@ function SlipCard({ accent }) {
           </div>
         )}
 
-        {result && (
-          <div className="px-3 py-3 rounded-xl flex flex-col gap-1.5"
-            style={{ background: result.duplicate ? '#fef2f2' : '#f0fdf4', border: `1px solid ${result.duplicate ? '#fca5a5' : '#86efac'}` }}>
-            <div className="font-black text-sm" style={{ color: result.duplicate ? '#dc2626' : '#16a34a' }}>
-              {result.duplicate ? '❌ ສລິບຊ້ຳ!' : '✅ ສລິບໃໝ່'}
+        {result && cfg && (
+          <div className="px-3 py-3 rounded-xl flex flex-col gap-2"
+            style={{ background: cfg.bg, border: `1.5px solid ${cfg.border}` }}>
+
+            {/* Status header */}
+            <div className="flex items-center justify-between">
+              <div className="font-black text-sm" style={{ color: cfg.color }}>
+                {cfg.icon} {cfg.label}
+              </div>
+              {result.slipInfo?.confidence && (
+                <div className="text-xs font-bold px-2 py-0.5 rounded-full"
+                  style={{
+                    background: result.slipInfo.confidence === 'high'   ? '#dcfce7'
+                              : result.slipInfo.confidence === 'medium' ? '#fef9c3' : '#fee2e2',
+                    color:      result.slipInfo.confidence === 'high'   ? '#15803d'
+                              : result.slipInfo.confidence === 'medium' ? '#a16207' : '#b91c1c',
+                  }}>
+                  {result.slipInfo.confidence === 'high'   ? 'ຄວາມໝັ້ນໃຈ: ສູງ'
+                 : result.slipInfo.confidence === 'medium' ? 'ຄວາມໝັ້ນໃຈ: ກາງ'
+                 :                                           'ຄວາມໝັ້ນໃຈ: ຕ່ຳ'}
+                </div>
+              )}
             </div>
-            {result.slipInfo?.transaction_id && (
-              <div className="text-xs font-bold" style={{ color: '#8a6a55' }}>
-                Ref: {result.slipInfo.transaction_id}
+
+            {/* Suspicious reason box */}
+            {status === 'suspicious' && result.slipInfo?.reason && (
+              <div className="px-2 py-1.5 rounded-lg text-xs font-bold"
+                style={{ background: '#fef3c7', color: '#92400e', border: '1px solid #fcd34d' }}>
+                ⚠ {result.slipInfo.reason}
               </div>
             )}
-            {result.slipInfo?.amount && (
-              <div className="text-xs font-bold" style={{ color: '#3d1f0a' }}>
-                ຈຳນວນ: {fmt(result.slipInfo.amount)} LAK
+
+            {/* Duplicate: when first seen */}
+            {status === 'duplicate' && result.first_seen && (
+              <div className="px-2 py-1.5 rounded-lg text-xs font-bold"
+                style={{ background: '#fee2e2', color: '#991b1b', border: '1px solid #fca5a5' }}>
+                ໃຊ້ແລ້ວເມື່ອ: {new Date(result.first_seen).toLocaleString('lo-LA')}
+                {result.first_sender && ` · ${result.first_sender}`}
               </div>
             )}
-            {result.slipInfo?.sender_name && (
-              <div className="text-xs font-bold" style={{ color: '#3d1f0a' }}>
-                ຜູ້ໂອນ: {result.slipInfo.sender_name}
-              </div>
-            )}
-            {result.duplicate && result.first_seen && (
-              <div className="text-xs font-bold" style={{ color: '#dc2626' }}>
-                ພົບເມື່ອ: {new Date(result.first_seen).toLocaleString('lo-LA')}
-              </div>
-            )}
+
+            {/* Slip details */}
+            <div className="flex flex-col gap-1 pt-1" style={{ borderTop: `1px solid ${cfg.border}` }}>
+              {result.slipInfo?.transaction_id && (
+                <div className="text-xs font-bold" style={{ color: '#8a6a55' }}>
+                  Ref: {result.slipInfo.transaction_id}
+                </div>
+              )}
+              {result.slipInfo?.amount && (
+                <div className="text-xs font-bold" style={{ color: '#3d1f0a' }}>
+                  ຈຳນວນ: {fmt(result.slipInfo.amount)} LAK
+                </div>
+              )}
+              {result.slipInfo?.sender_name && (
+                <div className="text-xs font-bold" style={{ color: '#3d1f0a' }}>
+                  ຜູ້ໂອນ: {result.slipInfo.sender_name}
+                </div>
+              )}
+              {result.slipInfo?.transfer_date && (
+                <div className="text-xs" style={{ color: '#8a6a55' }}>
+                  ວັນທີ: {result.slipInfo.transfer_date}
+                </div>
+              )}
+            </div>
+
             {result.warning && (
               <div className="text-xs" style={{ color: '#f59e0b' }}>⚠ {result.warning}</div>
             )}
@@ -193,7 +246,7 @@ function SlipCard({ accent }) {
         )}
 
         <div className="text-xs font-bold text-center" style={{ color: '#a0522d' }}>
-          AI ອ່ານສລິບ → ກວດຊ້ຳໃນລະບົບ
+          AI ອ່ານ · ກວດຊ້ຳ · ກວດຄວາມໜ້າສົງໄສ
         </div>
       </div>
     </Card>

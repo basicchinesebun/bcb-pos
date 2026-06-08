@@ -23,7 +23,7 @@ export async function POST(req) {
       },
       body: JSON.stringify({
         model: 'claude-haiku-4-5-20251001',
-        max_tokens: 512,
+        max_tokens: 600,
         messages: [{
           role: 'user',
           content: [
@@ -34,8 +34,12 @@ export async function POST(req) {
   "amount": <number>,
   "transfer_date": "<date and time as shown>",
   "sender_name": "<sender name>",
-  "raw_text": "<all visible text>"
+  "raw_text": "<all visible text>",
+  "suspicious": <true if anything looks fake, edited, or inconsistent — else false>,
+  "confidence": "<high|medium|low — confidence in extracted data>",
+  "reason": "<if suspicious=true: one sentence explaining why — else null>"
 }
+Signs of suspicious slips: inconsistent fonts or colors, numbers that look edited, missing bank watermarks/logo, amounts with unusual formatting, date/time inconsistencies, blurry only around key numbers.
 Use null for any field you cannot determine.` },
           ],
         }],
@@ -55,7 +59,7 @@ Use null for any field you cannot determine.` },
     }
 
     if (!slipInfo.transaction_id) {
-      return Response.json({ ok: true, duplicate: false, slipInfo, warning: 'No transaction ID found' })
+      return Response.json({ ok: true, duplicate: false, suspicious: !!slipInfo.suspicious, slipInfo, warning: 'No transaction ID found' })
     }
 
     const supabase = createClient(
@@ -71,11 +75,11 @@ Use null for any field you cannot determine.` },
 
     // Table doesn't exist yet — return AI result with a setup warning
     if (selectErr?.code === '42P01') {
-      return Response.json({ ok: true, duplicate: false, slipInfo, warning: 'slip_records table not created yet — duplicate detection disabled' })
+      return Response.json({ ok: true, duplicate: false, suspicious: !!slipInfo.suspicious, slipInfo, warning: 'slip_records table not created yet — duplicate detection disabled' })
     }
 
     if (existing) {
-      return Response.json({ ok: true, duplicate: true, slipInfo, first_seen: existing.created_at, first_sender: existing.sender_name, first_amount: existing.amount })
+      return Response.json({ ok: true, duplicate: true, suspicious: !!slipInfo.suspicious, slipInfo, first_seen: existing.created_at, first_sender: existing.sender_name, first_amount: existing.amount })
     }
 
     const { error: insertErr } = await supabase.from('slip_records').insert({
@@ -87,10 +91,10 @@ Use null for any field you cannot determine.` },
     })
 
     if (insertErr) {
-      return Response.json({ ok: true, duplicate: false, slipInfo, warning: 'Could not save slip record: ' + insertErr.message })
+      return Response.json({ ok: true, duplicate: false, suspicious: !!slipInfo.suspicious, slipInfo, warning: 'Could not save slip record: ' + insertErr.message })
     }
 
-    return Response.json({ ok: true, duplicate: false, slipInfo })
+    return Response.json({ ok: true, duplicate: false, suspicious: !!slipInfo.suspicious, slipInfo })
   } catch (err) {
     return Response.json({ error: err.message }, { status: 500 })
   }
