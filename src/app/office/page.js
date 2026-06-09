@@ -476,7 +476,8 @@ function SlipCard({ orders, slipResults, todayCount, limit, onResult, onSaveLimi
   const [bigImg,       setBigImg]       = useState(null)
 
   const allResults = { ...slipResults, ...localResults }
-  const slipOrders = (orders || []).filter(o => o.type==='online' && o.slip_url && o.status==='pending' && !o.done && !o.cancelled)
+  const thirtyDaysAgo = new Date(Date.now() - 30*24*60*60*1000).toISOString()
+  const slipOrders = (orders || []).filter(o => o.type==='online' && o.slip_url && o.status==='pending' && !o.done && !o.cancelled && o.created_at >= thirtyDaysAgo)
   const warned = slipOrders.filter(o => { const r=allResults[o.id]; return r&&(r.suspicious||!r.amount_matches||!r.date_is_today) })
 
   async function checkOrder(o) {
