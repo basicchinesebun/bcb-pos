@@ -476,8 +476,9 @@ function SlipCard({ orders, slipResults, todayCount, limit, onResult, onSaveLimi
   const [bigImg,       setBigImg]       = useState(null)
 
   const allResults = { ...slipResults, ...localResults }
-  const thirtyDaysAgo = new Date(Date.now() - 30*24*60*60*1000).toISOString()
-  const slipOrders = (orders || []).filter(o => o.type==='online' && o.slip_url && o.status==='pending' && !o.done && !o.cancelled && o.created_at >= thirtyDaysAgo)
+  const sevenDaysAgo = new Date(Date.now() - 7*24*60*60*1000).toISOString()
+  const slipOrders = (orders || []).filter(o => o.type==='online' && o.slip_url && o.status==='pending' && !o.done && !o.cancelled && o.created_at >= sevenDaysAgo)
+  const oldSlipOrders = (orders || []).filter(o => o.type==='online' && o.slip_url && o.status==='pending' && !o.done && !o.cancelled && o.created_at < sevenDaysAgo)
   const warned = slipOrders.filter(o => { const r=allResults[o.id]; return r&&(r.suspicious||!r.amount_matches||!r.date_is_today) })
 
   async function checkOrder(o) {
@@ -580,6 +581,15 @@ function SlipCard({ orders, slipResults, todayCount, limit, onResult, onSaveLimi
             })}
           </div>
       }
+      {oldSlipOrders.length > 0 && (
+        <button onClick={async () => {
+          if (!window.confirm(`ລ້າງ ${oldSlipOrders.length} Order ເກົ່າ (>7 ວັນ)?`)) return
+          for (const o of oldSlipOrders) await onReject?.(o.id)
+        }} className="w-full py-1.5 rounded-xl text-xs font-bold"
+          style={{background:'rgba(255,255,255,0.06)',color:'rgba(253,246,238,0.35)',border:'1px dashed rgba(255,255,255,0.1)'}}>
+          🗑 ມີ {oldSlipOrders.length} Order ເກົ່າ — ກົດລ້າງ
+        </button>
+      )}
       <button onClick={()=>setShowSettings(v=>!v)} className="text-xs font-bold text-center pt-1" style={{color:'rgba(253,246,238,0.3)'}}>
         ⚙ Limit {showSettings?'▲':'▼'}
       </button>
