@@ -731,7 +731,20 @@ export default function OfficePage() {
     setLastUpdate(new Date()); setLoading(false)
   }, [loadConfig, loadOrders, loadMessages])
 
-  useEffect(() => { refresh(); const t=setInterval(refresh,60000); return ()=>clearInterval(t) }, [refresh])
+  useEffect(() => {
+    refresh()
+    const t = setInterval(refresh, 60000)
+    if (!supabase) return () => clearInterval(t)
+    const ch = supabase.channel('office-live')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, () => {
+        loadOrders()
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'shop_config' }, () => {
+        loadConfig()
+      })
+      .subscribe()
+    return () => { clearInterval(t); supabase.removeChannel(ch) }
+  }, [refresh, loadOrders, loadConfig])
 
   function tryPin(pin) {
     if (!staffPin || pin===staffPin) { setUnlocked(true); setPinError('') }
