@@ -613,13 +613,13 @@ function RoomDetail({ roomId, onClose, data }) {
   if (!room) return null
   const { orders, settings, branches, msgCount, slipResults, slipLimit, slipTodayCount,
     onSlipResult, onSaveLimit, onConfirm, onReject, revenueToday, revenueMonth, doneToday, monthOrders,
-    pendingOnline, walkinToday, preorderToday, lowStockMenus, branch, dayLabel, timeStr } = data
+    pendingOnline, walkinToday, preorderToday, lowStockMenus, branch, simeuangOpen, houayhongOpen, dayLabel, timeStr } = data
 
   const panelContent = () => {
     if (roomId==='walkin') return <>
       <Row label="ວັນທີ" value={`${dayLabel} ${timeStr}`}/>
-      <Row label="ສາຂາສີເມືອງ" value={branch.simeuang?'ເປີດ ✓':'ປິດ'} sub="ຈ·ພ·ສ 15:00–19:30"/>
-      <Row label="ສາຂາຫວຍຫົງ" value={branch.houayhong?'ເປີດ ✓':'ປິດ'} sub="ຄ·ສກ·ອ 15:00–19:30"/>
+      <Row label="ສາຂາສີເມືອງ" value={simeuangOpen?'ເປີດ ✓': branch.simeuang?'ປິດ (ພັກ)':'ປິດ'} sub="ຈ·ພ·ສ 15:00–19:30"/>
+      <Row label="ສາຂາຫວຍຫົງ" value={houayhongOpen?'ເປີດ ✓': branch.houayhong?'ປິດ (ພັກ)':'ປິດ'} sub="ຄ·ສກ·ອ 15:00–19:30"/>
       {branches.map(b => b.phone1 && <Row key={b.id} label={b.name} value={'📞 '+b.phone1}/>)}
     </>
     if (roomId==='pos') return <>
@@ -780,11 +780,15 @@ export default function OfficePage() {
   const LOW = 5
   const lowStockMenus = menus.filter((_,i) => (stockShop[i]||0)<=LOW || (stockOnline[i]||0)<=LOW)
   const branch        = branchStatus()
+  const simeuangOn    = branches.find(b => b.id === 'simeuang')?.visible !== false
+  const houayhongOn   = branches.find(b => b.id === 'houayhong')?.visible !== false
+  const simeuangOpen  = branch.simeuang && simeuangOn
+  const houayhongOpen = branch.houayhong && houayhongOn
 
   const slipOrders = orders.filter(o => o.type==='online' && o.slip_url && !o.done && !o.cancelled)
   const slipWarned = slipOrders.filter(o => { const r=slipResults[o.id]; return r&&(r.suspicious||!r.amount_matches||!r.date_is_today) })
   const roomStatus = {
-    walkin:  branch.anyOpen ? 'ok' : 'idle',
+    walkin:  simeuangOpen || houayhongOpen ? 'ok' : 'idle',
     pos:     todayOrders.length > 0 ? 'ok' : 'idle',
     chatbot: settings.aiOn !== false ? 'ok' : 'warn',
     content: 'idle',
@@ -796,7 +800,7 @@ export default function OfficePage() {
     orders, menus, stockShop, stockOnline, settings, branches, msgCount,
     slipResults, slipLimit, slipTodayCount, revenueToday, revenueMonth,
     doneToday, monthOrders, pendingOnline, walkinToday, preorderToday,
-    lowStockMenus, branch, dayLabel, timeStr,
+    lowStockMenus, branch, simeuangOpen, houayhongOpen, dayLabel, timeStr,
     onSlipResult: (id, result, cnt) => { setSlipResults(p => ({...p,[id]:result})); setSlipTodayCount(cnt) },
     onSaveLimit: async val => {
       setSlipLimit(val)
