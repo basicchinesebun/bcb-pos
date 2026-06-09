@@ -71,12 +71,12 @@ function Row({ label, value, sub, big }) {
 
 // ─── ROOM DEFINITIONS ───
 const ROOM_DEFS = [
-  { id:'walkin',  icon:'🏪', label:'Walk-in', hairC:'#c4b5fd', shirtC:'#7c3aed', monC:'#8b5cf6', skinC:'#f5c8a0' },
-  { id:'pos',     icon:'💻', label:'POS',     hairC:'#93c5fd', shirtC:'#1d4ed8', monC:'#60a5fa', skinC:'#f5c8a0' },
-  { id:'chatbot', icon:'🤖', label:'AI Chat', hairC:'#67e8f9', shirtC:'#0891b2', monC:'#22d3ee', skinC:'#e8b88a' },
-  { id:'content', icon:'📱', label:'Content', hairC:'#f9a8d4', shirtC:'#be185d', monC:'#f472b6', skinC:'#f5c8a0' },
-  { id:'finance', icon:'💰', label:'Finance', hairC:'#86efac', shirtC:'#15803d', monC:'#4ade80', skinC:'#e8b88a' },
-  { id:'slip',    icon:'🧾', label:'Slip',    hairC:'#fdba74', shirtC:'#b45309', monC:'#fbbf24', skinC:'#f5c8a0' },
+  { id:'walkin',  icon:'🏪', label:'Walk-in', hairC:'#c4b5fd', shirtC:'#7c3aed', monC:'#8b5cf6', skinC:'#f5c8a0', rightC:'rgba(124,58,237,0.45)' },
+  { id:'pos',     icon:'💻', label:'POS',     hairC:'#93c5fd', shirtC:'#1d4ed8', monC:'#60a5fa', skinC:'#f5c8a0', rightC:'rgba(29,78,216,0.45)' },
+  { id:'chatbot', icon:'🤖', label:'AI Chat', hairC:'#67e8f9', shirtC:'#0891b2', monC:'#22d3ee', skinC:'#e8b88a', rightC:'rgba(8,145,178,0.45)' },
+  { id:'content', icon:'📱', label:'Content', hairC:'#f9a8d4', shirtC:'#be185d', monC:'#f472b6', skinC:'#f5c8a0', rightC:'rgba(190,24,93,0.45)' },
+  { id:'finance', icon:'💰', label:'Finance', hairC:'#86efac', shirtC:'#15803d', monC:'#4ade80', skinC:'#e8b88a', rightC:'rgba(21,128,61,0.45)' },
+  { id:'slip',    icon:'🧾', label:'Slip',    hairC:'#fdba74', shirtC:'#b45309', monC:'#fbbf24', skinC:'#f5c8a0', rightC:'rgba(180,83,9,0.45)' },
 ]
 
 // desk layout: 3 back (far), 3 front (near)
@@ -466,15 +466,17 @@ function IsoBuilding({ active, onSelect, roomStatus }) {
 
 
 // ─── SLIP CHECKER ───
-function SlipCard({ orders, slipResults, todayCount, limit, onResult, onSaveLimit }) {
+function SlipCard({ orders, slipResults, todayCount, limit, onResult, onSaveLimit, onConfirm, onReject }) {
   const [checking,     setChecking]     = useState({})
+  const [acting,       setActing]       = useState({})
   const [localResults, setLocalResults] = useState({})
   const [limitInput,   setLimitInput]   = useState(String(limit || 100))
   const [showSettings, setShowSettings] = useState(false)
   const [error,        setError]        = useState(null)
+  const [bigImg,       setBigImg]       = useState(null)
 
   const allResults = { ...slipResults, ...localResults }
-  const slipOrders = (orders || []).filter(o => o.type==='online' && o.slip_url && !o.done && !o.cancelled)
+  const slipOrders = (orders || []).filter(o => o.type==='online' && o.slip_url && o.status==='pending' && !o.done && !o.cancelled)
   const warned = slipOrders.filter(o => { const r=allResults[o.id]; return r&&(r.suspicious||!r.amount_matches||!r.date_is_today) })
 
   async function checkOrder(o) {
@@ -493,8 +495,28 @@ function SlipCard({ orders, slipResults, todayCount, limit, onResult, onSaveLimi
 
   async function checkAll() { for(const o of slipOrders) { if(!allResults[o.id]) await checkOrder(o) } }
 
+  async function handleConfirm(o) {
+    if (acting[o.id]) return
+    setActing(p => ({...p,[o.id]:'confirm'}))
+    try { await onConfirm?.(o.id) } finally { setActing(p => ({...p,[o.id]:null})) }
+  }
+  async function handleReject(o) {
+    if (acting[o.id]) return
+    setActing(p => ({...p,[o.id]:'reject'}))
+    try { await onReject?.(o.id) } finally { setActing(p => ({...p,[o.id]:null})) }
+  }
+
   return (
     <div className="flex flex-col gap-2">
+      {/* Slip image lightbox */}
+      {bigImg && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center" style={{background:'rgba(0,0,0,0.92)'}} onClick={()=>setBigImg(null)}>
+          <img src={bigImg} className="rounded-xl object-contain" style={{maxWidth:'90vw',maxHeight:'85vh'}}/>
+          <button className="absolute top-4 right-4 w-9 h-9 rounded-full flex items-center justify-center font-black text-lg"
+            style={{background:'rgba(255,255,255,0.15)',color:'#fff'}}>✕</button>
+        </div>
+      )}
+
       <div className="flex items-center justify-between">
         <div className="text-xs font-bold" style={{color:'rgba(253,246,238,0.5)'}}>
           ວັນນີ້: <span style={{color:'#fde68a'}}>{todayCount}</span>/{limit} ໃບ
@@ -509,30 +531,49 @@ function SlipCard({ orders, slipResults, todayCount, limit, onResult, onSaveLimi
       {error && <div className="px-3 py-2 rounded-xl text-xs font-bold" style={{background:'rgba(127,29,29,0.5)',color:'#fca5a5'}}>❌ {error}</div>}
       {slipOrders.length===0
         ? <div className="text-xs font-bold text-center py-3" style={{color:'rgba(253,246,238,0.3)'}}>ບໍ່ມີ Preorder ລໍຖ້າ</div>
-        : <div className="flex flex-col gap-1.5">
+        : <div className="flex flex-col gap-2">
             {slipOrders.map(o => {
               const r = allResults[o.id]
               const sc = r ? (r.suspicious||!r.amount_matches||!r.date_is_today?'warn':'ok') : null
               const isChecking = checking[o.id]
+              const isActing = acting[o.id]
               const cust = o.customer ? (typeof o.customer==='string' ? (()=>{ try{return JSON.parse(o.customer)}catch{return null} })() : o.customer) : null
               return (
-                <div key={o.id} className="rounded-xl p-2.5 flex items-center gap-2"
+                <div key={o.id} className="rounded-xl p-2.5"
                   style={{background:sc==='warn'?'rgba(127,29,29,0.35)':sc==='ok'?'rgba(20,83,45,0.35)':'rgba(255,255,255,0.05)', border:`1px solid ${sc==='warn'?'#991b1b':sc==='ok'?'#166534':'rgba(255,255,255,0.08)'}`}}>
-                  <a href={o.slip_url} target="_blank" rel="noopener noreferrer">
-                    <img src={o.slip_url} className="w-10 h-10 rounded-lg object-cover flex-shrink-0" alt="slip" style={{border:'1px solid rgba(255,255,255,0.1)'}}/>
-                  </a>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-xs font-black" style={{color:'#fdf6ee'}}>#{String(o.qnum||0).padStart(4,'0')} · {fmt(o.total)} ກີບ</div>
-                    {cust?.name && <div className="text-xs truncate" style={{color:'rgba(253,246,238,0.5)'}}>{cust.name}</div>}
-                    {r && <div className="text-xs font-bold mt-0.5" style={{color:sc==='ok'?'#86efac':'#fca5a5'}}>
-                      {sc==='ok'?'✅ ຜ່ານ':[!r.amount_matches&&`❌ ຈຳນວນ ${fmt(r.amount_found)}`,!r.date_is_today&&'⚠ ວັນທີ',r.suspicious&&'🚨 ສົງໄສ'].filter(Boolean).join(' · ')}
-                    </div>}
+                  <div className="flex items-center gap-2">
+                    {/* Tap image to zoom */}
+                    <button onClick={()=>setBigImg(o.slip_url)} className="flex-shrink-0">
+                      <img src={o.slip_url} className="w-12 h-12 rounded-lg object-cover" alt="slip" style={{border:'1px solid rgba(255,255,255,0.1)'}}/>
+                    </button>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-xs font-black" style={{color:'#fdf6ee'}}>#{String(o.qnum||0).padStart(4,'0')} · {fmt(o.total)} ກີບ</div>
+                      {cust?.name && <div className="text-xs truncate" style={{color:'rgba(253,246,238,0.5)'}}>{cust.name}</div>}
+                      {r && <div className="text-xs font-bold mt-0.5" style={{color:sc==='ok'?'#86efac':'#fca5a5'}}>
+                        {sc==='ok'?'✅ ຜ່ານ':[!r.amount_matches&&`❌ ຈຳນວນ ${fmt(r.amount_found)}`,!r.date_is_today&&'⚠ ວັນທີ',r.suspicious&&'🚨 ສົງໄສ'].filter(Boolean).join(' · ')}
+                      </div>}
+                    </div>
+                    {!r && <button onClick={()=>checkOrder(o)} disabled={isChecking}
+                      className="flex-shrink-0 text-xs font-black px-2.5 py-1.5 rounded-lg"
+                      style={{background:isChecking?'rgba(255,255,255,0.08)':'#d97706',color:'#fff'}}>
+                      {isChecking?'...':'ກວດ'}
+                    </button>}
                   </div>
-                  {!r && <button onClick={()=>checkOrder(o)} disabled={isChecking}
-                    className="flex-shrink-0 text-xs font-black px-2.5 py-1.5 rounded-lg"
-                    style={{background:isChecking?'rgba(255,255,255,0.08)':'#d97706',color:'#fff'}}>
-                    {isChecking?'...':'ກວດ'}
-                  </button>}
+                  {/* Confirm / Reject after verification */}
+                  {r && (
+                    <div className="flex gap-1.5 mt-2">
+                      <button onClick={()=>handleConfirm(o)} disabled={!!isActing}
+                        className="flex-1 py-1.5 rounded-lg text-xs font-black active:scale-95 transition-transform"
+                        style={{background:isActing==='confirm'?'rgba(22,163,74,0.5)':'#16a34a',color:'#fff'}}>
+                        {isActing==='confirm'?'...':'✓ ຢືນຢັນ'}
+                      </button>
+                      <button onClick={()=>handleReject(o)} disabled={!!isActing}
+                        className="flex-1 py-1.5 rounded-lg text-xs font-black active:scale-95 transition-transform"
+                        style={{background:isActing==='reject'?'rgba(220,38,38,0.5)':'#dc2626',color:'#fff'}}>
+                        {isActing==='reject'?'...':'✗ ປະຕິເສດ'}
+                      </button>
+                    </div>
+                  )}
                 </div>
               )
             })}
@@ -560,7 +601,7 @@ function RoomDetail({ roomId, onClose, data }) {
   const room = ROOM_DEFS.find(r => r.id===roomId)
   if (!room) return null
   const { orders, settings, branches, msgCount, slipResults, slipLimit, slipTodayCount,
-    onSlipResult, onSaveLimit, revenueToday, revenueMonth, doneToday, monthOrders,
+    onSlipResult, onSaveLimit, onConfirm, onReject, revenueToday, revenueMonth, doneToday, monthOrders,
     pendingOnline, walkinToday, preorderToday, lowStockMenus, branch, dayLabel, timeStr } = data
 
   const panelContent = () => {
@@ -604,7 +645,7 @@ function RoomDetail({ roomId, onClose, data }) {
       {revenueToday>0&&doneToday.length>0 && <Row label="ສະເລ່ຍ/ໃບ" value={fmtKip(Math.round(revenueToday/doneToday.length))}/>}
       <div className="mt-2 px-2 py-2 rounded-lg text-xs text-center" style={{background:'rgba(22,163,74,0.08)',color:'rgba(134,239,172,0.4)',border:'1px dashed rgba(22,163,74,0.15)'}}>💳 ລາຍຈ່າຍ coming soon</div>
     </>
-    if (roomId==='slip') return <SlipCard orders={orders} slipResults={slipResults} todayCount={slipTodayCount} limit={slipLimit} onResult={onSlipResult} onSaveLimit={onSaveLimit}/>
+    if (roomId==='slip') return <SlipCard orders={orders} slipResults={slipResults} todayCount={slipTodayCount} limit={slipLimit} onResult={onSlipResult} onSaveLimit={onSaveLimit} onConfirm={onConfirm} onReject={onReject}/>
   }
 
   return (
@@ -736,6 +777,14 @@ export default function OfficePage() {
     onSaveLimit: async val => {
       setSlipLimit(val)
       await supabase.from('shop_config').upsert({key:'slip_verify_limit',value:String(val)},{onConflict:'key'})
+    },
+    onConfirm: async (orderId) => {
+      await supabase.from('orders').update({ status:'confirmed' }).eq('id', orderId)
+      setOrders(prev => prev.map(o => o.id===orderId ? {...o, status:'confirmed'} : o))
+    },
+    onReject: async (orderId) => {
+      await supabase.from('orders').update({ status:'rejected', cancelled:true }).eq('id', orderId)
+      setOrders(prev => prev.map(o => o.id===orderId ? {...o, status:'rejected', cancelled:true} : o))
     },
   }
 
