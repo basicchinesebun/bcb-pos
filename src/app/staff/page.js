@@ -80,6 +80,8 @@ export default function StaffPage() {
   const [chatLabels, setChatLabels] = useState({})
   const [labelFilter, setLabelFilter] = useState(null)
   const [payingId, setPayingId] = useState(null)
+  const [deletingMsgId, setDeletingMsgId] = useState(null)
+  const [voiceRecording, setVoiceRecording] = useState(false)
   const [editOrder, setEditOrder] = useState(null)
   const [editItems, setEditItems] = useState({})
   const [editSaving, setEditSaving] = useState(false)
@@ -100,6 +102,8 @@ export default function StaffPage() {
   const activeChatPhoneRef = useRef(null)
   const voicesRef = useRef([])
   const receiptFontRef = useRef(null)
+  const recognitionRef = useRef(null)
+  const longPressTimer = useRef(null)
   const slipVerifyingRef = useRef(new Set())
 
   useEffect(() => {
@@ -194,7 +198,8 @@ export default function StaffPage() {
             setUnreadChat(prev => prev + 1)
           }
         } else if ((msg.sender === 'staff' || msg.sender === 'ai') && currentPhone === msg.phone) {
-          setChatMessages(prev => [...prev, msg])
+          // Don't add if already shown as optimistic (temp id replaced separately)
+          setChatMessages(prev => prev.some(m => m.id === msg.id) ? prev : [...prev, msg])
         }
         setChatConvos(prev => {
           const idx = prev.findIndex(c => c.phone === msg.phone)
@@ -216,6 +221,9 @@ export default function StaffPage() {
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_labels' }, payload => {
         if (payload.new) setChatLabels(prev => ({ ...prev, [payload.new.phone]: payload.new.label }))
+      })
+      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'messages' }, payload => {
+        setChatMessages(prev => prev.filter(m => m.id !== payload.old.id))
       })
       .subscribe()
     return () => supabase.removeChannel(ch)
@@ -454,13 +462,52 @@ export default function StaffPage() {
   async function sendStaffMsg() {
     if (!chatInput.trim() || chatSending || !activeChatPhone || !supabase) return
     const convo = chatConvos.find(c => c.phone === activeChatPhone)
-    setChatSending(true)
-    await supabase.from('messages').insert({
-      phone: activeChatPhone, name: convo?.name || '',
-      sender: 'staff', text: chatInput.trim(),
-    })
+    const text = chatInput.trim()
     setChatInput('')
-    setChatSending(false)
+    // Optimistic: show immediately
+    const tempId = 'tmp-' + Date.now()
+    const optimistic = { id: tempId, phone: activeChatPhone, sender: 'staff', text, created_at: new Date().toISOString(), name: convo?.name || '' }
+    setChatMessages(prev => [...prev, optimistic])
+    const { data } = await supabase.from('messages').insert({
+      phone: activeChatPhone, name: convo?.name || '',
+      sender: 'staff', text,
+    }).select().single()
+    // Replace temp with real (real-time INSERT will also fire but we deduplicate by id)
+    if (data) setChatMessages(prev => prev.map(m => m.id === tempId ? data : m))
+  }
+
+  async function deleteMessage(msgId) {
+    setDeletingMsgId(null)
+    setChatMessages(prev => prev.filter(m => m.id !== msgId))
+    await supabase.from('messages').delete().eq('id', msgId)
+  }
+
+  function startLongPress(msgId) {
+    longPressTimer.current = setTimeout(() => setDeletingMsgId(msgId), 500)
+  }
+  function cancelLongPress() {
+    clearTimeout(longPressTimer.current)
+  }
+
+  function startVoice() {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition
+    if (!SR) { alert('Browser ນີ້ບໍ່ຮອງຮັບ Voice'); return }
+    const recognition = new SR()
+    recognition.lang = 'th-TH'
+    recognition.interimResults = false
+    recognition.onresult = (e) => {
+      const transcript = e.results[0]?.[0]?.transcript || ''
+      if (transcript) setChatInput(prev => (prev + ' ' + transcript).trim())
+    }
+    recognition.onend = () => setVoiceRecording(false)
+    recognition.onerror = () => setVoiceRecording(false)
+    recognitionRef.current = recognition
+    recognition.start()
+    setVoiceRecording(true)
+  }
+  function stopVoice() {
+    recognitionRef.current?.stop()
+    setVoiceRecording(false)
   }
 
   async function loadAll() {
@@ -2574,19 +2621,39 @@ export default function StaffPage() {
                         </div>
                       )}
                       {isAi && <div className="text-[10px] font-black mb-1 px-1 text-right" style={{ color: '#16a34a' }}>🤖 AI</div>}
-                      <div className="px-4 py-2.5 rounded-2xl text-sm font-bold leading-snug"
+                      <div
+                        onTouchStart={() => isStaffSide && startLongPress(msg.id)}
+                        onTouchEnd={cancelLongPress}
+                        onTouchMove={cancelLongPress}
+                        onContextMenu={e => { if(isStaffSide){ e.preventDefault(); setDeletingMsgId(msg.id) } }}
+                        className="px-4 py-2.5 rounded-2xl text-sm font-bold leading-snug select-none"
                         style={{
-                          background: isAi ? '#f0fdf4' : isStaffSide ? 'var(--brown)' : 'white',
+                          background: deletingMsgId === msg.id ? '#fee2e2' : isAi ? '#f0fdf4' : isStaffSide ? 'var(--brown)' : 'white',
                           color: isAi ? '#166534' : isStaffSide ? 'var(--cream)' : 'var(--brown)',
-                          border: isAi ? '1.5px solid #86efac' : msg.sender === 'customer' ? '1.5px solid var(--cream3)' : 'none',
+                          border: isAi ? '1.5px solid #86efac' : deletingMsgId === msg.id ? '1.5px solid #fca5a5' : msg.sender === 'customer' ? '1.5px solid var(--cream3)' : 'none',
                           borderBottomRightRadius: isStaffSide ? 4 : undefined,
                           borderBottomLeftRadius: msg.sender === 'customer' ? 4 : undefined,
+                          opacity: msg.id?.startsWith?.('tmp-') ? 0.6 : 1,
                         }}>
                         {msg.text}
                       </div>
+                      {deletingMsgId === msg.id && (
+                        <div className="flex gap-1 mt-1 justify-end">
+                          <button onClick={() => deleteMessage(msg.id)}
+                            className="px-3 py-1 rounded-lg text-xs font-black"
+                            style={{ background: '#ef4444', color: 'white' }}>
+                            🗑 ລຶບ
+                          </button>
+                          <button onClick={() => setDeletingMsgId(null)}
+                            className="px-3 py-1 rounded-lg text-xs font-black"
+                            style={{ background: 'var(--cream2)', color: 'var(--brown)' }}>
+                            ຍົກເລີກ
+                          </button>
+                        </div>
+                      )}
                       <div className="text-[10px] font-bold mt-1 px-1"
                         style={{ color: 'var(--gray3)', textAlign: isStaffSide ? 'right' : 'left' }}>
-                        {new Date(msg.created_at).toLocaleTimeString('lo-LA', { hour: '2-digit', minute: '2-digit' })}
+                        {msg.id?.startsWith?.('tmp-') ? '⏳' : new Date(msg.created_at).toLocaleTimeString('lo-LA', { hour: '2-digit', minute: '2-digit' })}
                       </div>
                     </div>
                   </div>
@@ -2595,10 +2662,19 @@ export default function StaffPage() {
                 <div ref={chatBottomRef} />
               </div>
               <div className="p-3 flex gap-2 flex-shrink-0 border-t border-[#e8d5c0]" style={{ background: 'white' }}>
+                <button
+                  onTouchStart={e => { e.preventDefault(); startVoice() }}
+                  onTouchEnd={e => { e.preventDefault(); stopVoice() }}
+                  onMouseDown={startVoice} onMouseUp={stopVoice} onMouseLeave={stopVoice}
+                  className="w-10 h-10 rounded-xl flex items-center justify-center text-lg flex-shrink-0 transition-all"
+                  style={{ background: voiceRecording ? '#ef4444' : 'var(--cream2)', color: voiceRecording ? 'white' : 'var(--brown)' }}>
+                  {voiceRecording ? '⏹' : '🎤'}
+                </button>
                 <input value={chatInput} onChange={e => setChatInput(e.target.value)}
                   onKeyDown={e => e.key === 'Enter' && !e.shiftKey && sendStaffMsg()}
-                  placeholder="ຕອບຂໍ້ຄວາມ..." className="input-field flex-1 py-2.5 text-sm" />
-                <button onClick={sendStaffMsg} disabled={chatSending || !chatInput.trim()}
+                  placeholder={voiceRecording ? '🎤 ກຳລັງຟັງ...' : 'ຕອບຂໍ້ຄວາມ...'}
+                  className="input-field flex-1 py-2.5 text-sm" />
+                <button onClick={sendStaffMsg} disabled={!chatInput.trim()}
                   className="px-5 py-2.5 rounded-xl font-black text-sm flex-shrink-0"
                   style={{
                     background: chatInput.trim() ? 'var(--brown)' : 'var(--cream3)',
