@@ -698,11 +698,14 @@ export default function OfficePage() {
   const [slipLimit,      setSlipLimit]      = useState(100)
   const [slipTodayCount, setSlipTodayCount] = useState(0)
 
+  const [prices,         setPrices]         = useState([])
+
   // ─── AI Chat state ───
   const [chatOpen,    setChatOpen]    = useState(false)
   const [chatMsgs,    setChatMsgs]    = useState([])
   const [chatInput,   setChatInput]   = useState('')
   const [chatLoading, setChatLoading] = useState(false)
+  const [lastReceipt, setLastReceipt] = useState(null)
   const chatEndRef = useRef(null)
 
   const loadConfig = useCallback(async () => {
@@ -712,6 +715,7 @@ export default function OfficePage() {
     const cfg = {}
     data.forEach(r => { cfg[r.key] = r.value })
     if (cfg.menus)        setMenus(JSON.parse(cfg.menus))
+    if (cfg.prices)       setPrices(JSON.parse(cfg.prices))
     if (cfg.stock_shop)   setStockShop(JSON.parse(cfg.stock_shop))
     if (cfg.stock_online) setStockOnline(JSON.parse(cfg.stock_online))
     if (cfg.settings)     setSettings(JSON.parse(cfg.settings))
@@ -824,7 +828,33 @@ export default function OfficePage() {
   }
 
   // ─── AI Chat ───
+  function printOfficeReceipt(order) {
+    const items = typeof order.items === 'string' ? JSON.parse(order.items) : order.items || []
+    const html = `<div style="font-family:monospace;width:280px;font-size:12px;padding:8px;">
+      <div style="text-align:center;font-weight:bold;font-size:14px;">BASIC CHINESE BUN</div>
+      <div style="text-align:center;font-size:11px;">----- Walk-in -----</div>
+      <div style="text-align:center;font-weight:bold;font-size:18px;">#${String(order.qnum||0).padStart(4,'0')}</div>
+      <hr style="border:1px dashed #000;margin:4px 0"/>
+      ${items.map(it=>`<div style="display:flex;justify-content:space-between;"><span>${it.name} ×${it.qty}</span><span>${(it.sub||0).toLocaleString()}</span></div>`).join('')}
+      <hr style="border:1px dashed #000;margin:4px 0"/>
+      <div style="display:flex;justify-content:space-between;font-weight:bold;"><span>ລວມ</span><span>${(order.total||0).toLocaleString()} ກີບ</span></div>
+      ${order.payment_method ? `<div style="text-align:center;font-size:11px;margin-top:4px;">${order.payment_method==='cash'?'💵 ເງິນສົດ':'📱 ໂອນ'}</div>` : ''}
+      <div style="text-align:center;font-size:10px;margin-top:8px;">ຂອບໃຈທີ່ໃຊ້ບໍລິການ</div>
+    </div>`
+    const div = document.createElement('div')
+    div.id = 'office-receipt-print'
+    div.innerHTML = html
+    div.style.display = 'none'
+    document.body.appendChild(div)
+    const style = document.createElement('style')
+    style.innerHTML = '@media print{body>*{display:none!important}#office-receipt-print{display:block!important}}'
+    document.head.appendChild(style)
+    window.onafterprint = () => { div.remove(); style.remove() }
+    window.print()
+  }
+
   async function executeActions(actions) {
+    let newReceipt = null
     for (const action of (actions || [])) {
       if (action.type === 'confirm_order' && action.orderId) {
         await supabase.from('orders').update({ status:'confirmed' }).eq('id', action.orderId)
@@ -844,11 +874,39 @@ export default function OfficePage() {
         setSettings(ns)
         await supabase.from('shop_config').upsert({key:'settings',value:JSON.stringify(ns)},{onConflict:'key'})
       }
+      if (action.type === 'create_walkin_order' && action.items?.length) {
+        // Get next queue number
+        const { data: qd } = await supabase.from('shop_config').select('value').eq('key','next_queue_walkin').single()
+        const qnum = qd ? (parseInt(qd.value)||0)+1 : 1
+        await supabase.from('shop_config').upsert({key:'next_queue_walkin',value:String(qnum)},{onConflict:'key'})
+        const newOrder = {
+          qnum, type:'walkin', status:'confirmed', done:false, cancelled:false,
+          items: JSON.stringify(action.items), total: action.total || 0,
+          ...(action.customerName ? { customer: JSON.stringify({name:action.customerName}) } : {}),
+          ...(action.paymentMethod ? { payment_method: action.paymentMethod } : {}),
+        }
+        const { data: inserted } = await supabase.from('orders').insert(newOrder).select().single()
+        if (inserted) {
+          setOrders(prev => [inserted, ...prev])
+          newReceipt = {...inserted, items: action.items}
+        }
+        // Update stock
+        const newStock = [...stockShop]
+        action.items.forEach(it => { if(it.menuIdx>=0) newStock[it.menuIdx] = Math.max(0,(newStock[it.menuIdx]||0)-it.qty) })
+        setStockShop(newStock)
+        await supabase.from('shop_config').upsert({key:'stock_shop',value:JSON.stringify(newStock)},{onConflict:'key'})
+      }
+      if (action.type === 'update_order_items' && action.orderId && action.items) {
+        await supabase.from('orders').update({ items:JSON.stringify(action.items), total:action.total||0 }).eq('id', action.orderId)
+        setOrders(prev => prev.map(o => o.id===action.orderId ? {...o, items:JSON.stringify(action.items), total:action.total||0} : o))
+      }
     }
+    if (newReceipt) setLastReceipt(newReceipt)
   }
 
   async function sendChat(text) {
     if (!text.trim() || chatLoading) return
+    setLastReceipt(null)
     const userMsg = { role:'user', content: text.trim() }
     const newMsgs = [...chatMsgs, userMsg]
     setChatMsgs(newMsgs)
@@ -862,7 +920,7 @@ export default function OfficePage() {
           messages: newMsgs.map(m => ({role:m.role, content:m.content})),
           context: {
             orders: orders.slice(0,30),
-            settings, branches,
+            settings, branches, menus, prices, stockShop,
             stats: {
               todayCount: todayOrders.length, doneCount: doneToday.length,
               pendingCount: pendingOnline.length, pendingOnline: pendingOnline.length,
@@ -977,6 +1035,18 @@ export default function OfficePage() {
                 </div>
               </div>
             ))}
+            {lastReceipt && (
+              <div className="flex justify-start">
+                <div className="px-3 py-2 rounded-2xl text-xs" style={{background:'rgba(22,163,74,0.15)',border:'1px solid rgba(22,163,74,0.3)',color:'#86efac'}}>
+                  <div className="font-black mb-1">✅ ຄິວ #{String(lastReceipt.qnum||0).padStart(4,'0')} ສ້າງແລ້ວ</div>
+                  <button onClick={()=>printOfficeReceipt(lastReceipt)}
+                    className="px-3 py-1 rounded-lg text-xs font-black"
+                    style={{background:'#16a34a',color:'#fff'}}>
+                    🖨 ພິມໃບເສດ
+                  </button>
+                </div>
+              </div>
+            )}
             {chatLoading && (
               <div className="flex justify-start">
                 <div className="px-4 py-2 rounded-2xl text-xs" style={{background:'rgba(255,255,255,0.07)',color:'rgba(253,246,238,0.5)',border:'1px solid rgba(255,255,255,0.08)'}}>
