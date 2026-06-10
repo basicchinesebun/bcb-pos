@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { supabase } from '../../lib/supabase'
 
 // ─── helpers ───
@@ -698,6 +698,13 @@ export default function OfficePage() {
   const [slipLimit,      setSlipLimit]      = useState(100)
   const [slipTodayCount, setSlipTodayCount] = useState(0)
 
+  // ─── AI Chat state ───
+  const [chatOpen,    setChatOpen]    = useState(false)
+  const [chatMsgs,    setChatMsgs]    = useState([])
+  const [chatInput,   setChatInput]   = useState('')
+  const [chatLoading, setChatLoading] = useState(false)
+  const chatEndRef = useRef(null)
+
   const loadConfig = useCallback(async () => {
     if (!supabase) return
     const { data } = await supabase.from('shop_config').select('*')
@@ -816,6 +823,65 @@ export default function OfficePage() {
     },
   }
 
+  // ─── AI Chat ───
+  async function executeActions(actions) {
+    for (const action of (actions || [])) {
+      if (action.type === 'confirm_order' && action.orderId) {
+        await supabase.from('orders').update({ status:'confirmed' }).eq('id', action.orderId)
+        setOrders(prev => prev.map(o => o.id===action.orderId ? {...o, status:'confirmed'} : o))
+      }
+      if (action.type === 'reject_order' && action.orderId) {
+        await supabase.from('orders').update({ status:'rejected', cancelled:true }).eq('id', action.orderId)
+        setOrders(prev => prev.map(o => o.id===action.orderId ? {...o, status:'rejected', cancelled:true} : o))
+      }
+      if (action.type === 'toggle_branch' && action.id) {
+        const nb = branches.map(b => b.id===action.id ? {...b, visible:action.visible} : b)
+        setBranches(nb)
+        await supabase.from('shop_config').upsert({key:'branches',value:JSON.stringify(nb)},{onConflict:'key'})
+      }
+      if (action.type === 'toggle_setting' && action.key) {
+        const ns = {...settings, [action.key]: action.value}
+        setSettings(ns)
+        await supabase.from('shop_config').upsert({key:'settings',value:JSON.stringify(ns)},{onConflict:'key'})
+      }
+    }
+  }
+
+  async function sendChat(text) {
+    if (!text.trim() || chatLoading) return
+    const userMsg = { role:'user', content: text.trim() }
+    const newMsgs = [...chatMsgs, userMsg]
+    setChatMsgs(newMsgs)
+    setChatInput('')
+    setChatLoading(true)
+    setTimeout(() => chatEndRef.current?.scrollIntoView({behavior:'smooth'}), 50)
+    try {
+      const res = await fetch('/api/office-chat', {
+        method:'POST', headers:{'content-type':'application/json'},
+        body: JSON.stringify({
+          messages: newMsgs.map(m => ({role:m.role, content:m.content})),
+          context: {
+            orders: orders.slice(0,30),
+            settings, branches,
+            stats: {
+              todayCount: todayOrders.length, doneCount: doneToday.length,
+              pendingCount: pendingOnline.length, pendingOnline: pendingOnline.length,
+              revenueToday, revenueMonth
+            }
+          }
+        })
+      })
+      const data = await res.json()
+      await executeActions(data.actions)
+      setChatMsgs(prev => [...prev, { role:'assistant', content: data.reply }])
+    } catch(err) {
+      setChatMsgs(prev => [...prev, { role:'assistant', content: '❌ ' + err.message }])
+    } finally {
+      setChatLoading(false)
+      setTimeout(() => chatEndRef.current?.scrollIntoView({behavior:'smooth'}), 50)
+    }
+  }
+
   return (
     <div className="min-h-dvh" style={{background:'#050201'}}>
       {/* Header */}
@@ -830,6 +896,11 @@ export default function OfficePage() {
             className="px-3 py-1.5 rounded-lg text-xs font-black transition-all active:scale-95"
             style={{background:'rgba(201,125,42,0.15)',color:'#fde68a',border:'1px solid rgba(201,125,42,0.2)'}}>
             {loading ? '...' : '↺'}
+          </button>
+          <button onClick={()=>setChatOpen(v=>!v)}
+            className="px-3 py-1.5 rounded-lg text-xs font-black transition-all active:scale-95"
+            style={{background:chatOpen?'rgba(201,125,42,0.3)':'rgba(201,125,42,0.1)',color:'#fde68a',border:'1px solid rgba(201,125,42,0.25)'}}>
+            🤖
           </button>
           <button onClick={()=>setUnlocked(false)}
             className="px-3 py-1.5 rounded-lg text-xs font-black"
@@ -865,6 +936,77 @@ export default function OfficePage() {
       {/* Detail panel */}
       {activeRoom && (
         <RoomDetail roomId={activeRoom} onClose={()=>setActiveRoom(null)} data={detailData}/>
+      )}
+
+      {/* ── AI SECRETARY CHAT ── */}
+      {chatOpen && (
+        <div className="mx-3 mb-3 rounded-2xl overflow-hidden flex flex-col"
+          style={{background:'linear-gradient(145deg,#0e0601,#060100)',border:'1.5px solid rgba(201,125,42,0.3)',maxHeight:'65vh'}}>
+          {/* Chat header */}
+          <div className="flex items-center justify-between px-4 py-3"
+            style={{borderBottom:'1px solid rgba(201,125,42,0.15)',background:'rgba(201,125,42,0.06)'}}>
+            <div className="flex items-center gap-2">
+              <span className="text-lg">🤖</span>
+              <div>
+                <div className="text-xs font-black" style={{color:'#fde68a'}}>BCB AI Secretary</div>
+                <div className="text-xs" style={{color:'rgba(253,246,238,0.35)'}}>ສັ່ງງານ · ດູຂໍ້ມູນ · ຕັ້ງຄ່າ</div>
+              </div>
+            </div>
+            <button onClick={()=>setChatMsgs([])} className="text-xs px-2 py-1 rounded-lg"
+              style={{color:'rgba(253,246,238,0.3)',background:'rgba(255,255,255,0.05)'}}>ລ້າງ</button>
+          </div>
+          {/* Messages */}
+          <div className="flex-1 overflow-y-auto px-3 py-3 flex flex-col gap-2" style={{minHeight:'120px'}}>
+            {chatMsgs.length === 0 && (
+              <div className="text-center py-4">
+                <div className="text-2xl mb-2">🤖</div>
+                <div className="text-xs font-bold" style={{color:'rgba(253,246,238,0.4)'}}>ສະບາຍດີ! ຂ້ອຍຊ່ວຍຫຍັງໄດ້?</div>
+                <div className="text-xs mt-2" style={{color:'rgba(253,246,238,0.25)'}}>ລອງ: "ຍືນຢັນ order #0329" · "ວັນນີ້ຍອດຂາຍເທົ່າໃດ" · "ປິດສາຂາຫວ່ຍຫົງ"</div>
+              </div>
+            )}
+            {chatMsgs.map((m, i) => (
+              <div key={i} className={`flex ${m.role==='user'?'justify-end':'justify-start'}`}>
+                <div className="max-w-[85%] px-3 py-2 rounded-2xl text-xs leading-relaxed"
+                  style={{
+                    background: m.role==='user' ? 'rgba(201,125,42,0.25)' : 'rgba(255,255,255,0.07)',
+                    color: '#fdf6ee',
+                    borderRadius: m.role==='user' ? '18px 18px 4px 18px' : '18px 18px 18px 4px',
+                    border: m.role==='user' ? '1px solid rgba(201,125,42,0.3)' : '1px solid rgba(255,255,255,0.08)',
+                  }}>
+                  {m.content}
+                </div>
+              </div>
+            ))}
+            {chatLoading && (
+              <div className="flex justify-start">
+                <div className="px-4 py-2 rounded-2xl text-xs" style={{background:'rgba(255,255,255,0.07)',color:'rgba(253,246,238,0.5)',border:'1px solid rgba(255,255,255,0.08)'}}>
+                  <span className="inline-flex gap-1">
+                    {[0,1,2].map(i=>(
+                      <span key={i} className="w-1.5 h-1.5 rounded-full inline-block" style={{background:'#fde68a',animation:`pulse 1.2s ${i*0.3}s ease-in-out infinite`}}/>
+                    ))}
+                  </span>
+                </div>
+              </div>
+            )}
+            <div ref={chatEndRef}/>
+          </div>
+          {/* Input */}
+          <div className="flex gap-2 px-3 py-2.5" style={{borderTop:'1px solid rgba(255,255,255,0.07)'}}>
+            <input
+              value={chatInput} onChange={e=>setChatInput(e.target.value)}
+              onKeyDown={e=>{ if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendChat(chatInput)} }}
+              placeholder="ສັ່ງງານ... (eg. ຍືນຢັນ order #0329)"
+              className="flex-1 px-3 py-2 rounded-xl text-xs outline-none"
+              style={{background:'rgba(255,255,255,0.06)',border:'1px solid rgba(255,255,255,0.1)',color:'#fdf6ee'}}
+              disabled={chatLoading}
+            />
+            <button onClick={()=>sendChat(chatInput)} disabled={chatLoading||!chatInput.trim()}
+              className="px-3 py-2 rounded-xl text-xs font-black transition-all active:scale-95"
+              style={{background:chatInput.trim()&&!chatLoading?'#c97d2a':'rgba(255,255,255,0.06)',color:'#fdf6ee'}}>
+              ➤
+            </button>
+          </div>
+        </div>
       )}
 
       {/* Footer */}
