@@ -45,6 +45,8 @@ export default function StaffPage() {
   const [qrImage, setQrImage] = useState(null)
   const [qrPreview, setQrPreview] = useState(null)
   const [logoPreview, setLogoPreview] = useState(null)
+  const [noticeImage, setNoticeImage] = useState('')
+  const [noticePreview, setNoticePreview] = useState(null)
   const [shopInfo, setShopInfo] = useState({ name: 'Basic Chinese Bun', address: '', phone: '', footer: 'ຂອບໃຈທີ່ໃຊ້ບໍລິການ', logo: '', printerWidth: 384 })
   const [receiptDraft, setReceiptDraft] = useState({ name: 'Basic Chinese Bun', address: '', phone: '', footer: 'ຂອບໃຈທີ່ໃຊ້ບໍລິການ', logo: '', printerWidth: 384 })
   const [receiptPreviewUrl, setReceiptPreviewUrl] = useState('')
@@ -578,6 +580,7 @@ export default function StaffPage() {
     setTimeout(() => checkLowStock(loadedStockShop), 500)
     if (cfg.menu_images) setImages(JSON.parse(cfg.menu_images))
     if (cfg.qr_image) setQrImage(cfg.qr_image)
+    if (cfg.notice_image) setNoticeImage(cfg.notice_image)
     if (cfg.shop_info) {
       const info = JSON.parse(cfg.shop_info)
       setShopInfo(prev => ({ ...prev, ...info }))
@@ -943,6 +946,23 @@ export default function StaffPage() {
     setLogoPreview(null)
     await saveConfig('shop_info', newInfo)
     showToast('ອັບໂຫລດໂລໂກ້ ✅', 'green')
+  }
+
+  async function uploadNotice(e) {
+    const file = e.target.files[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = ev => setNoticePreview(ev.target.result)
+    reader.readAsDataURL(file)
+    const contentType = file.type || 'image/jpeg'
+    const ext = file.name.split('.').pop() || 'jpg'
+    const { error } = await supabase.storage.from('bcb - upload').upload(`shop/notice.${ext}`, file, { upsert: true, contentType })
+    if (error) { showToast('❌ ' + (error.message || 'ອັບໂຫລດຜິດ'), 'red'); setNoticePreview(null); return }
+    const { data } = supabase.storage.from('bcb - upload').getPublicUrl(`shop/notice.${ext}`)
+    const url = data.publicUrl + '?t=' + Date.now()
+    setNoticeImage(url); setNoticePreview(null)
+    await saveConfig('notice_image', url)
+    showToast('ອັບໂຫລດ Notice ✅', 'green')
   }
 
   async function removeLogo() {
@@ -1914,6 +1934,25 @@ export default function StaffPage() {
                           <input type="file" accept="image/*" className="hidden" onChange={uploadLogo} />
                         </label>
                         {receiptDraft.logo && <button onClick={removeLogo} className="text-xs text-red-500 font-black text-center">✕ ລຶບໂລໂກ້</button>}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Notice Image */}
+                  <div>
+                    <div className="text-xs font-black uppercase tracking-widest mb-2" style={{ color: 'var(--brown2)' }}>ຮູບແຈ້ງການ (Preorder Notice)</div>
+                    <div className="flex gap-3 items-center">
+                      <div className={`w-20 h-20 rounded-2xl border-2 overflow-hidden flex items-center justify-center flex-shrink-0 relative ${noticePreview || noticeImage ? 'border-[#a0522d]' : 'border-dashed border-[#e8d5c0]'}`} style={{ background: 'var(--cream)' }}>
+                        {noticePreview
+                          ? <><img src={noticePreview} className="w-full h-full object-cover" alt="preview" /><span className="absolute inset-0 flex items-center justify-center text-xs font-black text-white bg-black/40">...</span></>
+                          : noticeImage ? <img src={noticeImage} className="w-full h-full object-cover" alt="notice" /> : <span className="text-3xl">📢</span>}
+                      </div>
+                      <div className="flex flex-col gap-2">
+                        <label className="px-3 py-2 rounded-xl border-2 border-[#3d1f0a] text-xs font-black cursor-pointer text-center" style={{ color: 'var(--brown)', background: 'var(--warm-white)' }}>
+                          📤 ອັບໂຫລດຮູບ
+                          <input type="file" accept="image/*" className="hidden" onChange={uploadNotice} />
+                        </label>
+                        {noticeImage && <button onClick={async () => { setNoticeImage(''); await saveConfig('notice_image', '') }} className="text-xs text-red-500 font-black text-center">✕ ລຶບຮູບ</button>}
                       </div>
                     </div>
                   </div>

@@ -45,6 +45,7 @@ export default function PreOrderPage() {
   const [history, setHistory] = useState([])
   const [submitting, setSubmitting] = useState(false)
   const [showNotice, setShowNotice] = useState(false)
+  const [noticeImage, setNoticeImage] = useState('')
   const [isOnline, setIsOnline] = useState(true)
   const [shopInfo, setShopInfo] = useState({ name: 'Basic Chinese Bun' })
   const [branches, setBranches] = useState([])
@@ -150,6 +151,7 @@ export default function PreOrderPage() {
     setImages(cfg.menu_images ? JSON.parse(cfg.menu_images) : {})
     setQrImage(cfg.qr_image || null)
     setShopInfo(cfg.shop_info ? JSON.parse(cfg.shop_info) : { name: 'Basic Chinese Bun' })
+    if (cfg.notice_image) setNoticeImage(cfg.notice_image)
     if (cfg.branches) setBranches(JSON.parse(cfg.branches))
     if (cfg.settings) {
       const s = JSON.parse(cfg.settings)
@@ -371,44 +373,25 @@ export default function PreOrderPage() {
     >
       {/* ── Notice Modal ── */}
       {showNotice && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center p-0"
-          style={{background:'rgba(0,0,0,0.55)'}}>
-          <div className="w-full max-w-lg rounded-t-3xl overflow-hidden flex flex-col"
-            style={{background:'#fdf3e3',maxHeight:'90dvh'}}>
-            {/* header */}
-            <div className="relative px-6 pt-6 pb-3 text-center flex-shrink-0"
-              style={{borderBottom:'1px solid rgba(139,90,43,0.15)'}}>
-              <button onClick={()=>{ setShowNotice(false); setStep(1) }}
-                className="absolute top-3 right-4 w-8 h-8 rounded-full flex items-center justify-center text-base font-black transition-all active:scale-90"
-                style={{background:'rgba(139,90,43,0.12)',color:'#7c4a1e'}}>✕</button>
-              <div className="text-2xl mb-1">📢</div>
-              <div className="font-black text-xl" style={{color:'#5c3317'}}>
-                ແຈ້ງເຖິງລູກຄ້າ
-              </div>
-            </div>
-            {/* content */}
-            <div className="overflow-y-auto px-6 py-4 flex flex-col gap-4 flex-1">
-              {[
-                {icon:'📦', text:'ສຳລັບລູກຄ້າທີ່ສັ່ງສິນຄ້າຜ່ານ website ຂອງຮ້ານ ທາງຮ້ານສາມາດຝາກເກັບສິນຄ້າໄວ້ໃຫ້ໄດ້ສູງສຸດ 3 ວັນ ນັບຈາກວັນສັ່ງຊື້.'},
-                {icon:'🈲', text:'ເນື່ອງຈາກຊາລາເປົ້າ ແລະ ຂົນໂທຍ ເປັນສິນຄ້າຊາວທາງທີ່ມີອາຍຸການເກັບຮັກສາຈຳກັດ.'},
-                {icon:'⚠️', text:'ຫາກເກີນ 3 ວັນ ແລະ ບໍ່ມີການຕິດຕໍ່ ຫຼື ມາຮັບສິນຄ້າ, ທາງຮ້ານຂໍສະຫງວນສິດໃນການນຳສິນຄ້າອອກຈາກຝາກເກັບ ແລະ ຈະບໍ່ສາມາດຮັບຜິດຊອບຕໍ່ຄຸນນະພາບ ຫຼື ມູນຄ່າຂອງສິນຄ້າໄດ້.'},
-              ].map(({icon,text},i)=>(
-                <div key={i} className="flex gap-3 items-start">
-                  <span className="text-xl flex-shrink-0 mt-0.5">{icon}</span>
-                  <p className="text-sm leading-relaxed font-medium" style={{color:'#4a2a0e'}}>{text}</p>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{background:'rgba(0,0,0,0.65)'}}
+          onClick={()=>{ setShowNotice(false); setStep(1) }}>
+          <div className="relative w-full max-w-sm"
+            onClick={e=>e.stopPropagation()}>
+            {/* X button */}
+            <button
+              onClick={()=>{ setShowNotice(false); setStep(1) }}
+              className="absolute -top-3 -right-3 z-10 w-9 h-9 rounded-full flex items-center justify-center text-base font-black shadow-lg transition-all active:scale-90"
+              style={{background:'#3d1f0a',color:'#fdf6ee'}}>✕</button>
+            {/* Image */}
+            {noticeImage
+              ? <img src={noticeImage} alt="ແຈ້ງການ" className="w-full rounded-2xl shadow-2xl" style={{display:'block'}} />
+              : <div className="rounded-2xl p-8 text-center" style={{background:'#fdf3e3'}}>
+                  <div className="text-4xl mb-3">📢</div>
+                  <div className="font-black text-lg mb-2" style={{color:'#5c3317'}}>ແຈ້ງເຖິງລູກຄ້າ</div>
+                  <p className="text-sm" style={{color:'#7c4a1e'}}>ທາງຮ້ານສາມາດຝາກເກັບສິນຄ້າໄວ້ໃຫ້ໄດ້ສູງສຸດ 3 ວັນ ນັບຈາກວັນສັ່ງຊື້</p>
                 </div>
-              ))}
-              <p className="text-center text-sm font-black pt-1" style={{color:'#7c4a1e'}}>
-                ຂອບໃຈທີ່ເຂົ້າໃຈ ແລະ ໃຫ້ຄວາມຮ່ວມມື 🙏
-              </p>
-            </div>
-            {/* footer buttons */}
-            <div className="px-5 py-4 flex-shrink-0" style={{borderTop:'1px solid rgba(139,90,43,0.12)'}}>
-              <button onClick={()=>{ setShowNotice(false); setStep(1) }}
-                className="btn-primary w-full py-3.5 text-base font-black">
-                ຮັບຊາບແລ້ວ · ຕໍ່ໄປ →
-              </button>
-            </div>
+            }
           </div>
         </div>
       )}
