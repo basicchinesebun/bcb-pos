@@ -374,15 +374,14 @@ export default function PreOrderPage() {
           style={{background:'rgba(0,0,0,0.55)'}}>
           <div className="w-full max-w-lg rounded-t-3xl overflow-hidden flex flex-col"
             style={{background:'#fdf3e3',maxHeight:'90dvh'}}>
-            {/* decorative corners + header */}
+            {/* header */}
             <div className="relative px-6 pt-6 pb-3 text-center flex-shrink-0"
               style={{borderBottom:'1px solid rgba(139,90,43,0.15)'}}>
-              {/* corner ornaments */}
-              {[['top-3 left-3','╔'],['top-3 right-3','╗']].map(([pos,ch])=>(
-                <span key={pos} className={`absolute ${pos} text-xs font-black`} style={{color:'rgba(139,90,43,0.3)',fontSize:'18px',lineHeight:1}}>{ch}</span>
-              ))}
+              <button onClick={()=>{ setShowNotice(false); setStep(1) }}
+                className="absolute top-3 right-4 w-8 h-8 rounded-full flex items-center justify-center text-base font-black transition-all active:scale-90"
+                style={{background:'rgba(139,90,43,0.12)',color:'#7c4a1e'}}>✕</button>
               <div className="text-2xl mb-1">📢</div>
-              <div className="font-black text-xl" style={{color:'#5c3317',fontFamily:'var(--font-lao, sans-serif)'}}>
+              <div className="font-black text-xl" style={{color:'#5c3317'}}>
                 ແຈ້ງເຖິງລູກຄ້າ
               </div>
             </div>
