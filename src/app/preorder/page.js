@@ -44,6 +44,7 @@ export default function PreOrderPage() {
   const [histPhone, setHistPhone] = useState('')
   const [history, setHistory] = useState([])
   const [submitting, setSubmitting] = useState(false)
+  const [showNotice, setShowNotice] = useState(false)
   const [isOnline, setIsOnline] = useState(true)
   const [shopInfo, setShopInfo] = useState({ name: 'Basic Chinese Bun' })
   const [branches, setBranches] = useState([])
@@ -367,6 +368,50 @@ export default function PreOrderPage() {
       className={`flex flex-col${step !== 4 ? ' overflow-hidden h-dvh' : ' min-h-dvh'}`}
       style={{ background: 'var(--cream)' }}
     >
+      {/* ── Notice Modal ── */}
+      {showNotice && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center p-0"
+          style={{background:'rgba(0,0,0,0.55)'}}>
+          <div className="w-full max-w-lg rounded-t-3xl overflow-hidden flex flex-col"
+            style={{background:'#fdf3e3',maxHeight:'90dvh'}}>
+            {/* decorative corners + header */}
+            <div className="relative px-6 pt-6 pb-3 text-center flex-shrink-0"
+              style={{borderBottom:'1px solid rgba(139,90,43,0.15)'}}>
+              {/* corner ornaments */}
+              {[['top-3 left-3','╔'],['top-3 right-3','╗']].map(([pos,ch])=>(
+                <span key={pos} className={`absolute ${pos} text-xs font-black`} style={{color:'rgba(139,90,43,0.3)',fontSize:'18px',lineHeight:1}}>{ch}</span>
+              ))}
+              <div className="text-2xl mb-1">📢</div>
+              <div className="font-black text-xl" style={{color:'#5c3317',fontFamily:'var(--font-lao, sans-serif)'}}>
+                ແຈ້ງເຖິງລູກຄ້າ
+              </div>
+            </div>
+            {/* content */}
+            <div className="overflow-y-auto px-6 py-4 flex flex-col gap-4 flex-1">
+              {[
+                {icon:'📦', text:'ສຳລັບລູກຄ້າທີ່ສັ່ງສິນຄ້າຜ່ານ website ຂອງຮ້ານ ທາງຮ້ານສາມາດຝາກເກັບສິນຄ້າໄວ້ໃຫ້ໄດ້ສູງສຸດ 3 ວັນ ນັບຈາກວັນສັ່ງຊື້.'},
+                {icon:'🈲', text:'ເນື່ອງຈາກຊາລາເປົ້າ ແລະ ຂົນໂທຍ ເປັນສິນຄ້າຊາວທາງທີ່ມີອາຍຸການເກັບຮັກສາຈຳກັດ.'},
+                {icon:'⚠️', text:'ຫາກເກີນ 3 ວັນ ແລະ ບໍ່ມີການຕິດຕໍ່ ຫຼື ມາຮັບສິນຄ້າ, ທາງຮ້ານຂໍສະຫງວນສິດໃນການນຳສິນຄ້າອອກຈາກຝາກເກັບ ແລະ ຈະບໍ່ສາມາດຮັບຜິດຊອບຕໍ່ຄຸນນະພາບ ຫຼື ມູນຄ່າຂອງສິນຄ້າໄດ້.'},
+              ].map(({icon,text},i)=>(
+                <div key={i} className="flex gap-3 items-start">
+                  <span className="text-xl flex-shrink-0 mt-0.5">{icon}</span>
+                  <p className="text-sm leading-relaxed font-medium" style={{color:'#4a2a0e'}}>{text}</p>
+                </div>
+              ))}
+              <p className="text-center text-sm font-black pt-1" style={{color:'#7c4a1e'}}>
+                ຂອບໃຈທີ່ເຂົ້າໃຈ ແລະ ໃຫ້ຄວາມຮ່ວມມື 🙏
+              </p>
+            </div>
+            {/* footer buttons */}
+            <div className="px-5 py-4 flex-shrink-0" style={{borderTop:'1px solid rgba(139,90,43,0.12)'}}>
+              <button onClick={()=>{ setShowNotice(false); setStep(1) }}
+                className="btn-primary w-full py-3.5 text-base font-black">
+                ຮັບຊາບແລ້ວ · ຕໍ່ໄປ →
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {!isOnline && (
         <div className="bg-red-700 text-white text-center py-2 text-sm font-black">
           ⚠ ບໍ່ມີອິນເຕີເນັດ
@@ -463,7 +508,7 @@ export default function PreOrderPage() {
               if (!form.name.trim()) { alert('ກະລຸນາໃສ່ຊື່'); return }
               if (form.phone.length < 10 || !form.phone.startsWith('20')) { alert('ເບີໂທຕ້ອງຄົບ 10 ຕົວເລກ ແລະ ເລີ່ມດ້ວຍ 20'); return }
               try { localStorage.setItem('bcb-customer', JSON.stringify({ name: form.name, phone: form.phone })) } catch (_) {}
-              setStep(1)
+              setShowNotice(true)
             }}>ຕໍ່ໄປ →</button>
           </div>
         </>
