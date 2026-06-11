@@ -941,8 +941,7 @@ export default function OfficePage() {
   }
 
   return (
-    <div style={{background:'#050201'}} className="min-h-dvh">
-    <div className="max-w-[430px] mx-auto min-h-dvh" style={{background:'#050201'}}>
+    <div className="min-h-dvh" style={{background:'#050201'}}>
       {/* Header */}
       <div className="sticky top-0 z-10 flex items-center justify-between px-4 py-3"
         style={{background:'rgba(12,5,1,0.96)',borderBottom:'1px solid rgba(201,125,42,0.15)',backdropFilter:'blur(10px)'}}>
@@ -1085,7 +1084,6 @@ export default function OfficePage() {
         BCB Office · auto-refresh 60s
         {lastUpdate && <span> · {lastUpdate.toLocaleTimeString('lo-LA',{hour:'2-digit',minute:'2-digit'})}</span>}
       </div>
-    </div>
     </div>
   )
 }
