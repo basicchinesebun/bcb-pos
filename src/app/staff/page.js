@@ -99,6 +99,7 @@ export default function StaffPage() {
   const [batchOpen, setBatchOpen] = useState(false)
   const [batchSelected, setBatchSelected] = useState(new Set())
   const chatBottomRef = useRef(null)
+  const chatMsgsRef = useRef(null)
   const activeChatPhoneRef = useRef(null)
   const voicesRef = useRef([])
   const receiptFontRef = useRef(null)
@@ -234,7 +235,9 @@ export default function StaffPage() {
   }, [activeChatPhone])
 
   useEffect(() => {
-    chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+    if (chatMsgsRef.current) {
+      chatMsgsRef.current.scrollTop = chatMsgsRef.current.scrollHeight
+    }
   }, [chatMessages])
 
   // iOS Safari keyboard: track visualViewport so chat input stays above keyboard
@@ -2602,7 +2605,7 @@ export default function StaffPage() {
                   🤖 {aiPausedPhones.has(activeChatPhone) ? 'AI OFF' : 'AI ON'}
                 </button>
               </div>
-              <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3">
+              <div ref={chatMsgsRef} className="flex-1 overflow-y-auto p-4 flex flex-col gap-3">
                 {chatMessages.map(msg => {
                   const isStaffSide = msg.sender === 'staff' || msg.sender === 'ai'
                   const isAi = msg.sender === 'ai'
