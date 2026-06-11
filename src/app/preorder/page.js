@@ -364,8 +364,9 @@ export default function PreOrderPage() {
   )
 
   return (
+    <div style={{ background: 'var(--cream)' }} className="min-h-dvh">
     <div
-      className={`flex flex-col${step !== 4 ? ' overflow-hidden h-dvh' : ' min-h-dvh'}`}
+      className={`max-w-[430px] mx-auto flex flex-col${step !== 4 ? ' overflow-hidden h-dvh' : ' min-h-dvh'}`}
       style={{ background: 'var(--cream)' }}
     >
       {/* ── Notice Modal ── */}
@@ -1040,6 +1041,7 @@ export default function PreOrderPage() {
           </div>
         </>
       )}
+    </div>
     </div>
   )
 }

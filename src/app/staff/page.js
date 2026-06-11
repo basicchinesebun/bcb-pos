@@ -1528,7 +1528,8 @@ export default function StaffPage() {
   )
 
   return (
-    <div className="h-dvh flex flex-col overflow-hidden" style={{ background: 'var(--cream)' }}>
+    <div style={{ background: 'var(--cream)' }} className="min-h-dvh">
+    <div className="max-w-[430px] mx-auto h-dvh flex flex-col overflow-hidden" style={{ background: 'var(--cream)' }}>
       {/* Toast */}
       <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-50 flex flex-col gap-2 items-center pointer-events-none">
         {toast.map(t => (
@@ -3223,6 +3224,7 @@ export default function StaffPage() {
         </div>
       )}
 
+    </div>
     </div>
   )
 }

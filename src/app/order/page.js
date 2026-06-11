@@ -319,8 +319,9 @@ export default function OrderPage() {
   )
 
   return (
+    <div style={{ background: 'var(--cream)' }} className="min-h-dvh">
     <div
-      className={`flex flex-col${step !== 3 ? ' overflow-hidden h-dvh' : ' min-h-dvh'}`}
+      className={`max-w-[430px] mx-auto flex flex-col${step !== 3 ? ' overflow-hidden h-dvh' : ' min-h-dvh'}`}
       style={{ background: 'var(--cream)' }}
     >
       {/* Offline banner */}
@@ -902,6 +903,7 @@ export default function OrderPage() {
           </div>
         </>
       )}
+    </div>
     </div>
   )
 }
