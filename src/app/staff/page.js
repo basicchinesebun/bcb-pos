@@ -2216,6 +2216,10 @@ export default function StaffPage() {
                             <div className="text-sm font-black" style={{ color: 'var(--brown)' }}>
                               ລວມ: {(o.total || 0).toLocaleString()} ກີບ
                             </div>
+                            <div className="flex gap-2 mt-2">
+                              <button onClick={() => announce(o.qnum)} className="flex-1 py-2 rounded-xl text-sm font-black" style={{ background: 'var(--brown2)', color: 'var(--cream)' }}>📢 ເອີ້ນຄິວ #{String(o.qnum).padStart(4,'0')}</button>
+                              {o.slip_url && <button onClick={() => setSlipModal({ url: o.slip_url, qnum: o.qnum })} className="py-2 px-3 rounded-xl text-sm font-black bg-orange-50 text-orange-700">🧾 ສລິບ</button>}
+                            </div>
                           </div>
                         </div>
                       )
@@ -2382,6 +2386,7 @@ export default function StaffPage() {
                             <>
                               <button onClick={() => doneOrder(o)} className="flex-[4] py-3 rounded-xl text-sm font-black" style={{ background: 'var(--brown)', color: 'var(--cream)' }}>✓ Done</button>
                               <button onClick={() => announce(o.qnum)} className="flex-[2] py-3 rounded-xl text-sm font-black" style={{ background: 'var(--brown2)', color: 'var(--cream)' }}>📢</button>
+                              {o.slip_url && <button onClick={() => setSlipModal({ url: o.slip_url, qnum: o.qnum })} className="py-3 px-3 rounded-xl text-sm font-black bg-orange-50 text-orange-700">🧾</button>}
                               <button onClick={() => smartPrint(o)} className="py-3 px-3 rounded-xl text-sm font-black bg-blue-50 text-blue-700">🖨</button>
                               <button onClick={() => cancelOrder(o)} className="py-3 px-3 rounded-xl text-sm font-black border-2 border-red-400 text-red-600">✕</button>
                             </>
@@ -2448,9 +2453,11 @@ export default function StaffPage() {
                                     <img src={o.slip_url} className="w-16 rounded-lg border border-[#e8d5c0]" alt="slip" />
                                   </div>
                                 )}
-                                <div className="flex gap-2 mt-1">
+                                <div className="flex gap-2 mt-1 flex-wrap">
                                   {o.cancelled && <button onClick={() => undoOrder(o.id, 'cancelled')} className="text-xs py-1.5 px-3 rounded-lg border-2 border-[#e8d5c0] font-black" style={{ color: 'var(--gray3)' }}>↩ ຄືນ</button>}
                                   {o.done && <button onClick={() => undoOrder(o.id, 'done')} className="text-xs py-1.5 px-3 rounded-lg border-2 border-[#e8d5c0] font-black" style={{ color: 'var(--gray3)' }}>↩ ຍົກເລີກ Done</button>}
+                                  {o.slip_url && <button onClick={() => setSlipModal({ url: o.slip_url, qnum: o.qnum })} className="text-xs py-1.5 px-3 rounded-lg bg-orange-50 text-orange-700 font-black">🧾 ສລິບ</button>}
+                                  <button onClick={() => announce(o.qnum)} className="text-xs py-1.5 px-3 rounded-lg font-black" style={{ background: 'var(--brown2)', color: 'var(--cream)' }}>📢 ຄິວ</button>
                                   <button onClick={() => smartPrint(o)} className="text-xs py-1.5 px-3 rounded-lg bg-blue-50 text-blue-700 font-black">🖨</button>
                                 </div>
                               </div>
