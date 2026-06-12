@@ -96,7 +96,7 @@ export default function StaffPage() {
   const [qoSubmitting, setQoSubmitting] = useState(false)
   const [qoPackToast, setQoPackToast] = useState(null)
   const [qoName, setQoName] = useState('')
-  const [chatVH, setChatVH] = useState(null)
+  const [kbOffset, setKbOffset] = useState(0)
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [batchOpen, setBatchOpen] = useState(false)
   const [batchSelected, setBatchSelected] = useState(new Set())
@@ -242,13 +242,22 @@ export default function StaffPage() {
     }
   }, [chatMessages])
 
-  // iOS Safari keyboard: track visualViewport so chat input stays above keyboard
+  // iOS Safari keyboard: measure keyboard height via visualViewport offset
   useEffect(() => {
-    if (tab !== 'chat' || !activeChatPhone) { setChatVH(null); return }
-    function update() { setChatVH((window.visualViewport?.height ?? window.innerHeight) - 56 + 'px') }
+    if (tab !== 'chat' || !activeChatPhone) { setKbOffset(0); return }
+    function update() {
+      const vv = window.visualViewport
+      if (!vv) return
+      const kb = Math.max(0, window.innerHeight - vv.height - (vv.offsetTop || 0))
+      setKbOffset(kb)
+    }
     update()
     window.visualViewport?.addEventListener('resize', update)
-    return () => window.visualViewport?.removeEventListener('resize', update)
+    window.visualViewport?.addEventListener('scroll', update)
+    return () => {
+      window.visualViewport?.removeEventListener('resize', update)
+      window.visualViewport?.removeEventListener('scroll', update)
+    }
   }, [tab, activeChatPhone])
 
   function showToast(msg, type = '') {
@@ -2623,7 +2632,7 @@ export default function StaffPage() {
             </div>
           ) : (
             // Conversation messages
-            <div className="flex flex-col" style={{ height: chatVH ?? 'calc(100dvh - 56px)' }}>
+            <div className="flex-1 flex flex-col overflow-hidden">
               <div className="flex items-center gap-3 px-4 py-3 flex-shrink-0" style={{ background: 'var(--brown)' }}>
                 <button onClick={() => { setActiveChatPhone(null); setChatMessages([]) }}
                   className="text-xl font-black" style={{ color: 'var(--cream)' }}>←</button>
@@ -2703,7 +2712,7 @@ export default function StaffPage() {
                 })}
                 <div ref={chatBottomRef} />
               </div>
-              <div className="p-3 flex gap-2 flex-shrink-0 border-t border-[#e8d5c0]" style={{ background: 'white' }}>
+              <div className="p-3 flex gap-2 flex-shrink-0 border-t border-[#e8d5c0]" style={{ background: 'white', paddingBottom: kbOffset ? kbOffset + 12 + 'px' : undefined }}>
                 <button
                   onTouchStart={e => { e.preventDefault(); startVoice() }}
                   onTouchEnd={e => { e.preventDefault(); stopVoice() }}
