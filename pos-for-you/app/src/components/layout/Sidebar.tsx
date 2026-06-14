@@ -2,21 +2,22 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
-  LayoutDashboard, UtensilsCrossed, Package, BookOpen,
+  LayoutDashboard, UtensilsCrossed, Package, PackageSearch, BookOpen,
   ShoppingCart, CalendarClock, BarChart3, Users, Store, Settings,
 } from 'lucide-react'
 
 const NAV = [
-  { href: '/pos',        icon: ShoppingCart,   label: 'POS' },
-  { href: '/orders',     icon: LayoutDashboard, label: 'Orders' },
-  { href: '/menu',       icon: UtensilsCrossed, label: 'Menu' },
-  { href: '/inventory',  icon: Package,         label: 'Inventory' },
-  { href: '/recipe',     icon: BookOpen,        label: 'Recipe' },
-  { href: '/preorder',   icon: CalendarClock,   label: 'Pre-order' },
-  { href: '/reports',    icon: BarChart3,       label: 'Reports' },
-  { href: '/staff',      icon: Users,           label: 'Staff' },
-  { href: '/branches',   icon: Store,           label: 'Branches' },
-  { href: '/settings',   icon: Settings,        label: 'Settings' },
+  { href: '/dashboard',       icon: LayoutDashboard, label: 'Dashboard' },
+  { href: '/pos',             icon: ShoppingCart,    label: 'POS' },
+  { href: '/orders',          icon: Package,         label: 'Orders' },
+  { href: '/menu',            icon: UtensilsCrossed, label: 'Menu' },
+  { href: '/inventory',       icon: PackageSearch,   label: 'Inventory' },
+  { href: '/recipe',          icon: BookOpen,        label: 'Recipe' },
+  { href: '/preorder-rounds', icon: CalendarClock,   label: 'Pre-orders' },
+  { href: '/reports',         icon: BarChart3,       label: 'Reports' },
+  { href: '/staff',           icon: Users,           label: 'Staff' },
+  { href: '/branches',        icon: Store,           label: 'Branches' },
+  { href: '/settings',        icon: Settings,        label: 'Settings' },
 ]
 
 export default function Sidebar() {

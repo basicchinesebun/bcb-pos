@@ -1,728 +1,875 @@
 'use client'
-import { useState, useEffect } from 'react'
-import Image from 'next/image'
-import {
-  ShoppingCart, Plus, Minus, ChevronDown, CheckCircle,
-  Upload, Phone, User, MessageSquare, X,
-} from 'lucide-react'
+import { useState } from 'react'
+import { ShoppingCart, ArrowLeft, ChevronDown } from 'lucide-react'
 
-// ── Types ─────────────────────────────────────────────────────────────────────
+// ── Types ──────────────────────────────────────────────────────────────────────
 interface MenuItem {
   id: string
-  nameLo: string
-  nameEn: string
+  name: string
   price: number
   image: string
-  stock: number       // remaining units
-  maxStock: number    // original max for display
   popular: boolean
   limited: boolean
+  soldOut: boolean
 }
 
-interface RoundInfo {
+interface CartItem {
   id: string
-  label: string
-  pickupTime: string
-  deadline: string
-  status: 'open' | 'closed'
-}
-
-interface CartItem extends MenuItem {
+  name: string
+  image: string
+  price: number
   qty: number
-  notes: string
 }
 
-type Step = 'browse' | 'cart' | 'confirm'
-type PayMethod = 'bcel' | 'later'
+type Step = 'browse' | 'checkout' | 'confirm'
+type PayMethod = 'bcel' | 'cash'
 
 // ── Mock Data ──────────────────────────────────────────────────────────────────
-const SHOP_INFO = {
-  name: 'Basic Chinese Bun',
-  nameLo: 'ເບຊິກ ຈີນ ເຂົ້າໜົມ',
-  tagline: 'ເຂົ້າໜົມຈີນແທ້ · Authentic Chinese Buns',
-  coverGradient: 'from-orange-600 via-red-700 to-amber-800',
-  isOpen: true,
-  logoText: 'BCB',
+const MENU_ITEMS: MenuItem[] = [
+  {
+    id: 'm1',
+    name: 'ກາເຟລາວ',
+    price: 1000,
+    image: 'https://images.unsplash.com/photo-1461023058943-07fcbe16d735?w=300',
+    popular: true,
+    limited: false,
+    soldOut: false,
+  },
+  {
+    id: 'm2',
+    name: 'ກົ້ວຊາຍ',
+    price: 1500,
+    image: 'https://images.unsplash.com/photo-1549931319-a545dcf3bc7c?w=300',
+    popular: false,
+    limited: true,
+    soldOut: false,
+  },
+  {
+    id: 'm3',
+    name: 'ຂອງຫວານ',
+    price: 1500,
+    image: 'https://images.unsplash.com/photo-1578985545062-69928b1d9587?w=300',
+    popular: true,
+    limited: false,
+    soldOut: false,
+  },
+  {
+    id: 'm4',
+    name: 'ອາຫານ',
+    price: 4200,
+    image: 'https://images.unsplash.com/photo-1563379091339-03246963c96a?w=300',
+    popular: false,
+    limited: false,
+    soldOut: false,
+  },
+  {
+    id: 'm5',
+    name: 'ເຂົ້າໜົມ',
+    price: 2000,
+    image: 'https://images.unsplash.com/photo-1558961363-fa8fdf82db35?w=300',
+    popular: false,
+    limited: true,
+    soldOut: false,
+  },
+  {
+    id: 'm6',
+    name: 'ໝົດແລ້ວ',
+    price: 3000,
+    image: 'https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?w=300',
+    popular: false,
+    limited: false,
+    soldOut: true,
+  },
+]
+
+function fmtPrice(n: number) {
+  return `${n.toLocaleString()} LAK`
 }
 
-const ROUNDS: RoundInfo[] = [
-  { id: 'r1', label: 'ຮອບທ່ຽງ · Morning',   pickupTime: '08:00–10:00', deadline: 'Order by 22:00 tonight', status: 'open'   },
-  { id: 'r2', label: 'ຮອບບ່າຍ · Afternoon', pickupTime: '13:00–15:00', deadline: 'Order by 10:00 tomorrow', status: 'open'   },
-]
-
-const MENU: MenuItem[] = [
-  { id: 'm1', nameLo: 'ເຂົ້າໜົມຊີ້ນໝູ',  nameEn: 'BBQ Pork Bun',       price: 2.50, image: '', stock: 28, maxStock: 100, popular: true,  limited: false },
-  { id: 'm2', nameLo: 'ເຂົ້າໜົມໄຂ່',      nameEn: 'Custard Bun',         price: 2.00, image: '', stock: 15, maxStock: 80,  popular: true,  limited: true  },
-  { id: 'm3', nameLo: 'ເຂົ້າໜົມຖົ່ວ',      nameEn: 'Red Bean Bun',        price: 1.80, image: '', stock: 42, maxStock: 60,  popular: false, limited: false },
-  { id: 'm4', nameLo: 'ເຂົ້າໜົມດອກບົວ',   nameEn: 'Lotus Paste Bun',     price: 2.20, image: '', stock: 0,  maxStock: 50,  popular: false, limited: false },
-  { id: 'm5', nameLo: 'ລູກຊີ່ງ',           nameEn: 'Sesame Ball',         price: 1.50, image: '', stock: 8,  maxStock: 40,  popular: true,  limited: true  },
-  { id: 'm6', nameLo: 'ຂ້າວໜົມຜັກກາດ',    nameEn: 'Pan-Fried Turnip Cake',price:2.80, image: '', stock: 22, maxStock: 30,  popular: false, limited: false },
-]
-
-// Pastel gradient backgrounds per item (used as image fallback)
-const CARD_GRADIENTS = [
-  'from-amber-100 to-orange-200',
-  'from-yellow-100 to-amber-200',
-  'from-orange-100 to-red-200',
-  'from-rose-100 to-pink-200',
-  'from-amber-200 to-yellow-100',
-  'from-orange-200 to-amber-100',
-]
-
-// Food emojis for visual interest
-const FOOD_EMOJIS = ['🥟', '🧆', '🍡', '🥮', '🍘', '🍱']
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-function fmtPrice(n: number) { return `$${n.toFixed(2)}` }
-
-function StockIndicator({ stock, maxStock }: { stock: number; maxStock: number }) {
-  if (stock === 0) return null
-  const pct = stock / maxStock
-  if (pct > 0.3) return null   // plenty in stock, don't show
-  return (
-    <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">
-      <span className="w-1.5 h-1.5 rounded-full bg-amber-500 inline-block" />
-      {stock} left
-    </span>
-  )
-}
-
-// ── Food Card ─────────────────────────────────────────────────────────────────
-function FoodCard({
-  item,
-  idx,
-  qty,
-  onAdd,
-  onMinus,
+// ── Screen 1: Browse ───────────────────────────────────────────────────────────
+function BrowseScreen({
+  cart,
+  onAddToCart,
+  onGoCheckout,
 }: {
-  item: MenuItem
-  idx: number
-  qty: number
-  onAdd: () => void
-  onMinus: () => void
+  cart: CartItem[]
+  onAddToCart: (item: MenuItem) => void
+  onGoCheckout: () => void
 }) {
-  const soldOut = item.stock === 0
+  const cartCount = cart.reduce((s, i) => s + i.qty, 0)
+  const stock = 15
+  const maxStock = 50
+  const pct = (stock / maxStock) * 100
 
   return (
     <div
-      className={`relative rounded-2xl overflow-hidden shadow-md transition-transform ${
-        soldOut ? 'opacity-60' : 'hover:shadow-xl hover:-translate-y-0.5'
-      }`}
-      style={{ background: 'white', border: '1px solid #fde8c8' }}
+      style={{
+        minHeight: '100vh',
+        background: '#f8f9fa',
+        fontFamily: "'Noto Sans Lao', 'Noto Sans', sans-serif",
+        maxWidth: 390,
+        margin: '0 auto',
+        position: 'relative',
+        paddingBottom: 100,
+      }}
     >
-      {/* Image / Gradient placeholder */}
-      <div className={`relative h-44 w-full bg-gradient-to-br ${CARD_GRADIENTS[idx % CARD_GRADIENTS.length]} flex items-center justify-center`}>
-        {item.image ? (
-          <Image src={item.image} alt={item.nameEn} fill className="object-cover" sizes="(max-width: 768px) 50vw, 33vw" />
-        ) : (
-          <span className="text-6xl select-none" role="img" aria-label={item.nameEn}>
-            {FOOD_EMOJIS[idx % FOOD_EMOJIS.length]}
+      {/* ── Top Header ── */}
+      <div
+        style={{
+          background: '#fff',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '12px 16px',
+          borderBottom: '1px solid #f0f0f0',
+        }}
+      >
+        {/* Left: logo + shop name */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div
+            style={{
+              width: 40,
+              height: 40,
+              borderRadius: '50%',
+              background: 'linear-gradient(135deg, #f97316, #ea580c)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: 18,
+              flexShrink: 0,
+            }}
+          >
+            🍴
+          </div>
+          <div>
+            <div style={{ fontSize: 11, color: '#888' }}>ຮ້ານອາຫານ</div>
+            <div style={{ fontSize: 15, fontWeight: 700, color: '#1a1a1a' }}>Baguette Express</div>
+          </div>
+        </div>
+
+        {/* Right: branch + language */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <button
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 4,
+              padding: '6px 10px',
+              borderRadius: 20,
+              border: '1px solid #e5e7eb',
+              background: '#fff',
+              fontSize: 12,
+              color: '#444',
+              cursor: 'pointer',
+            }}
+          >
+            ສາຂາ <ChevronDown size={12} />
+          </button>
+          <button
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 4,
+              padding: '6px 10px',
+              borderRadius: 20,
+              border: '1px solid #e5e7eb',
+              background: '#fff',
+              fontSize: 12,
+              color: '#444',
+              cursor: 'pointer',
+            }}
+          >
+            🇱🇦 ລາວ
+          </button>
+        </div>
+      </div>
+
+      {/* ── Round Banner ── */}
+      <div style={{ padding: '12px 16px' }}>
+        <div
+          style={{
+            background: 'linear-gradient(135deg, #f97316, #ea580c)',
+            borderRadius: 16,
+            padding: '14px 16px',
+            color: '#fff',
+          }}
+        >
+          <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 8 }}>
+            ຮອນ Pre-order: Weekend Special
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 8 }}>
+            <span>ປິດຮອນວັນທີ: ທ່ານມີ 15</span>
+            <span>ເຫຼືອ {stock}/{maxStock} ຊິ້ນ</span>
+          </div>
+          {/* Progress bar */}
+          <div
+            style={{
+              height: 6,
+              background: 'rgba(255,255,255,0.3)',
+              borderRadius: 999,
+              overflow: 'hidden',
+            }}
+          >
+            <div
+              style={{
+                height: '100%',
+                width: `${pct}%`,
+                background: '#fff',
+                borderRadius: 999,
+              }}
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* ── Menu Grid ── */}
+      <div style={{ padding: '4px 16px' }}>
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: '1fr 1fr',
+            gap: 12,
+          }}
+        >
+          {MENU_ITEMS.map((item) => (
+            <FoodCard key={item.id} item={item} onAdd={() => onAddToCart(item)} />
+          ))}
+        </div>
+      </div>
+
+      {/* ── Floating Cart Button ── */}
+      {cartCount > 0 && (
+        <button
+          onClick={onGoCheckout}
+          style={{
+            position: 'fixed',
+            bottom: 20,
+            right: 20,
+            width: 56,
+            height: 56,
+            borderRadius: '50%',
+            background: 'linear-gradient(135deg, #f97316, #ea580c)',
+            border: 'none',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            boxShadow: '0 4px 16px rgba(249,115,22,0.5)',
+            zIndex: 100,
+          }}
+        >
+          <ShoppingCart size={22} color="#fff" />
+          {/* badge */}
+          <span
+            style={{
+              position: 'absolute',
+              top: 0,
+              right: 0,
+              width: 20,
+              height: 20,
+              borderRadius: '50%',
+              background: '#ef4444',
+              color: '#fff',
+              fontSize: 11,
+              fontWeight: 700,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              border: '2px solid #fff',
+            }}
+          >
+            {cartCount}
           </span>
-        )}
+        </button>
+      )}
+    </div>
+  )
+}
+
+function FoodCard({ item, onAdd }: { item: MenuItem; onAdd: () => void }) {
+  return (
+    <div
+      style={{
+        background: '#fff',
+        borderRadius: 16,
+        overflow: 'hidden',
+        boxShadow: '0 2px 8px rgba(0,0,0,0.07)',
+        opacity: item.soldOut ? 0.65 : 1,
+      }}
+    >
+      {/* Image */}
+      <div style={{ position: 'relative', height: 160 }}>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={item.image}
+          alt={item.name}
+          style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+        />
 
         {/* Sold out overlay */}
-        {soldOut && (
-          <div className="absolute inset-0 bg-gray-900/60 flex items-center justify-center">
-            <span className="text-white font-bold text-sm px-3 py-1 rounded-full bg-gray-700">
-              Sold Out
+        {item.soldOut && (
+          <div
+            style={{
+              position: 'absolute',
+              inset: 0,
+              background: 'rgba(0,0,0,0.45)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <span
+              style={{
+                background: '#9ca3af',
+                color: '#fff',
+                fontSize: 12,
+                fontWeight: 700,
+                padding: '4px 12px',
+                borderRadius: 999,
+              }}
+            >
+              ໝົດ
             </span>
           </div>
         )}
 
         {/* Badges */}
-        <div className="absolute top-2 left-2 flex flex-col gap-1">
+        <div
+          style={{
+            position: 'absolute',
+            top: 8,
+            left: 8,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 4,
+          }}
+        >
           {item.popular && (
-            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-orange-500 text-white shadow-sm">
-              🔥 Popular
+            <span
+              style={{
+                background: '#ef4444',
+                color: '#fff',
+                fontSize: 10,
+                fontWeight: 700,
+                padding: '2px 7px',
+                borderRadius: 999,
+              }}
+            >
+              🔥 ຂອດນິຍົມ
             </span>
           )}
           {item.limited && (
-            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-600 text-white shadow-sm">
-              ⚡ Limited
+            <span
+              style={{
+                background: '#f97316',
+                color: '#fff',
+                fontSize: 10,
+                fontWeight: 700,
+                padding: '2px 7px',
+                borderRadius: 999,
+              }}
+            >
+              ⚡ ຈຳກັດ
             </span>
           )}
         </div>
       </div>
 
-      {/* Card body */}
-      <div className="p-3">
-        <p className="font-bold text-sm leading-tight text-gray-900">{item.nameLo}</p>
-        <p className="text-xs text-gray-500 mb-2 leading-tight">{item.nameEn}</p>
-
-        <div className="flex items-center justify-between gap-2">
-          <div>
-            <p className="text-base font-extrabold text-orange-500">{fmtPrice(item.price)}</p>
-            <StockIndicator stock={item.stock} maxStock={item.maxStock} />
-          </div>
-
-          {/* Qty controls / Add button */}
-          {!soldOut && (
-            qty === 0 ? (
-              <button
-                onClick={onAdd}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold text-white shadow-sm transition-all active:scale-95"
-                style={{ background: '#f97316' }}
-              >
-                <Plus size={13} /> Add
-              </button>
-            ) : (
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={onMinus}
-                  className="w-7 h-7 rounded-full flex items-center justify-center text-orange-500 border-2 border-orange-300 transition-colors active:bg-orange-50"
-                >
-                  <Minus size={13} />
-                </button>
-                <span className="w-5 text-center text-sm font-bold text-gray-900">{qty}</span>
-                <button
-                  onClick={onAdd}
-                  className="w-7 h-7 rounded-full flex items-center justify-center text-white transition-all active:scale-95"
-                  style={{ background: '#f97316' }}
-                >
-                  <Plus size={13} />
-                </button>
-              </div>
-            )
-          )}
+      {/* Body */}
+      <div style={{ padding: '10px 10px 12px' }}>
+        <div style={{ fontWeight: 700, fontSize: 13, color: '#1a1a1a', marginBottom: 4 }}>
+          {item.name}
         </div>
-      </div>
-    </div>
-  )
-}
-
-// ── Order Sheet (slides up from bottom) ──────────────────────────────────────
-function OrderSheet({
-  cart,
-  roundLabel,
-  onClose,
-  onQtyChange,
-  onNoteChange,
-  onSubmit,
-}: {
-  cart: CartItem[]
-  roundLabel: string
-  onClose: () => void
-  onQtyChange: (id: string, delta: number) => void
-  onNoteChange: (id: string, note: string) => void
-  onSubmit: (form: { name: string; phone: string; notes: string; payMethod: PayMethod; slip?: File }) => void
-}) {
-  const [name, setName]           = useState('')
-  const [phone, setPhone]         = useState('')
-  const [notes, setNotes]         = useState('')
-  const [payMethod, setPayMethod] = useState<PayMethod>('bcel')
-  const [slip, setSlip]           = useState<File | null>(null)
-  const [slipPreview, setSlipPreview] = useState<string | null>(null)
-
-  const total = cart.reduce((s, i) => s + i.price * i.qty, 0)
-
-  function handleSlip(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (!file) return
-    setSlip(file)
-    setSlipPreview(URL.createObjectURL(file))
-  }
-
-  function handleSubmit() {
-    onSubmit({ name, phone, notes, payMethod, slip: slip ?? undefined })
-  }
-
-  return (
-    <>
-      {/* Backdrop */}
-      <div
-        className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm"
-        onClick={onClose}
-      />
-
-      {/* Sheet */}
-      <div
-        className="fixed bottom-0 left-0 right-0 z-50 rounded-t-3xl overflow-hidden flex flex-col"
-        style={{ maxHeight: '90vh', background: 'white', maxWidth: 480, margin: '0 auto' }}
-      >
-        {/* Drag handle */}
-        <div className="flex justify-center pt-3 pb-1">
-          <div className="w-10 h-1 rounded-full bg-gray-200" />
+        <div style={{ fontSize: 13, color: '#f97316', fontWeight: 700, marginBottom: 8 }}>
+          {fmtPrice(item.price)}
         </div>
-
-        {/* Header */}
-        <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100">
-          <div>
-            <h3 className="font-bold text-gray-900">Your Order</h3>
-            <p className="text-xs text-gray-500">{roundLabel}</p>
-          </div>
-          <button
-            onClick={onClose}
-            className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-500"
-          >
-            <X size={16} />
-          </button>
-        </div>
-
-        <div className="flex-1 overflow-y-auto px-5 py-3 space-y-4">
-          {/* Cart items */}
-          <div className="space-y-3">
-            {cart.map(item => (
-              <div key={item.id} className="flex items-start gap-3">
-                {/* Emoji thumb */}
-                <div className="w-12 h-12 rounded-xl bg-orange-50 flex items-center justify-center text-2xl shrink-0">
-                  {FOOD_EMOJIS[MENU.findIndex(m => m.id === item.id) % FOOD_EMOJIS.length]}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-sm text-gray-900 leading-tight">{item.nameLo}</p>
-                  <p className="text-xs text-gray-500 mb-1">{fmtPrice(item.price)} each</p>
-                  <input
-                    type="text"
-                    placeholder="Special notes (optional)"
-                    value={item.notes}
-                    onChange={e => onNoteChange(item.id, e.target.value)}
-                    className="w-full text-xs px-2 py-1 rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-300 text-gray-700 placeholder-gray-400"
-                  />
-                </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  <button
-                    onClick={() => onQtyChange(item.id, -1)}
-                    className="w-7 h-7 rounded-full flex items-center justify-center text-orange-500 border-2 border-orange-200"
-                  >
-                    <Minus size={12} />
-                  </button>
-                  <span className="w-5 text-center text-sm font-bold text-gray-900">{item.qty}</span>
-                  <button
-                    onClick={() => onQtyChange(item.id, 1)}
-                    className="w-7 h-7 rounded-full flex items-center justify-center text-white"
-                    style={{ background: '#f97316' }}
-                  >
-                    <Plus size={12} />
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* Divider */}
-          <div className="border-t border-gray-100" />
-
-          {/* Customer info */}
-          <div className="space-y-3">
-            <h4 className="font-bold text-sm text-gray-800">Your Details</h4>
-            <div className="relative">
-              <User size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-              <input
-                type="text"
-                placeholder="Your name"
-                value={name}
-                onChange={e => setName(e.target.value)}
-                className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300 text-gray-800 placeholder-gray-400"
-              />
-            </div>
-            <div className="relative">
-              <Phone size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-              <input
-                type="tel"
-                placeholder="Phone number"
-                value={phone}
-                onChange={e => setPhone(e.target.value)}
-                className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300 text-gray-800 placeholder-gray-400"
-              />
-            </div>
-            <div className="relative">
-              <MessageSquare size={14} className="absolute left-3 top-3 text-gray-400" />
-              <textarea
-                placeholder="Order notes (optional)"
-                value={notes}
-                onChange={e => setNotes(e.target.value)}
-                rows={2}
-                className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300 text-gray-800 placeholder-gray-400 resize-none"
-              />
-            </div>
-          </div>
-
-          {/* Payment */}
-          <div>
-            <h4 className="font-bold text-sm text-gray-800 mb-3">Payment</h4>
-            <div className="grid grid-cols-2 gap-3">
-              {([
-                { key: 'bcel' as PayMethod, label: 'BCEL OnePay', icon: '🏦', sub: 'Upload slip' },
-                { key: 'later' as PayMethod, label: 'Pay at Pickup', icon: '💵', sub: 'Cash / Transfer' },
-              ]).map(opt => (
-                <button
-                  key={opt.key}
-                  onClick={() => setPayMethod(opt.key)}
-                  className={`flex flex-col items-center gap-1 p-3 rounded-2xl border-2 transition-all ${
-                    payMethod === opt.key
-                      ? 'border-orange-400 bg-orange-50'
-                      : 'border-gray-200 bg-white'
-                  }`}
-                >
-                  <span className="text-2xl">{opt.icon}</span>
-                  <span className={`text-xs font-bold ${payMethod === opt.key ? 'text-orange-600' : 'text-gray-700'}`}>
-                    {opt.label}
-                  </span>
-                  <span className="text-[10px] text-gray-400">{opt.sub}</span>
-                </button>
-              ))}
-            </div>
-
-            {/* Slip upload */}
-            {payMethod === 'bcel' && (
-              <div className="mt-3">
-                <label className="flex flex-col items-center gap-2 p-4 border-2 border-dashed border-orange-300 rounded-2xl cursor-pointer hover:bg-orange-50 transition-colors">
-                  {slipPreview ? (
-                    <div className="relative w-full h-32 rounded-xl overflow-hidden">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={slipPreview} alt="Payment slip" className="w-full h-full object-cover" />
-                    </div>
-                  ) : (
-                    <>
-                      <Upload size={20} className="text-orange-400" />
-                      <span className="text-xs text-orange-500 font-semibold">Upload Payment Slip</span>
-                      <span className="text-[10px] text-gray-400">PNG, JPG up to 10MB</span>
-                    </>
-                  )}
-                  <input type="file" accept="image/*" className="hidden" onChange={handleSlip} />
-                </label>
-              </div>
-            )}
-          </div>
-
-          {/* Order total */}
-          <div className="rounded-2xl p-4 bg-orange-50 border border-orange-100">
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-gray-600">
-                {cart.reduce((s, i) => s + i.qty, 0)} items
-              </span>
-              <span className="text-xl font-extrabold text-orange-600">{fmtPrice(total)}</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Submit */}
-        <div className="px-5 py-4 border-t border-gray-100">
-          <button
-            onClick={handleSubmit}
-            disabled={!name.trim() || !phone.trim() || (payMethod === 'bcel' && !slip)}
-            className="w-full py-3.5 rounded-2xl font-bold text-white text-base transition-all active:scale-95 disabled:opacity-40"
-            style={{ background: 'linear-gradient(135deg, #f97316, #ea580c)' }}
-          >
-            Place Order · {fmtPrice(total)}
-          </button>
-        </div>
-      </div>
-    </>
-  )
-}
-
-// ── Confirmation Screen ────────────────────────────────────────────────────────
-function ConfirmScreen({
-  queueNum,
-  cart,
-  total,
-  customer,
-  onDone,
-}: {
-  queueNum: string
-  cart: CartItem[]
-  total: number
-  customer: string
-  onDone: () => void
-}) {
-  const [visible, setVisible] = useState(false)
-  useEffect(() => {
-    const t = setTimeout(() => setVisible(true), 50)
-    return () => clearTimeout(t)
-  }, [])
-
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ background: '#fef9f0' }}
-    >
-      <div
-        className="w-full max-w-sm flex flex-col items-center text-center"
-        style={{
-          opacity: visible ? 1 : 0,
-          transform: visible ? 'translateY(0)' : 'translateY(24px)',
-          transition: 'opacity 0.4s ease, transform 0.4s ease',
-        }}
-      >
-        {/* Check animation */}
-        <div
-          className="w-24 h-24 rounded-full flex items-center justify-center mb-5 shadow-lg"
-          style={{ background: 'linear-gradient(135deg, #f97316, #ea580c)' }}
-        >
-          <CheckCircle size={48} className="text-white" strokeWidth={2.5} />
-        </div>
-
-        <h2 className="text-2xl font-extrabold text-gray-900 mb-1">Order Placed!</h2>
-        <p className="text-gray-500 text-sm mb-6">ສັ່ງຊື້ສຳເລັດ · Thank you, {customer}!</p>
-
-        {/* Queue number */}
-        <div
-          className="rounded-3xl px-10 py-6 mb-6 shadow-lg w-full"
-          style={{ background: 'linear-gradient(135deg, #f97316, #ea580c)' }}
-        >
-          <p className="text-sm font-semibold text-orange-100 mb-1">Queue Number / ໝາຍເລກຄິວ</p>
-          <p className="text-6xl font-black text-white tracking-tight">{queueNum}</p>
-          <p className="text-xs text-orange-200 mt-2">Please arrive during your pickup window</p>
-        </div>
-
-        {/* Order summary */}
-        <div className="w-full bg-white rounded-2xl p-4 mb-5 shadow-sm border border-orange-100 text-left">
-          <p className="font-bold text-sm text-gray-800 mb-3">Order Summary</p>
-          <div className="space-y-1 mb-3">
-            {cart.map(item => (
-              <div key={item.id} className="flex justify-between text-sm">
-                <span className="text-gray-600">{item.qty}× {item.nameEn}</span>
-                <span className="text-gray-800 font-semibold">{fmtPrice(item.qty * item.price)}</span>
-              </div>
-            ))}
-          </div>
-          <div className="flex justify-between font-extrabold text-base pt-2 border-t border-gray-100">
-            <span className="text-gray-900">Total</span>
-            <span className="text-orange-500">{fmtPrice(total)}</span>
-          </div>
-        </div>
-
-        {/* Track message */}
-        <div className="flex items-center gap-2 text-sm text-gray-500 mb-8">
-          <span className="text-lg">📲</span>
-          We&apos;ll notify you when your order is ready.
-        </div>
-
         <button
-          onClick={onDone}
-          className="w-full py-3 rounded-2xl font-bold text-orange-600 border-2 border-orange-400 transition-all active:scale-95 hover:bg-orange-50"
+          disabled={item.soldOut}
+          onClick={onAdd}
+          style={{
+            width: '100%',
+            padding: '7px 0',
+            borderRadius: 8,
+            border: 'none',
+            background: item.soldOut ? '#d1d5db' : '#f97316',
+            color: '#fff',
+            fontSize: 12,
+            fontWeight: 700,
+            cursor: item.soldOut ? 'not-allowed' : 'pointer',
+          }}
         >
-          Order More
+          {item.soldOut ? 'ໝົດ' : 'ເພີ່ມໃສ່ຕະກ້ອ'}
         </button>
       </div>
     </div>
   )
 }
 
-// ── Main Public Shop Page ──────────────────────────────────────────────────────
-export default function ShopPage({ params }: { params: { shop: string } }) {
-  const [selectedRound, setSelectedRound]   = useState(ROUNDS[0])
-  const [showRoundPicker, setShowRoundPicker] = useState(false)
-  const [cart, setCart]                     = useState<CartItem[]>([])
-  const [step, setStep]                     = useState<Step>('browse')
-  const [queueNum, setQueueNum]             = useState('')
-  const [confirmedCart, setConfirmedCart]   = useState<CartItem[]>([])
-  const [confirmedCustomer, setConfirmedCustomer] = useState('')
+// ── Screen 2: Checkout ─────────────────────────────────────────────────────────
+function CheckoutScreen({
+  cart,
+  onBack,
+  onQtyChange,
+  notes,
+  setNotes,
+  phone,
+  setPhone,
+  payMethod,
+  setPayMethod,
+  onConfirm,
+}: {
+  cart: CartItem[]
+  onBack: () => void
+  onQtyChange: (id: string, qty: number) => void
+  notes: string
+  setNotes: (v: string) => void
+  phone: string
+  setPhone: (v: string) => void
+  payMethod: PayMethod
+  setPayMethod: (v: PayMethod) => void
+  onConfirm: () => void
+}) {
+  const total = cart.reduce((s, i) => s + i.price * i.qty, 0)
 
-  // Suppress unused param lint — slug will be used for real API calls
-  void params.shop
+  return (
+    <div
+      style={{
+        minHeight: '100vh',
+        background: '#f8f9fa',
+        fontFamily: "'Noto Sans Lao', 'Noto Sans', sans-serif",
+        maxWidth: 390,
+        margin: '0 auto',
+        paddingBottom: 32,
+      }}
+    >
+      {/* Header */}
+      <div
+        style={{
+          background: '#fff',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 12,
+          padding: '14px 16px',
+          borderBottom: '1px solid #f0f0f0',
+        }}
+      >
+        <button
+          onClick={onBack}
+          style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex' }}
+        >
+          <ArrowLeft size={22} color="#1a1a1a" />
+        </button>
+        <span style={{ fontWeight: 700, fontSize: 16, flex: 1 }}>ໜ້າຊຳລະເງິນ</span>
+        <span style={{ fontSize: 20 }}>🇱🇦</span>
+      </div>
 
-  const cartCount = cart.reduce((s, i) => s + i.qty, 0)
-  const cartTotal = cart.reduce((s, i) => s + i.price * i.qty, 0)
+      <div style={{ padding: '16px 16px 0' }}>
+        {/* Order items section */}
+        <div
+          style={{
+            background: '#fff',
+            borderRadius: 16,
+            padding: 16,
+            marginBottom: 12,
+          }}
+        >
+          <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 12, color: '#1a1a1a' }}>
+            ສະຖານການສັ່ງຊື
+          </div>
 
-  function getQty(id: string) {
-    return cart.find(i => i.id === id)?.qty ?? 0
-  }
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {cart.map((item) => (
+              <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                {/* Thumbnail */}
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={item.image}
+                  alt={item.name}
+                  style={{ width: 48, height: 48, borderRadius: 10, objectFit: 'cover', flexShrink: 0 }}
+                />
+                {/* Name */}
+                <div style={{ flex: 1, fontSize: 13, fontWeight: 600, color: '#1a1a1a' }}>{item.name}</div>
+                {/* Qty dropdown */}
+                <select
+                  value={item.qty}
+                  onChange={(e) => onQtyChange(item.id, Number(e.target.value))}
+                  style={{
+                    padding: '4px 6px',
+                    borderRadius: 8,
+                    border: '1px solid #e5e7eb',
+                    fontSize: 13,
+                    background: '#fff',
+                    cursor: 'pointer',
+                    color: '#1a1a1a',
+                  }}
+                >
+                  {[1, 2, 3, 4, 5].map((n) => (
+                    <option key={n} value={n}>{n}</option>
+                  ))}
+                </select>
+                {/* Price */}
+                <div style={{ fontSize: 13, fontWeight: 700, color: '#f97316', minWidth: 70, textAlign: 'right' }}>
+                  {fmtPrice(item.price * item.qty)}
+                </div>
+              </div>
+            ))}
+          </div>
 
-  function handleAdd(item: MenuItem) {
-    setCart(prev => {
-      const existing = prev.find(i => i.id === item.id)
-      if (existing) return prev.map(i => i.id === item.id ? { ...i, qty: i.qty + 1 } : i)
-      return [...prev, { ...item, qty: 1, notes: '' }]
+          {/* Total */}
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginTop: 14,
+              paddingTop: 12,
+              borderTop: '1px solid #f0f0f0',
+            }}
+          >
+            <span style={{ fontSize: 14, color: '#555' }}>ລວມລາຄາ</span>
+            <span style={{ fontSize: 16, fontWeight: 800, color: '#1a1a1a' }}>{fmtPrice(total)}</span>
+          </div>
+        </div>
+
+        {/* Input fields */}
+        <div
+          style={{
+            background: '#fff',
+            borderRadius: 16,
+            padding: 16,
+            marginBottom: 12,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 10,
+          }}
+        >
+          <input
+            type="text"
+            placeholder="ໂນດ"
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            style={{
+              width: '100%',
+              padding: '11px 14px',
+              borderRadius: 10,
+              border: '1px solid #e5e7eb',
+              fontSize: 14,
+              color: '#1a1a1a',
+              boxSizing: 'border-box',
+              outline: 'none',
+            }}
+          />
+          <input
+            type="tel"
+            placeholder="ເບີໂທລະສັບ"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            style={{
+              width: '100%',
+              padding: '11px 14px',
+              borderRadius: 10,
+              border: '1px solid #e5e7eb',
+              fontSize: 14,
+              color: '#1a1a1a',
+              boxSizing: 'border-box',
+              outline: 'none',
+            }}
+          />
+        </div>
+
+        {/* Payment method */}
+        <div
+          style={{
+            background: '#fff',
+            borderRadius: 16,
+            padding: 16,
+            marginBottom: 20,
+          }}
+        >
+          <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 12, color: '#1a1a1a' }}>
+            ວິທີຊຳລະ
+          </div>
+          <div style={{ display: 'flex', gap: 10 }}>
+            {/* BCEL */}
+            <button
+              onClick={() => setPayMethod('bcel')}
+              style={{
+                flex: 1,
+                padding: '12px 10px',
+                borderRadius: 12,
+                border: `2px solid ${payMethod === 'bcel' ? '#f43f5e' : '#e5e7eb'}`,
+                background: payMethod === 'bcel' ? '#fff1f3' : '#fff',
+                cursor: 'pointer',
+                textAlign: 'center',
+              }}
+            >
+              <div style={{ fontSize: 22, marginBottom: 4 }}>🏦</div>
+              <div
+                style={{
+                  fontSize: 11,
+                  fontWeight: 700,
+                  color: payMethod === 'bcel' ? '#f43f5e' : '#555',
+                  lineHeight: 1.4,
+                }}
+              >
+                ຊຳລະດ້ວຍນີ້ຜ່ານ BCEL OnePay
+              </div>
+            </button>
+
+            {/* Cash */}
+            <button
+              onClick={() => setPayMethod('cash')}
+              style={{
+                flex: 1,
+                padding: '12px 10px',
+                borderRadius: 12,
+                border: `2px solid ${payMethod === 'cash' ? '#f43f5e' : '#e5e7eb'}`,
+                background: payMethod === 'cash' ? '#fff1f3' : '#fff',
+                cursor: 'pointer',
+                textAlign: 'center',
+              }}
+            >
+              <div style={{ fontSize: 22, marginBottom: 4 }}>💵</div>
+              <div
+                style={{
+                  fontSize: 11,
+                  fontWeight: 700,
+                  color: payMethod === 'cash' ? '#f43f5e' : '#555',
+                  lineHeight: 1.4,
+                }}
+              >
+                ຊຳລະເມື່ອຮັບເຄື່ອງ (ເງິນສົດ)
+              </div>
+            </button>
+          </div>
+        </div>
+
+        {/* Confirm button */}
+        <button
+          onClick={onConfirm}
+          style={{
+            width: '100%',
+            padding: '16px 0',
+            borderRadius: 14,
+            border: 'none',
+            background: 'linear-gradient(135deg, #f43f5e, #ef4444)',
+            color: '#fff',
+            fontSize: 16,
+            fontWeight: 800,
+            cursor: 'pointer',
+            boxShadow: '0 4px 14px rgba(244,63,94,0.35)',
+          }}
+        >
+          ຢືນຢັນການສັ່ງຊື
+        </button>
+      </div>
+    </div>
+  )
+}
+
+// ── Screen 3: Confirm ──────────────────────────────────────────────────────────
+function ConfirmScreen({
+  cart,
+  onBack,
+}: {
+  cart: CartItem[]
+  onBack: () => void
+}) {
+  const total = cart.reduce((s, i) => s + i.price * i.qty, 0)
+  const queueCode = '#LAO789'
+
+  return (
+    <div
+      style={{
+        minHeight: '100vh',
+        background: '#f8f9fa',
+        fontFamily: "'Noto Sans Lao', 'Noto Sans', sans-serif",
+        maxWidth: 390,
+        margin: '0 auto',
+        paddingBottom: 40,
+      }}
+    >
+      {/* Header */}
+      <div
+        style={{
+          background: '#fff',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 12,
+          padding: '14px 16px',
+          borderBottom: '1px solid #f0f0f0',
+        }}
+      >
+        <button
+          onClick={onBack}
+          style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex' }}
+        >
+          <ArrowLeft size={22} color="#1a1a1a" />
+        </button>
+        <span style={{ fontWeight: 700, fontSize: 16, flex: 1 }}>ຢືນຢັນການສັ່ງຊື</span>
+      </div>
+
+      <div style={{ padding: '24px 16px 0' }}>
+        {/* Success title */}
+        <div style={{ textAlign: 'center', marginBottom: 24 }}>
+          <div style={{ fontSize: 32, marginBottom: 8 }}>✅</div>
+          <div style={{ fontSize: 20, fontWeight: 800, color: '#1a1a1a' }}>ສັ່ງຊື້ສຳເລັດແລ້ວ!</div>
+        </div>
+
+        {/* Queue number box */}
+        <div
+          style={{
+            background: '#fff',
+            borderRadius: 16,
+            padding: '20px 16px',
+            textAlign: 'center',
+            marginBottom: 16,
+            boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
+          }}
+        >
+          <div style={{ fontSize: 13, color: '#888', marginBottom: 8 }}>ລະຫັດການສັ່ງຊື</div>
+          <div
+            style={{
+              fontSize: 48,
+              fontWeight: 900,
+              color: '#1a1a1a',
+              letterSpacing: 2,
+            }}
+          >
+            {queueCode}
+          </div>
+        </div>
+
+        {/* Order breakdown */}
+        <div
+          style={{
+            background: '#fff',
+            borderRadius: 16,
+            padding: 16,
+            marginBottom: 16,
+            boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
+          }}
+        >
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {cart.map((item) => (
+              <div
+                key={item.id}
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  fontSize: 14,
+                  color: '#444',
+                }}
+              >
+                <span>
+                  {item.qty} {item.name}
+                </span>
+                <span>{fmtPrice(item.price * item.qty)}</span>
+              </div>
+            ))}
+
+            {/* Total */}
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                fontSize: 15,
+                fontWeight: 800,
+                color: '#1a1a1a',
+                paddingTop: 10,
+                borderTop: '1px solid #f0f0f0',
+                marginTop: 4,
+              }}
+            >
+              <span>ລວມ</span>
+              <span>{fmtPrice(total)}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Footer note */}
+        <div
+          style={{
+            textAlign: 'center',
+            fontSize: 13,
+            color: '#888',
+            padding: '12px 0',
+          }}
+        >
+          ກະລຸນາບັນທຶກ/ຖ່າຍຮູບໃຫ້ດ້ວຍ 📸
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Main Page ──────────────────────────────────────────────────────────────────
+export default function PublicShopPage({ params }: { params: Promise<{ shop: string }> }) {
+  // params is a Promise in Next.js 15 but we don't need the slug for mock data
+  void params
+
+  const [step, setStep] = useState<Step>('browse')
+  const [cart, setCart] = useState<CartItem[]>([])
+  const [payMethod, setPayMethod] = useState<PayMethod>('bcel')
+  const [notes, setNotes] = useState('')
+  const [phone, setPhone] = useState('')
+
+  function handleAddToCart(item: MenuItem) {
+    setCart((prev) => {
+      const existing = prev.find((i) => i.id === item.id)
+      if (existing) {
+        return prev.map((i) => (i.id === item.id ? { ...i, qty: i.qty + 1 } : i))
+      }
+      return [
+        ...prev,
+        { id: item.id, name: item.name, image: item.image, price: item.price, qty: 1 },
+      ]
     })
   }
 
-  function handleMinus(item: MenuItem) {
-    setCart(prev => {
-      const existing = prev.find(i => i.id === item.id)
-      if (!existing) return prev
-      if (existing.qty === 1) return prev.filter(i => i.id !== item.id)
-      return prev.map(i => i.id === item.id ? { ...i, qty: i.qty - 1 } : i)
-    })
+  function handleQtyChange(id: string, qty: number) {
+    if (qty === 0) {
+      setCart((prev) => prev.filter((i) => i.id !== id))
+    } else {
+      setCart((prev) => prev.map((i) => (i.id === id ? { ...i, qty } : i)))
+    }
   }
 
-  function handleQtyChange(id: string, delta: number) {
-    setCart(prev => {
-      const existing = prev.find(i => i.id === id)
-      if (!existing) return prev
-      const newQty = existing.qty + delta
-      if (newQty <= 0) return prev.filter(i => i.id !== id)
-      return prev.map(i => i.id === id ? { ...i, qty: newQty } : i)
-    })
-  }
-
-  function handleNoteChange(id: string, note: string) {
-    setCart(prev => prev.map(i => i.id === id ? { ...i, notes: note } : i))
-  }
-
-  function handleSubmit(form: { name: string; phone: string; notes: string; payMethod: PayMethod; slip?: File }) {
-    // In production: POST to API with form data
-    void form
-    const num = String(Math.floor(Math.random() * 900) + 100).padStart(3, '0')
-    setQueueNum(`#${num}`)
-    setConfirmedCart([...cart])
-    setConfirmedCustomer(form.name)
+  function handleConfirm() {
     setStep('confirm')
-    setCart([])
   }
 
-  function handleDone() {
-    setStep('browse')
-    setConfirmedCart([])
-    setConfirmedCustomer('')
-    setQueueNum('')
+  function handleBack() {
+    if (step === 'checkout') setStep('browse')
+    else if (step === 'confirm') setStep('browse')
   }
 
-  if (step === 'confirm') {
+  if (step === 'browse') {
     return (
-      <ConfirmScreen
-        queueNum={queueNum}
-        cart={confirmedCart}
-        total={confirmedCart.reduce((s, i) => s + i.qty * i.price, 0)}
-        customer={confirmedCustomer}
-        onDone={handleDone}
+      <BrowseScreen
+        cart={cart}
+        onAddToCart={handleAddToCart}
+        onGoCheckout={() => setStep('checkout')}
       />
     )
   }
 
-  return (
-    <div
-      className="min-h-screen pb-32"
-      style={{ background: '#fef9f0', fontFamily: "'Noto Sans Lao', sans-serif" }}
-    >
-      {/* Max width container — mobile-first centered */}
-      <div className="max-w-md mx-auto relative">
+  if (step === 'checkout') {
+    return (
+      <CheckoutScreen
+        cart={cart}
+        onBack={handleBack}
+        onQtyChange={handleQtyChange}
+        notes={notes}
+        setNotes={setNotes}
+        phone={phone}
+        setPhone={setPhone}
+        payMethod={payMethod}
+        setPayMethod={setPayMethod}
+        onConfirm={handleConfirm}
+      />
+    )
+  }
 
-        {/* ── Hero Header ──────────────────────────────────────────────── */}
-        <div className={`relative h-52 bg-gradient-to-br ${SHOP_INFO.coverGradient} flex flex-col items-center justify-center overflow-hidden`}>
-          {/* Decorative circles */}
-          <div className="absolute -top-8 -right-8 w-40 h-40 rounded-full bg-white/10" />
-          <div className="absolute -bottom-12 -left-8 w-48 h-48 rounded-full bg-white/5" />
-
-          {/* Logo badge */}
-          <div className="w-16 h-16 rounded-2xl bg-white shadow-xl flex items-center justify-center mb-3 relative z-10">
-            <span className="text-xl font-black text-orange-500">{SHOP_INFO.logoText}</span>
-          </div>
-
-          <h1 className="text-xl font-extrabold text-white relative z-10 text-center px-4 leading-tight">
-            {SHOP_INFO.name}
-          </h1>
-          <p className="text-sm text-white/80 mt-0.5 relative z-10">{SHOP_INFO.tagline}</p>
-
-          {/* Status badge */}
-          <div className="mt-3 relative z-10">
-            <span
-              className={`text-xs font-bold px-3 py-1 rounded-full shadow ${
-                SHOP_INFO.isOpen
-                  ? 'bg-green-400 text-green-900'
-                  : 'bg-red-400 text-red-900'
-              }`}
-            >
-              {SHOP_INFO.isOpen ? '● Open Now' : '● Closed'}
-            </span>
-          </div>
-        </div>
-
-        {/* ── Round Selector ────────────────────────────────────────────── */}
-        <div className="px-4 py-3 bg-white border-b border-orange-100 sticky top-0 z-20 shadow-sm">
-          <p className="text-xs text-gray-500 mb-2">Select pickup round / ເລືອກຮອບ</p>
-          <div className="flex gap-2 overflow-x-auto pb-1">
-            {ROUNDS.map(round => (
-              <button
-                key={round.id}
-                onClick={() => setSelectedRound(round)}
-                className={`flex-shrink-0 px-3 py-2 rounded-xl border-2 text-left transition-all ${
-                  selectedRound.id === round.id
-                    ? 'border-orange-400 bg-orange-50'
-                    : 'border-gray-200 bg-white'
-                }`}
-              >
-                <p className={`text-xs font-bold ${selectedRound.id === round.id ? 'text-orange-600' : 'text-gray-700'}`}>
-                  {round.label}
-                </p>
-                <p className="text-[10px] text-gray-400">⏱ {round.pickupTime}</p>
-                <p className="text-[10px] text-gray-400">{round.deadline}</p>
-              </button>
-            ))}
-          </div>
-          {/* Dropdown toggle (for mobile with many rounds) */}
-          <button
-            className="hidden items-center gap-1 text-xs text-orange-500 font-semibold mt-1"
-            onClick={() => setShowRoundPicker(v => !v)}
-          >
-            Change round <ChevronDown size={12} />
-          </button>
-          {showRoundPicker && (
-            <div className="absolute left-4 right-4 top-full mt-1 bg-white rounded-xl shadow-lg border border-orange-100 z-30 overflow-hidden">
-              {ROUNDS.map(r => (
-                <button
-                  key={r.id}
-                  onClick={() => { setSelectedRound(r); setShowRoundPicker(false) }}
-                  className="w-full text-left px-4 py-3 text-sm hover:bg-orange-50 border-b border-gray-100 last:border-0"
-                >
-                  <span className="font-semibold text-gray-800">{r.label}</span>
-                  <span className="ml-2 text-gray-400 text-xs">{r.pickupTime}</span>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* ── Menu Grid ─────────────────────────────────────────────────── */}
-        <div className="px-4 pt-4">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="font-extrabold text-gray-900 text-base">ລາຍການ <span className="text-gray-400 font-normal text-sm">Menu</span></h2>
-            <span className="text-xs text-gray-400">{MENU.filter(m => m.stock > 0).length} available</span>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            {MENU.map((item, idx) => (
-              <FoodCard
-                key={item.id}
-                item={item}
-                idx={idx}
-                qty={getQty(item.id)}
-                onAdd={() => handleAdd(item)}
-                onMinus={() => handleMinus(item)}
-              />
-            ))}
-          </div>
-        </div>
-
-        {/* Bottom spacer */}
-        <div className="h-12" />
-      </div>
-
-      {/* ── Floating Cart Bar ─────────────────────────────────────────── */}
-      {cartCount > 0 && (
-        <div className="fixed bottom-5 left-1/2 -translate-x-1/2 z-30 w-full max-w-md px-4">
-          <button
-            onClick={() => setStep('cart')}
-            className="w-full flex items-center justify-between px-5 py-4 rounded-2xl shadow-2xl text-white font-bold transition-all active:scale-95"
-            style={{ background: 'linear-gradient(135deg, #f97316, #ea580c)' }}
-          >
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center relative">
-                <ShoppingCart size={16} />
-                <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-white text-orange-500 text-[10px] font-black flex items-center justify-center">
-                  {cartCount}
-                </span>
-              </div>
-              <span>{cartCount} item{cartCount > 1 ? 's' : ''}</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span>{fmtPrice(cartTotal)}</span>
-              <span className="text-white/70 text-sm">View Order →</span>
-            </div>
-          </button>
-        </div>
-      )}
-
-      {/* ── Order Sheet ───────────────────────────────────────────────── */}
-      {step === 'cart' && (
-        <OrderSheet
-          cart={cart}
-          roundLabel={`${selectedRound.label} · ${selectedRound.pickupTime}`}
-          onClose={() => setStep('browse')}
-          onQtyChange={handleQtyChange}
-          onNoteChange={handleNoteChange}
-          onSubmit={handleSubmit}
-        />
-      )}
-    </div>
-  )
+  return <ConfirmScreen cart={cart} onBack={handleBack} />
 }
