@@ -1,7 +1,0 @@
-node_modules/
-.next/
-out/
-.env.local
-.vercel
-.claude/worktrees/
-pos-for-you/app/.env.local

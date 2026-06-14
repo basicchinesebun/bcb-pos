@@ -1,8 +1,0 @@
-{
-  "framework": "nextjs",
-  "cleanUrls": true,
-  "trailingSlash": false,
-  "redirects": [
-    { "source": "/", "destination": "/order", "permanent": false }
-  ]
-}
