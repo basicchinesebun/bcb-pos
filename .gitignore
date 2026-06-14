@@ -3,3 +3,5 @@ node_modules/
 out/
 .env.local
 .vercel
+.claude/worktrees/
+pos-for-you/app/.env.local
