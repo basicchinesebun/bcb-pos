@@ -476,7 +476,7 @@ DECLARE
 BEGIN
   SELECT COALESCE(MAX(
     CASE WHEN created_at::DATE = today
-         THEN CAST(NULLIF(regexp_replace(queue_number, '\D', '', 'g'), '') AS INT)
+         THEN CAST(NULLIF(regexp_replace(queue_number, '[^0-9]', '', 'g'), '') AS INT)
          ELSE 0
     END
   ), 0) + 1
