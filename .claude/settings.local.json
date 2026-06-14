@@ -24,7 +24,8 @@
       "mcp__45894cac-602c-45cf-a7f5-437de2064e7c__list_organizations",
       "mcp__45894cac-602c-45cf-a7f5-437de2064e7c__get_cost",
       "mcp__45894cac-602c-45cf-a7f5-437de2064e7c__confirm_cost",
-      "mcp__45894cac-602c-45cf-a7f5-437de2064e7c__create_project"
+      "mcp__45894cac-602c-45cf-a7f5-437de2064e7c__create_project",
+      "mcp__45894cac-602c-45cf-a7f5-437de2064e7c__get_publishable_keys"
     ]
   }
 }
