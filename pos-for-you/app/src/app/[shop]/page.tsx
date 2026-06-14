@@ -805,7 +805,6 @@ function ConfirmScreen({
 
 // ── Main Page ──────────────────────────────────────────────────────────────────
 export default function PublicShopPage({ params }: { params: Promise<{ shop: string }> }) {
-  // params is a Promise in Next.js 15 but we don't need the slug for mock data
   void params
 
   const [step, setStep] = useState<Step>('browse')
