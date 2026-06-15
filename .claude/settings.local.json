@@ -27,7 +27,9 @@
       "mcp__45894cac-602c-45cf-a7f5-437de2064e7c__create_project",
       "mcp__45894cac-602c-45cf-a7f5-437de2064e7c__get_publishable_keys",
       "mcp__c1e08ae7-57fc-4bb0-91ef-3722058815dd__netlify-project-services-reader",
-      "mcp__c1e08ae7-57fc-4bb0-91ef-3722058815dd__netlify-team-services-reader"
+      "mcp__c1e08ae7-57fc-4bb0-91ef-3722058815dd__netlify-team-services-reader",
+      "mcp__c1e08ae7-57fc-4bb0-91ef-3722058815dd__netlify-deploy-services-updater",
+      "mcp__c1e08ae7-57fc-4bb0-91ef-3722058815dd__netlify-user-services-reader"
     ]
   }
 }
