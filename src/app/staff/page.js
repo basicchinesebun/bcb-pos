@@ -100,6 +100,7 @@ export default function StaffPage() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [batchOpen, setBatchOpen] = useState(false)
   const [batchSelected, setBatchSelected] = useState(new Set())
+  const [cleaningSlips, setCleaningSlips] = useState(false)
   const chatBottomRef = useRef(null)
   const chatMsgsRef = useRef(null)
   const activeChatPhoneRef = useRef(null)
@@ -385,6 +386,28 @@ export default function StaffPage() {
     await supabase.from('orders').update({ paid: true, payment_method: method }).eq('id', o.id)
     setPayingId(null)
     showToast(`💰 #${String(o.qnum).padStart(4,'0')} ຮັບເງິນແລ້ວ`, 'green')
+  }
+
+  async function cleanOldSlips() {
+    setCleaningSlips(true)
+    const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
+    const old = orders.filter(o =>
+      (o.done || o.cancelled || o.status === 'rejected') && o.slip_url && new Date(o.created_at) < cutoff
+    )
+    let deleted = 0
+    for (const o of old) {
+      const marker = `/object/public/bcb - upload/`
+      const idx = o.slip_url.indexOf(marker)
+      if (idx !== -1) {
+        const filePath = decodeURIComponent(o.slip_url.slice(idx + marker.length).split('?')[0])
+        await supabase.storage.from('bcb - upload').remove([filePath])
+      }
+      await supabase.from('orders').update({ slip_url: null }).eq('id', o.id)
+      setOrders(prev => prev.map(ord => ord.id === o.id ? { ...ord, slip_url: null } : ord))
+      deleted++
+    }
+    setCleaningSlips(false)
+    showToast(`🗑 ລຶບສລິບເກົ່າ ${deleted} ໃບແລ້ວ · Bandwidth ຫຼຸດລົງແລ້ວ`, 'green')
   }
 
   function announce(qnum) {
@@ -1576,6 +1599,24 @@ export default function StaffPage() {
           ⚠ ສຕ໋ອກໃກ້ໝົດ: {lowStockMenus.map(m => `${m.name} (ຮ້ານ:${m.shop} ອອນໄລ:${m.online})`).join(' · ')}
         </div>
       )}
+      {(() => {
+        const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
+        const oldSlips = orders.filter(o => (o.done || o.cancelled || o.status === 'rejected') && o.slip_url && new Date(o.created_at) < cutoff)
+        if (oldSlips.length === 0) return null
+        return (
+          <div className="px-3 py-2 flex items-center justify-between gap-2" style={{ background: '#fff7ed', borderBottom: '2px solid #fed7aa' }}>
+            <span className="text-xs font-black" style={{ color: '#c2410c' }}>🗄 ສລິບເກົ່າ {oldSlips.length} ໃບ ກຳລັງໃຊ້ Bandwidth ຟຣີ — ລຶບໄດ້ເລີຍ</span>
+            <button
+              onClick={cleanOldSlips}
+              disabled={cleaningSlips}
+              className="text-xs font-black px-3 py-1.5 rounded-lg flex-shrink-0"
+              style={{ background: '#c2410c', color: 'white' }}
+            >
+              {cleaningSlips ? '⏳...' : '🗑 ລຶບ'}
+            </button>
+          </div>
+        )
+      })()}
 
       {/* ─── ORDERS TAB ─── */}
       {tab === 'orders' && (
