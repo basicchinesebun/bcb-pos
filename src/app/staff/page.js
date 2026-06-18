@@ -898,17 +898,33 @@ export default function StaffPage() {
     showToast('ລຶບເມນູ ✅', 'green')
   }
 
+  function compressImage(file, maxW = 600, quality = 0.75) {
+    return new Promise(resolve => {
+      const img = new Image()
+      const url = URL.createObjectURL(file)
+      img.onload = () => {
+        const scale = Math.min(1, maxW / img.width)
+        const canvas = document.createElement('canvas')
+        canvas.width = img.width * scale
+        canvas.height = img.height * scale
+        canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height)
+        URL.revokeObjectURL(url)
+        canvas.toBlob(blob => resolve(blob || file), 'image/jpeg', quality)
+      }
+      img.src = url
+    })
+  }
+
   async function uploadMenuImg(e, i) {
     const file = e.target.files[0]
     if (!file) return
     const reader = new FileReader()
     reader.onload = ev => setImgPreviews(prev => ({ ...prev, [i]: ev.target.result }))
     reader.readAsDataURL(file)
-    const ext = file.name.split('.').pop()?.toLowerCase() || 'jpg'
-    const contentType = file.type || (ext === 'png' ? 'image/png' : 'image/jpeg')
-    const { error } = await supabase.storage.from('bcb - upload').upload(`menu/${i}.${ext}`, file, { upsert: true, contentType })
+    const compressed = await compressImage(file)
+    const { error } = await supabase.storage.from('bcb - upload').upload(`menu/${i}.jpg`, compressed, { upsert: true, contentType: 'image/jpeg' })
     if (error) { console.error('uploadMenuImg error:', error); showToast('❌ ' + (error.message || 'ອັບໂຫລດຜິດ'), 'red'); setImgPreviews(prev => { const n = {...prev}; delete n[i]; return n }); return }
-    const { data } = supabase.storage.from('bcb - upload').getPublicUrl(`menu/${i}.${ext}`)
+    const { data } = supabase.storage.from('bcb - upload').getPublicUrl(`menu/${i}.jpg`)
     const newImg = { ...images, [i]: data.publicUrl + '?t=' + Date.now() }
     setImages(newImg)
     setImgPreviews(prev => { const n = {...prev}; delete n[i]; return n })

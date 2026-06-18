@@ -9,6 +9,10 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 )
 
+let _stockCache = null
+let _stockCacheTime = 0
+const CACHE_TTL = 5 * 60 * 1000
+
 export async function GET(req) {
   const { searchParams } = new URL(req.url)
   const mode = searchParams.get('hub.mode')
@@ -45,6 +49,7 @@ export async function POST(req) {
 }
 
 async function getStockInfo() {
+  if (_stockCache && Date.now() - _stockCacheTime < CACHE_TTL) return _stockCache
   try {
     const { data } = await supabase
       .from('shop_config')
@@ -59,11 +64,13 @@ async function getStockInfo() {
     const stock = config.stock_online || []
     const onlineOn = config.settings?.onlineOn !== false
 
-    if (!onlineOn) return 'ຮ້ານປິດຮັບ Online ໃນຕອນນີ້'
+    if (!onlineOn) { _stockCache = 'ຮ້ານປິດຮັບ Online ໃນຕອນນີ້'; _stockCacheTime = Date.now(); return _stockCache }
 
-    return menus.map((m, i) =>
+    _stockCache = menus.map((m, i) =>
       `- ${m.lo}: ${(stock[i] || 0) > 0 ? `${stock[i]} ຊິ້ນ (${(prices[i] || 0).toLocaleString()} ກີບ)` : 'ໝົດແລ້ວ'}`
     ).join('\n') || 'ບໍ່ມີຂໍ້ມູນສິນຄ້າ'
+    _stockCacheTime = Date.now()
+    return _stockCache
   } catch {
     return 'ບໍ່ສາມາດດຶງຂໍ້ມູນສິນຄ້າໄດ້'
   }
