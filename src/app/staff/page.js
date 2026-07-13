@@ -96,6 +96,8 @@ export default function StaffPage() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [batchOpen, setBatchOpen] = useState(false)
   const [batchSelected, setBatchSelected] = useState(new Set())
+  const [selectedSlipIds, setSelectedSlipIds] = useState(new Set())
+  const [deletingSlips, setDeletingSlips] = useState(false)
   const chatBottomRef = useRef(null)
   const activeChatPhoneRef = useRef(null)
   const voicesRef = useRef([])
@@ -735,6 +737,32 @@ export default function StaffPage() {
     } catch (err) {
       setSlipVerify(prev => ({ ...prev, [o.id]: { loading: false, error: err.message } }))
     }
+  }
+
+  async function deleteSelectedSlips() {
+    if (selectedSlipIds.size === 0) return
+    setDeletingSlips(true)
+    let deleted = 0
+    for (const id of selectedSlipIds) {
+      const o = orders.find(ord => ord.id === id)
+      if (!o?.slip_url) continue
+      try {
+        const marker = '/object/public/bcb - upload/'
+        const idx = o.slip_url.indexOf(marker)
+        if (idx !== -1) {
+          const filePath = decodeURIComponent(o.slip_url.slice(idx + marker.length).split('?')[0])
+          await supabase.storage.from('bcb - upload').remove([filePath])
+        }
+        await supabase.from('orders').update({ slip_url: null }).eq('id', id)
+        setOrders(prev => prev.map(ord => ord.id === id ? { ...ord, slip_url: null } : ord))
+        deleted++
+      } catch (e) {
+        console.error('deleteSlip error:', e)
+      }
+    }
+    setSelectedSlipIds(new Set())
+    setDeletingSlips(false)
+    showToast(`🗑 ລຶບສລິບ ${deleted} ໃບ ✅`, 'green')
   }
 
   // ─── Menus ───
@@ -1974,6 +2002,78 @@ export default function StaffPage() {
                 </div>
               </details>
 
+              {/* Slip Gallery */}
+              <details className="card">
+                <summary className="font-black text-xs tracking-widest uppercase cursor-pointer" style={{ color: 'var(--brown3)' }}>
+                  {'🗑 ຈັດການສລິບ'}
+                  {orders.filter(o => o.slip_url).length > 0 && (
+                    <span className="ml-1 px-1.5 py-0.5 rounded-full text-xs" style={{ background: '#fef2f2', color: '#dc2626' }}>
+                      {orders.filter(o => o.slip_url).length}
+                    </span>
+                  )}
+                </summary>
+                <div className="mt-3">
+                  {orders.filter(o => o.slip_url).length === 0 ? (
+                    <div className="text-center py-4 text-xs font-bold" style={{ color: 'var(--cream3)' }}>ບໍ່ມີສລິບ</div>
+                  ) : (
+                    <>
+                      <div className="flex gap-2 mb-3 flex-wrap items-center">
+                        <button
+                          onClick={() => setSelectedSlipIds(new Set(orders.filter(o => o.slip_url).map(o => o.id)))}
+                          className="text-xs px-2.5 py-1.5 rounded-lg font-black"
+                          style={{ background: 'var(--cream2)', color: 'var(--brown2)', border: '1.5px solid var(--cream3)' }}>
+                          ເລືອກທັງໝົດ
+                        </button>
+                        {selectedSlipIds.size > 0 && (
+                          <>
+                            <button
+                              onClick={() => setSelectedSlipIds(new Set())}
+                              className="text-xs px-2.5 py-1.5 rounded-lg font-black"
+                              style={{ background: 'var(--cream2)', color: 'var(--brown2)', border: '1.5px solid var(--cream3)' }}>
+                              ຍົກເລີກ
+                            </button>
+                            <button
+                              onClick={() => showConfirm(`ລຶບສລິບ ${selectedSlipIds.size} ໃບ ແທ້ບໍ?`, deleteSelectedSlips)}
+                              disabled={deletingSlips}
+                              className="text-xs px-2.5 py-1.5 rounded-lg font-black"
+                              style={{ background: '#fef2f2', color: '#dc2626', border: '1.5px solid #fca5a5' }}>
+                              {deletingSlips ? '⏳...' : `🗑 ລຶບ (${selectedSlipIds.size})`}
+                            </button>
+                          </>
+                        )}
+                      </div>
+                      <div className="grid grid-cols-3 gap-2">
+                        {orders.filter(o => o.slip_url).sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).map(o => {
+                          const isSelected = selectedSlipIds.has(o.id)
+                          const date = new Date(o.created_at).toLocaleDateString('lo-LA', { day: '2-digit', month: '2-digit' })
+                          return (
+                            <div
+                              key={o.id}
+                              onClick={() => setSelectedSlipIds(prev => {
+                                const n = new Set(prev)
+                                if (n.has(o.id)) n.delete(o.id); else n.add(o.id)
+                                return n
+                              })}
+                              className="relative cursor-pointer rounded-xl overflow-hidden select-none"
+                              style={{ border: isSelected ? '2.5px solid #dc2626' : '2px solid var(--cream3)' }}>
+                              <img src={o.slip_url} alt={`slip ${o.qnum}`} className="w-full aspect-square object-cover" />
+                              {isSelected && (
+                                <div className="absolute inset-0 flex items-center justify-center" style={{ background: 'rgba(220,38,38,0.25)' }}>
+                                  <span className="w-6 h-6 rounded-full bg-red-600 flex items-center justify-center text-white font-black text-sm">✓</span>
+                                </div>
+                              )}
+                              <div className="absolute bottom-0 left-0 right-0 px-1 py-0.5 text-white font-black truncate" style={{ background: 'rgba(61,31,10,0.75)', fontSize: 9 }}>
+                                #{o.qnum} · {date}
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </>
+                  )}
+                </div>
+              </details>
+
               {/* Export / Import */}
               <details className="card">
                 <summary className="font-black text-xs tracking-widest uppercase cursor-pointer" style={{ color: 'var(--brown3)' }}>💾 ຂໍ້ມູນ · Data</summary>
@@ -2352,10 +2452,10 @@ export default function StaffPage() {
                   )}
                 </div>
               )}
-              </div>{/* end scroll area */}
-            </div>{/* end Orders Main */}
-          </div>{/* end sidebar+orders grid */}
-        </div>{/* end orders tab */}
+              </div>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* ─── SALES TAB ─── */}
