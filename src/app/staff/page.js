@@ -829,18 +829,42 @@ export default function StaffPage() {
     showToast('ລຶບເມນູ ✅', 'green')
   }
 
+  function compressImage(file, maxW = 800, quality = 0.8) {
+    return new Promise(resolve => {
+      const img = new Image()
+      const url = URL.createObjectURL(file)
+      img.onload = () => {
+        const scale = Math.min(1, maxW / img.width)
+        const canvas = document.createElement('canvas')
+        canvas.width = img.width * scale
+        canvas.height = img.height * scale
+        canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height)
+        URL.revokeObjectURL(url)
+        canvas.toBlob(blob => resolve(blob || file), 'image/jpeg', quality)
+      }
+      img.onerror = () => { URL.revokeObjectURL(url); resolve(file) }
+      img.src = url
+    })
+  }
+
+  async function uploadToR2(file, path) {
+    const form = new FormData()
+    form.append('file', file, path.split('/').pop())
+    form.append('path', path)
+    const res = await fetch('/api/upload', { method: 'POST', body: form })
+    return res.json()
+  }
+
   async function uploadMenuImg(e, i) {
     const file = e.target.files[0]
     if (!file) return
     const reader = new FileReader()
     reader.onload = ev => setImgPreviews(prev => ({ ...prev, [i]: ev.target.result }))
     reader.readAsDataURL(file)
-    const ext = file.name.split('.').pop()?.toLowerCase() || 'jpg'
-    const contentType = file.type || (ext === 'png' ? 'image/png' : 'image/jpeg')
-    const { error } = await supabase.storage.from('bcb - upload').upload(`menu/${i}.${ext}`, file, { upsert: true, contentType })
-    if (error) { console.error('uploadMenuImg error:', error); showToast('❌ ' + (error.message || 'ອັບໂຫລດຜິດ'), 'red'); setImgPreviews(prev => { const n = {...prev}; delete n[i]; return n }); return }
-    const { data } = supabase.storage.from('bcb - upload').getPublicUrl(`menu/${i}.${ext}`)
-    const newImg = { ...images, [i]: data.publicUrl + '?t=' + Date.now() }
+    const compressed = await compressImage(file, 800, 0.8)
+    const data = await uploadToR2(compressed, `menu/${i}.jpg`)
+    if (!data.success) { showToast('❌ ' + (data.error || 'ອັບໂຫລດຜິດ'), 'red'); setImgPreviews(prev => { const n = {...prev}; delete n[i]; return n }); return }
+    const newImg = { ...images, [i]: data.url + '?t=' + Date.now() }
     setImages(newImg)
     setImgPreviews(prev => { const n = {...prev}; delete n[i]; return n })
     await saveConfig('menu_images', newImg)
@@ -861,11 +885,9 @@ export default function StaffPage() {
     const reader = new FileReader()
     reader.onload = ev => setQrPreview(ev.target.result)
     reader.readAsDataURL(file)
-    const contentType = file.type || 'image/jpeg'
-    const { error } = await supabase.storage.from('bcb - upload').upload('qr/payment.jpg', file, { upsert: true, contentType })
-    if (error) { console.error('uploadQR error:', error); showToast('❌ ' + (error.message || 'ຜິດ'), 'red'); setQrPreview(null); return }
-    const { data } = supabase.storage.from('bcb - upload').getPublicUrl('qr/payment.jpg')
-    const qrUrl = data.publicUrl + '?t=' + Date.now()
+    const data = await uploadToR2(file, 'qr/payment.jpg')
+    if (!data.success) { showToast('❌ ' + (data.error || 'ຜິດ'), 'red'); setQrPreview(null); return }
+    const qrUrl = data.url + '?t=' + Date.now()
     setQrImage(qrUrl)
     setQrPreview(null)
     await saveConfig('qr_image', qrUrl)
@@ -900,11 +922,9 @@ export default function StaffPage() {
     const reader = new FileReader()
     reader.onload = ev => setLogoPreview(ev.target.result)
     reader.readAsDataURL(file)
-    const contentType = file.type || 'image/jpeg'
-    const { error } = await supabase.storage.from('bcb - upload').upload('shop/logo.jpg', file, { upsert: true, contentType })
-    if (error) { console.error('uploadLogo error:', error); showToast('❌ ' + (error.message || 'ອັບໂຫລດຜິດ'), 'red'); setLogoPreview(null); return }
-    const { data } = supabase.storage.from('bcb - upload').getPublicUrl('shop/logo.jpg')
-    const newInfo = { ...receiptDraft, logo: data.publicUrl + '?t=' + Date.now() }
+    const data = await uploadToR2(file, 'shop/logo.jpg')
+    if (!data.success) { showToast('❌ ' + (data.error || 'ອັບໂຫລດຜິດ'), 'red'); setLogoPreview(null); return }
+    const newInfo = { ...receiptDraft, logo: data.url + '?t=' + Date.now() }
     setShopInfo(newInfo); setReceiptDraft(newInfo)
     setLogoPreview(null)
     await saveConfig('shop_info', newInfo)
