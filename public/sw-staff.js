@@ -1,27 +1,11 @@
-const CACHE_NAME = 'bcb-staff-v7';
-const URLS_TO_CACHE = ['/icon-staff-192.png'];
-
-self.addEventListener('install', event => {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then(cache => cache.addAll(URLS_TO_CACHE))
-  );
-  self.skipWaiting();
-});
-
+// Self-destruct: unregister and clear all caches to force fresh load
+self.addEventListener('install', () => self.skipWaiting());
 self.addEventListener('activate', event => {
   event.waitUntil(
     caches.keys()
-      .then(keys => Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k))))
-      .then(() => self.clients.claim())
-  );
-});
-
-self.addEventListener('fetch', event => {
-  if (!event.request.url.startsWith(self.location.origin)) return;
-  // Navigation requests (HTML pages): don't intercept, let browser fetch normally
-  if (event.request.mode === 'navigate') return;
-  // Static assets: cache first
-  event.respondWith(
-    caches.match(event.request).then(cached => cached || fetch(event.request))
+      .then(keys => Promise.all(keys.map(k => caches.delete(k))))
+      .then(() => self.registration.unregister())
+      .then(() => self.clients.matchAll())
+      .then(clients => clients.forEach(c => c.navigate(c.url)))
   );
 });
