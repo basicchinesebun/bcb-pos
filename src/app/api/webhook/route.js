@@ -4,10 +4,14 @@ const VERIFY_TOKEN = process.env.FB_VERIFY_TOKEN
 const PAGE_ACCESS_TOKEN = process.env.FB_PAGE_ACCESS_TOKEN
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-)
+let _supabase = null
+function getSupabase() {
+  if (!_supabase) _supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  )
+  return _supabase
+}
 
 let _stockCache = null
 let _stockCacheTime = 0
@@ -51,7 +55,7 @@ export async function POST(req) {
 async function getStockInfo() {
   if (_stockCache && Date.now() - _stockCacheTime < CACHE_TTL) return _stockCache
   try {
-    const { data } = await supabase
+    const { data } = await getSupabase()
       .from('shop_config')
       .select('key, value')
       .in('key', ['menus', 'prices', 'stock_online', 'settings'])
