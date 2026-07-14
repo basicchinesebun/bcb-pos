@@ -1514,9 +1514,9 @@ export default function StaffPage() {
   )
 
   return (
-    <div className="h-dvh flex flex-col overflow-hidden" style={{ background: 'var(--cream)' }}>
+    <div style={{ display: 'grid', gridTemplateColumns: '64px 1fr', gridTemplateRows: '52px 1fr', height: '100dvh', overflow: 'hidden' }}>
       {/* Toast */}
-      <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-50 flex flex-col gap-2 items-center pointer-events-none">
+      <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 flex flex-col gap-2 items-center pointer-events-none">
         {toast.map(t => (
           <div key={t.id} className={`px-5 py-2 rounded-full text-sm font-black shadow-lg text-white ${
             t.type === 'green' ? 'bg-green-700' :
@@ -1527,43 +1527,69 @@ export default function StaffPage() {
         ))}
       </div>
 
-      {!isOnline && <div className="bg-red-700 text-white text-center py-2 text-sm font-black">⚠ ບໍ່ມີອິນເຕີເນັດ</div>}
-      {lowStockMenus.length > 0 && (
-        <div className="px-3 py-2 text-xs font-black" style={{ background: '#fef3c7', color: '#92400e' }}>
-          ⚠ ສຕ໋ອກໃກ້ໝົດ: {lowStockMenus.map(m => `${m.name} (ຮ້ານ:${m.shop} ອອນໄລ:${m.online})`).join(' · ')}
-        </div>
-      )}
+      {/* Left Rail Nav */}
+      <nav style={{ gridRow: '1 / 3', background: 'var(--brown)', display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '10px 0', gap: '4px', borderRight: '2px solid var(--brown2)' }}>
+        <div style={{ width: 38, height: 38, borderRadius: 10, background: 'var(--brown3)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 900, fontSize: 12, color: '#fff', marginBottom: 8, fontFamily: 'serif' }}>BCB</div>
+        <button onClick={() => setTab('orders')} style={{ width: 48, height: 48, borderRadius: 12, border: 'none', background: tab === 'orders' ? 'rgba(255,255,255,0.16)' : 'transparent', color: tab === 'orders' ? '#fff' : 'rgba(255,255,255,0.45)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 3, cursor: 'pointer', position: 'relative' }}>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M8 7h8M8 12h8M8 17h5"/></svg>
+          <span style={{ fontSize: 9, fontWeight: 700 }}>ອໍເດີ</span>
+          {pendingOnline > 0 && <span style={{ position: 'absolute', top: 6, right: 6, minWidth: 16, height: 16, borderRadius: 8, background: '#ef4444', color: '#fff', fontSize: 9, fontWeight: 900, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 3px' }}>{pendingOnline}</span>}
+        </button>
+        <button onClick={() => setTab('stock')} style={{ width: 48, height: 48, borderRadius: 12, border: 'none', background: tab === 'stock' ? 'rgba(255,255,255,0.16)' : 'transparent', color: tab === 'stock' ? '#fff' : 'rgba(255,255,255,0.45)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 3, cursor: 'pointer' }}>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+          <span style={{ fontSize: 9, fontWeight: 700 }}>ສະຕ໋ອກ</span>
+        </button>
+        <button onClick={() => setTab('sales')} style={{ width: 48, height: 48, borderRadius: 12, border: 'none', background: tab === 'sales' ? 'rgba(255,255,255,0.16)' : 'transparent', color: tab === 'sales' ? '#fff' : 'rgba(255,255,255,0.45)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 3, cursor: 'pointer' }}>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+          <span style={{ fontSize: 9, fontWeight: 700 }}>ຍອດ</span>
+        </button>
+        <button onClick={() => setTab('chat')} style={{ width: 48, height: 48, borderRadius: 12, border: 'none', background: tab === 'chat' ? 'rgba(255,255,255,0.16)' : 'transparent', color: tab === 'chat' ? '#fff' : 'rgba(255,255,255,0.45)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 3, cursor: 'pointer', position: 'relative' }}>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+          <span style={{ fontSize: 9, fontWeight: 700 }}>ແຊດ</span>
+          {unreadChat > 0 && <span style={{ position: 'absolute', top: 6, right: 6, minWidth: 16, height: 16, borderRadius: 8, background: '#ef4444', color: '#fff', fontSize: 9, fontWeight: 900, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 3px' }}>{unreadChat > 9 ? '9+' : unreadChat}</span>}
+        </button>
+        <div style={{ flex: 1 }} />
+        <button onClick={() => setTab('settings')} style={{ width: 48, height: 48, borderRadius: 12, border: 'none', background: tab === 'settings' ? 'rgba(255,255,255,0.16)' : 'transparent', color: tab === 'settings' ? '#fff' : 'rgba(255,255,255,0.45)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 3, cursor: 'pointer' }}>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/></svg>
+          <span style={{ fontSize: 9, fontWeight: 700 }}>ຕັ້ງຄ່າ</span>
+        </button>
+      </nav>
+
+      {/* Top Bar */}
+      <header style={{ gridColumn: '2', gridRow: '1', background: 'var(--warm-white)', borderBottom: '1px solid var(--cream3)', display: 'flex', alignItems: 'center', gap: 10, padding: '0 14px', flexShrink: 0 }}>
+        <div style={{ width: 7, height: 7, borderRadius: '50%', background: liveStatus === 'live' ? '#22c55e' : '#f59e0b', flexShrink: 0, boxShadow: liveStatus === 'live' ? '0 0 0 3px rgba(34,197,94,0.2)' : 'none' }} />
+        <span style={{ fontWeight: 900, fontSize: 15, color: 'var(--brown)', flex: 1 }}>
+          { tab === 'orders' ? 'ອໍເດີ' : tab === 'stock' ? 'ສະຕ໋ອກ' : tab === 'sales' ? 'ຍອດຂາຍ' : tab === 'chat' ? 'ແຊດ' : 'ຕັ້ງຄ່າ' }
+        </span>
+        {tab === 'orders' && (
+          <>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '5px 10px', borderRadius: 20, fontSize: 12, fontWeight: 700, background: 'var(--cream2)', color: 'var(--brown2)', border: '1px solid var(--cream3)' }}>
+              <span>ລໍຖ້າ</span>
+              <span style={{ fontSize: 14, fontWeight: 900, color: 'var(--brown)', fontVariantNumeric: 'tabular-nums' }}>{waiting}</span>
+            </div>
+            <button onClick={connectUsbPrinter} style={{ fontSize: 11, fontWeight: 800, padding: '5px 10px', borderRadius: 8, border: `1.5px solid ${usbConnected ? '#86efac' : 'var(--cream3)'}`, background: 'transparent', color: usbConnected ? '#15803d' : 'var(--brown2)', cursor: 'pointer' }}>
+              {usbConnected ? '🖨 USB ✓' : 'USB'}
+            </button>
+            <button onClick={connectPrinter} style={{ fontSize: 11, fontWeight: 800, padding: '5px 10px', borderRadius: 8, border: `1.5px solid ${btConnected ? '#86efac' : 'var(--cream3)'}`, background: 'transparent', color: btConnected ? '#15803d' : 'var(--brown2)', cursor: 'pointer' }}>
+              {btConnected ? '🖨 BT ✓' : 'BT'}
+            </button>
+            <button onClick={() => setSidebarOpen(s => !s)} title={sidebarOpen ? 'ເຊື່ອງ' : 'ສະແດງ'} style={{ fontSize: 14, padding: '5px 10px', borderRadius: 8, border: '1.5px solid var(--cream3)', background: sidebarOpen ? 'var(--brown)' : 'transparent', color: sidebarOpen ? 'var(--cream)' : 'var(--brown2)', cursor: 'pointer' }}>☰</button>
+          </>
+        )}
+      </header>
+
+      {/* Content Area */}
+      <div style={{ gridColumn: '2', gridRow: '2', overflowY: 'auto', overflowX: 'hidden', display: 'flex', flexDirection: 'column' }}>
+        {!isOnline && <div className="bg-red-700 text-white text-center py-2 text-sm font-black">⚠ ບໍ່ມີອິນເຕີເນັດ</div>}
+        {lowStockMenus.length > 0 && (
+          <div className="px-3 py-2 text-xs font-black" style={{ background: '#fef3c7', color: '#92400e' }}>
+            ⚠ ສຕ໋ອກໃກ້ໝົດ: {lowStockMenus.map(m => `${m.name} (ຮ້ານ:${m.shop} ອອນໄລ:${m.online})`).join(' · ')}
+          </div>
+        )}
 
       {/* ─── ORDERS TAB ─── */}
       {tab === 'orders' && (
-        <div className="flex-1 flex flex-col overflow-hidden">
-          <div className="flex-shrink-0 flex items-center justify-between px-4 py-3" style={{ background: 'var(--brown)' }}>
-            <div className="flex items-center gap-2">
-              <div className="font-serif text-lg font-black" style={{ color: 'var(--cream)' }}>
-                {shopInfo.name}
-                {pendingOnline > 0 && <span className="ml-2 bg-red-500 text-white text-xs rounded-full px-2 py-0.5">{pendingOnline}</span>}
-              </div>
-              {/* Realtime status dot */}
-              <div className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-black"
-                style={{
-                  background: liveStatus === 'live' ? 'rgba(34,197,94,0.2)' : 'rgba(234,179,8,0.2)',
-                  color: liveStatus === 'live' ? '#86efac' : '#fde68a',
-                }}>
-                <span className="w-1.5 h-1.5 rounded-full flex-shrink-0"
-                  style={{ background: liveStatus === 'live' ? '#22c55e' : '#f59e0b' }} />
-                {liveStatus === 'live' ? 'LIVE' : '...'}
-              </div>
-            </div>
-            <div className="flex gap-2">
-              <button onClick={connectUsbPrinter} className={`text-xs font-black px-3 py-2 rounded-lg border ${usbConnected ? 'border-green-400 text-green-300' : 'border-[rgba(253,246,238,0.35)] text-[#fdf6ee]'}`}>
-                {usbConnected ? '🖨 USB ✓' : 'USB'}
-              </button>
-              <button onClick={connectPrinter} className={`text-xs font-black px-3 py-2 rounded-lg border ${btConnected ? 'border-green-400 text-green-300' : 'border-[rgba(253,246,238,0.35)] text-[#fdf6ee]'}`}>
-                {btConnected ? '🖨 BT ✓' : 'BT'}
-              </button>
-              <button onClick={() => alert('ຕ້ອງຊອກຫາ ↺ Reset ໃນລາຍການ')} className="text-xs font-black px-3 py-2 rounded-lg border border-red-400 text-red-300">↺</button>
-            </div>
-          </div>
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
 
           <div className="flex-shrink-0 grid grid-cols-3 gap-2 p-3">
             {[['ລໍຖ້າ', waiting, 'var(--brown)'], ['ສຳເລັດ', done, 'var(--green,#2d6a2d)'], ['ທັງໝົດ', orders.length, 'var(--gray3)']].map(([l, n, c]) => (
@@ -2480,10 +2506,7 @@ export default function StaffPage() {
 
       {/* ─── SALES TAB ─── */}
       {tab === 'sales' && (
-        <div className="flex-1 overflow-y-auto pb-16">
-          <div className="sticky top-0 z-10 px-4 py-3" style={{ background: 'var(--brown)' }}>
-            <div className="font-serif text-lg font-black" style={{ color: 'var(--cream)' }}>ຍອດຂາຍ · Sales</div>
-          </div>
+        <div>
           <div className="max-w-lg mx-auto p-4">
             <select value={salesDate} onChange={e => setSalesDate(e.target.value)} className="input-field mb-4">
               {salesDates.map(d => <option key={d} value={d}>{d}</option>)}
@@ -2720,36 +2743,71 @@ export default function StaffPage() {
         </div>
       )}
 
+      {/* ─── STOCK TAB ─── */}
+      {tab === 'stock' && (
+        <div style={{ padding: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+            <span style={{ fontSize: 13, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--gray3)' }}>ສະຕ໋ອກ ປະຈຳວັນ</span>
+            <button onClick={saveStock} className="btn-primary" style={{ fontSize: 12, padding: '7px 14px', width: 'auto' }}>💾 ບັນທຶກ</button>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr repeat(3, 70px)', gap: 8, fontSize: 11, fontWeight: 700, color: 'var(--gray3)', padding: '0 4px 6px', borderBottom: '1px solid var(--cream3)', marginBottom: 6 }}>
+            <span>ເມນູ</span>
+            <span style={{ textAlign: 'center' }}>ລວມ</span>
+            <span style={{ textAlign: 'center' }}>ຮ້ານ</span>
+            <span style={{ textAlign: 'center' }}>Online</span>
+          </div>
+          {menus.map((m, i) => {
+            const sh = stockShop[i]||0, on = stockOnline[i]||0, tot = stockTotal[i]||0
+            return (
+              <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr repeat(3, 70px)', gap: 8, alignItems: 'center', padding: '10px 4px', borderBottom: '1px solid var(--cream3)' }}>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--brown)' }}>{m.lo || m}</div>
+                  {sh === 0 && <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 4, background: '#fef2f2', color: '#dc2626', display: 'inline-block', marginTop: 2 }}>ໝົດ</span>}
+                  {sh > 0 && sh <= 5 && <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 4, background: '#fffbeb', color: '#d97706', display: 'inline-block', marginTop: 2 }}>ໃກ້ໝົດ</span>}
+                </div>
+                <div style={{ textAlign: 'center', fontSize: 20, fontWeight: 900, color: 'var(--brown)', fontVariantNumeric: 'tabular-nums' }}>{tot}</div>
+                <input type="text" inputMode="numeric" value={sh}
+                  onChange={e => updateStock('shop', i, e.target.value)}
+                  style={{ width: 60, height: 36, borderRadius: 8, border: '1.5px solid var(--cream3)', background: 'var(--warm-white)', color: 'var(--brown)', textAlign: 'center', fontSize: 15, fontWeight: 700, display: 'block', margin: 'auto' }} />
+                <input type="text" inputMode="numeric" value={on}
+                  onChange={e => updateStock('online', i, e.target.value)}
+                  style={{ width: 60, height: 36, borderRadius: 8, border: '1.5px solid var(--cream3)', background: 'var(--warm-white)', color: 'var(--brown)', textAlign: 'center', fontSize: 15, fontWeight: 700, display: 'block', margin: 'auto' }} />
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+      {/* ─── SETTINGS TAB ─── */}
+      {tab === 'settings' && (
+        <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <a href="/qr" target="_blank" rel="noopener noreferrer"
+            className="card flex items-center gap-3 active:scale-95 transition-all"
+            style={{ textDecoration: 'none' }}>
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 text-xl"
+              style={{ background: 'var(--cream2)' }}>📱</div>
+            <div className="flex-1">
+              <div className="font-black text-sm" style={{ color: 'var(--brown)' }}>QR Code Pre-Order</div>
+              <div className="text-xs font-bold" style={{ color: 'var(--gray3)' }}>ສະແດງ QR ໃຫ້ລູກຄ້າສະແກນ</div>
+            </div>
+            <div className="text-xs font-black px-2 py-1 rounded-lg" style={{ background: 'var(--brown)', color: 'var(--cream)' }}>ເປີດ →</div>
+          </a>
+          <div className="text-xs font-bold py-4 text-center" style={{ color: 'var(--gray3)' }}>ຕັ້ງຄ່າເພີ່ມເຕີມຢູ່ໃນ Sidebar ຂອງໜ້າ Orders ☰</div>
+        </div>
+      )}
+
+      </div>
+
       {/* Quick Order FAB */}
       {tab === 'orders' && !qoOpen && (
         <button
           onClick={() => { resetQo(); setQoOpen(true) }}
-          className="fixed bottom-20 right-4 z-40 w-16 h-16 rounded-full flex items-center justify-center text-3xl active:scale-95 transition-all"
+          className="fixed bottom-4 right-4 z-40 w-16 h-16 rounded-full flex items-center justify-center text-3xl active:scale-95 transition-all"
           style={{ background: 'var(--brown)', color: 'var(--cream)', boxShadow: '0 4px 20px rgba(61,31,10,0.45)', border: '3px solid var(--cream)' }}
         >
           🛒
         </button>
       )}
-
-      {/* Bottom Nav */}
-      <div className="flex flex-shrink-0" style={{ background: 'var(--brown)', borderTop: '2px solid var(--brown2)' }}>
-        {[['orders','📋','ອໍເດີ'],['sales','📊','ຍອດຂາຍ']].map(([t,icon,l]) => (
-          <button key={t} onClick={() => setTab(t)} className={`flex-1 flex flex-col items-center py-3 gap-1 border-none text-xs font-bold ${tab===t ? 'text-[#fdf6ee]' : 'text-[rgba(253,246,238,0.45)]'}`} style={{ background: 'transparent' }}>
-            <span className="text-2xl">{icon}</span>{l}
-          </button>
-        ))}
-        <button onClick={() => setTab('chat')} className={`flex-1 flex flex-col items-center py-3 gap-1 border-none text-xs font-bold relative ${tab==='chat' ? 'text-[#fdf6ee]' : 'text-[rgba(253,246,238,0.45)]'}`} style={{ background: 'transparent' }}>
-          <span className="text-2xl relative inline-block">
-            💬
-            {unreadChat > 0 && (
-              <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[9px] font-black rounded-full w-4 h-4 flex items-center justify-center leading-none">
-                {unreadChat > 9 ? '9+' : unreadChat}
-              </span>
-            )}
-          </span>
-          ແຊດ
-        </button>
-      </div>
 
       {/* Quick Order Modal */}
       {qoOpen && (
