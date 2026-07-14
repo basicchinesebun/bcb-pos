@@ -45,8 +45,6 @@ export default function StaffPage() {
   const [qrImage, setQrImage] = useState(null)
   const [qrPreview, setQrPreview] = useState(null)
   const [logoPreview, setLogoPreview] = useState(null)
-  const [noticeImage, setNoticeImage] = useState('')
-  const [noticePreview, setNoticePreview] = useState(null)
   const [shopInfo, setShopInfo] = useState({ name: 'Basic Chinese Bun', address: '', phone: '', footer: 'ຂອບໃຈທີ່ໃຊ້ບໍລິການ', logo: '', printerWidth: 384 })
   const [receiptDraft, setReceiptDraft] = useState({ name: 'Basic Chinese Bun', address: '', phone: '', footer: 'ຂອບໃຈທີ່ໃຊ້ບໍລິການ', logo: '', printerWidth: 384 })
   const [receiptPreviewUrl, setReceiptPreviewUrl] = useState('')
@@ -82,8 +80,6 @@ export default function StaffPage() {
   const [chatLabels, setChatLabels] = useState({})
   const [labelFilter, setLabelFilter] = useState(null)
   const [payingId, setPayingId] = useState(null)
-  const [deletingMsgId, setDeletingMsgId] = useState(null)
-  const [voiceRecording, setVoiceRecording] = useState(false)
   const [editOrder, setEditOrder] = useState(null)
   const [editItems, setEditItems] = useState({})
   const [editSaving, setEditSaving] = useState(false)
@@ -96,18 +92,16 @@ export default function StaffPage() {
   const [qoSubmitting, setQoSubmitting] = useState(false)
   const [qoPackToast, setQoPackToast] = useState(null)
   const [qoName, setQoName] = useState('')
-  const [kbOffset, setKbOffset] = useState(0)
+  const [chatVH, setChatVH] = useState(null)
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [batchOpen, setBatchOpen] = useState(false)
   const [batchSelected, setBatchSelected] = useState(new Set())
-  const [cleaningSlips, setCleaningSlips] = useState(false)
+  const [selectedSlipIds, setSelectedSlipIds] = useState(new Set())
+  const [deletingSlips, setDeletingSlips] = useState(false)
   const chatBottomRef = useRef(null)
-  const chatMsgsRef = useRef(null)
   const activeChatPhoneRef = useRef(null)
   const voicesRef = useRef([])
   const receiptFontRef = useRef(null)
-  const recognitionRef = useRef(null)
-  const longPressTimer = useRef(null)
   const slipVerifyingRef = useRef(new Set())
 
   useEffect(() => {
@@ -202,8 +196,7 @@ export default function StaffPage() {
             setUnreadChat(prev => prev + 1)
           }
         } else if ((msg.sender === 'staff' || msg.sender === 'ai') && currentPhone === msg.phone) {
-          // Don't add if already shown as optimistic (temp id replaced separately)
-          setChatMessages(prev => prev.some(m => m.id === msg.id) ? prev : [...prev, msg])
+          setChatMessages(prev => [...prev, msg])
         }
         setChatConvos(prev => {
           const idx = prev.findIndex(c => c.phone === msg.phone)
@@ -226,9 +219,6 @@ export default function StaffPage() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_labels' }, payload => {
         if (payload.new) setChatLabels(prev => ({ ...prev, [payload.new.phone]: payload.new.label }))
       })
-      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'messages' }, payload => {
-        setChatMessages(prev => prev.filter(m => m.id !== payload.old.id))
-      })
       .subscribe()
     return () => supabase.removeChannel(ch)
   }, [])
@@ -238,27 +228,16 @@ export default function StaffPage() {
   }, [activeChatPhone])
 
   useEffect(() => {
-    if (chatMsgsRef.current) {
-      chatMsgsRef.current.scrollTop = chatMsgsRef.current.scrollHeight
-    }
+    chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [chatMessages])
 
-  // iOS Safari keyboard: measure keyboard height via visualViewport offset
+  // iOS Safari keyboard: track visualViewport so chat input stays above keyboard
   useEffect(() => {
-    if (tab !== 'chat' || !activeChatPhone) { setKbOffset(0); return }
-    function update() {
-      const vv = window.visualViewport
-      if (!vv) return
-      const kb = Math.max(0, window.innerHeight - vv.height - (vv.offsetTop || 0))
-      setKbOffset(kb)
-    }
+    if (tab !== 'chat' || !activeChatPhone) { setChatVH(null); return }
+    function update() { setChatVH((window.visualViewport?.height ?? window.innerHeight) - 52 + 'px') }
     update()
     window.visualViewport?.addEventListener('resize', update)
-    window.visualViewport?.addEventListener('scroll', update)
-    return () => {
-      window.visualViewport?.removeEventListener('resize', update)
-      window.visualViewport?.removeEventListener('scroll', update)
-    }
+    return () => window.visualViewport?.removeEventListener('resize', update)
   }, [tab, activeChatPhone])
 
   function showToast(msg, type = '') {
@@ -388,28 +367,6 @@ export default function StaffPage() {
     showToast(`💰 #${String(o.qnum).padStart(4,'0')} ຮັບເງິນແລ້ວ`, 'green')
   }
 
-  async function cleanOldSlips() {
-    setCleaningSlips(true)
-    const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
-    const old = orders.filter(o =>
-      (o.done || o.cancelled || o.status === 'rejected') && o.slip_url && new Date(o.created_at) < cutoff
-    )
-    let deleted = 0
-    for (const o of old) {
-      const marker = `/object/public/bcb - upload/`
-      const idx = o.slip_url.indexOf(marker)
-      if (idx !== -1) {
-        const filePath = decodeURIComponent(o.slip_url.slice(idx + marker.length).split('?')[0])
-        await supabase.storage.from('bcb - upload').remove([filePath])
-      }
-      await supabase.from('orders').update({ slip_url: null }).eq('id', o.id)
-      setOrders(prev => prev.map(ord => ord.id === o.id ? { ...ord, slip_url: null } : ord))
-      deleted++
-    }
-    setCleaningSlips(false)
-    showToast(`🗑 ລຶບສລິບເກົ່າ ${deleted} ໃບແລ້ວ · Bandwidth ຫຼຸດລົງແລ້ວ`, 'green')
-  }
-
   function announce(qnum) {
     saveConfig('current_queue', String(qnum))
     if (!settings.soundOn) return
@@ -499,52 +456,13 @@ export default function StaffPage() {
   async function sendStaffMsg() {
     if (!chatInput.trim() || chatSending || !activeChatPhone || !supabase) return
     const convo = chatConvos.find(c => c.phone === activeChatPhone)
-    const text = chatInput.trim()
-    setChatInput('')
-    // Optimistic: show immediately
-    const tempId = 'tmp-' + Date.now()
-    const optimistic = { id: tempId, phone: activeChatPhone, sender: 'staff', text, created_at: new Date().toISOString(), name: convo?.name || '' }
-    setChatMessages(prev => [...prev, optimistic])
-    const { data } = await supabase.from('messages').insert({
+    setChatSending(true)
+    await supabase.from('messages').insert({
       phone: activeChatPhone, name: convo?.name || '',
-      sender: 'staff', text,
-    }).select().single()
-    // Replace temp with real (real-time INSERT will also fire but we deduplicate by id)
-    if (data) setChatMessages(prev => prev.map(m => m.id === tempId ? data : m))
-  }
-
-  async function deleteMessage(msgId) {
-    setDeletingMsgId(null)
-    setChatMessages(prev => prev.filter(m => m.id !== msgId))
-    await supabase.from('messages').delete().eq('id', msgId)
-  }
-
-  function startLongPress(msgId) {
-    longPressTimer.current = setTimeout(() => setDeletingMsgId(msgId), 500)
-  }
-  function cancelLongPress() {
-    clearTimeout(longPressTimer.current)
-  }
-
-  function startVoice() {
-    const SR = window.SpeechRecognition || window.webkitSpeechRecognition
-    if (!SR) { alert('Browser ນີ້ບໍ່ຮອງຮັບ Voice'); return }
-    const recognition = new SR()
-    recognition.lang = 'th-TH'
-    recognition.interimResults = false
-    recognition.onresult = (e) => {
-      const transcript = e.results[0]?.[0]?.transcript || ''
-      if (transcript) setChatInput(prev => (prev + ' ' + transcript).trim())
-    }
-    recognition.onend = () => setVoiceRecording(false)
-    recognition.onerror = () => setVoiceRecording(false)
-    recognitionRef.current = recognition
-    recognition.start()
-    setVoiceRecording(true)
-  }
-  function stopVoice() {
-    recognitionRef.current?.stop()
-    setVoiceRecording(false)
+      sender: 'staff', text: chatInput.trim(),
+    })
+    setChatInput('')
+    setChatSending(false)
   }
 
   async function loadAll() {
@@ -612,7 +530,6 @@ export default function StaffPage() {
     setTimeout(() => checkLowStock(loadedStockShop), 500)
     if (cfg.menu_images) setImages(JSON.parse(cfg.menu_images))
     if (cfg.qr_image) setQrImage(cfg.qr_image)
-    if (cfg.notice_image) setNoticeImage(cfg.notice_image)
     if (cfg.shop_info) {
       const info = JSON.parse(cfg.shop_info)
       setShopInfo(prev => ({ ...prev, ...info }))
@@ -624,18 +541,6 @@ export default function StaffPage() {
     if (cfg.staff_pin) setStaffPin(cfg.staff_pin)
     if (cfg.profit_pin) setProfitPin(cfg.profit_pin)
     if (cfg.walkin_code) setWalkinCode(cfg.walkin_code)
-    if (cfg.slip_verify_results) {
-      try {
-        const results = JSON.parse(cfg.slip_verify_results)
-        setSlipVerify(prev => {
-          const merged = { ...prev }
-          Object.keys(results).forEach(id => {
-            if (!merged[id]) merged[id] = { loading: false, result: results[id] }
-          })
-          return merged
-        })
-      } catch {}
-    }
 
     // ถ้ายังไม่มีข้อมูลใน Supabase ให้ save default ขึ้นไปก่อน
     if (!cfg.menus) {
@@ -824,7 +729,7 @@ export default function StaffPage() {
       const res = await fetch('/api/verify-slip', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ slipUrl: o.slip_url, expectedAmount: o.total, orderId: o.id }),
+        body: JSON.stringify({ slipUrl: o.slip_url, expectedAmount: o.total }),
       })
       const data = await res.json()
       if (!res.ok || data.error) throw new Error(data.error || 'ເກີດຂໍ້ຜິດພາດ')
@@ -832,6 +737,32 @@ export default function StaffPage() {
     } catch (err) {
       setSlipVerify(prev => ({ ...prev, [o.id]: { loading: false, error: err.message } }))
     }
+  }
+
+  async function deleteSelectedSlips() {
+    if (selectedSlipIds.size === 0) return
+    setDeletingSlips(true)
+    let deleted = 0
+    for (const id of selectedSlipIds) {
+      const o = orders.find(ord => ord.id === id)
+      if (!o?.slip_url) continue
+      try {
+        const marker = '/object/public/bcb - upload/'
+        const idx = o.slip_url.indexOf(marker)
+        if (idx !== -1) {
+          const filePath = decodeURIComponent(o.slip_url.slice(idx + marker.length).split('?')[0])
+          await supabase.storage.from('bcb - upload').remove([filePath])
+        }
+        await supabase.from('orders').update({ slip_url: null }).eq('id', id)
+        setOrders(prev => prev.map(ord => ord.id === id ? { ...ord, slip_url: null } : ord))
+        deleted++
+      } catch (e) {
+        console.error('deleteSlip error:', e)
+      }
+    }
+    setSelectedSlipIds(new Set())
+    setDeletingSlips(false)
+    showToast(`🗑 ລຶບສລິບ ${deleted} ໃບ ✅`, 'green')
   }
 
   // ─── Menus ───
@@ -898,7 +829,7 @@ export default function StaffPage() {
     showToast('ລຶບເມນູ ✅', 'green')
   }
 
-  function compressImage(file, maxW = 600, quality = 0.75) {
+  function compressImage(file, maxW = 800, quality = 0.8) {
     return new Promise(resolve => {
       const img = new Image()
       const url = URL.createObjectURL(file)
@@ -911,8 +842,17 @@ export default function StaffPage() {
         URL.revokeObjectURL(url)
         canvas.toBlob(blob => resolve(blob || file), 'image/jpeg', quality)
       }
+      img.onerror = () => { URL.revokeObjectURL(url); resolve(file) }
       img.src = url
     })
+  }
+
+  async function uploadToR2(file, path) {
+    const form = new FormData()
+    form.append('file', file, path.split('/').pop())
+    form.append('path', path)
+    const res = await fetch('/api/upload', { method: 'POST', body: form })
+    return res.json()
   }
 
   async function uploadMenuImg(e, i) {
@@ -921,11 +861,10 @@ export default function StaffPage() {
     const reader = new FileReader()
     reader.onload = ev => setImgPreviews(prev => ({ ...prev, [i]: ev.target.result }))
     reader.readAsDataURL(file)
-    const compressed = await compressImage(file)
-    const { error } = await supabase.storage.from('bcb - upload').upload(`menu/${i}.jpg`, compressed, { upsert: true, contentType: 'image/jpeg' })
-    if (error) { console.error('uploadMenuImg error:', error); showToast('❌ ' + (error.message || 'ອັບໂຫລດຜິດ'), 'red'); setImgPreviews(prev => { const n = {...prev}; delete n[i]; return n }); return }
-    const { data } = supabase.storage.from('bcb - upload').getPublicUrl(`menu/${i}.jpg`)
-    const newImg = { ...images, [i]: data.publicUrl + '?t=' + Date.now() }
+    const compressed = await compressImage(file, 800, 0.8)
+    const data = await uploadToR2(compressed, `menu/${i}.jpg`)
+    if (!data.success) { showToast('❌ ' + (data.error || 'ອັບໂຫລດຜິດ'), 'red'); setImgPreviews(prev => { const n = {...prev}; delete n[i]; return n }); return }
+    const newImg = { ...images, [i]: data.url + '?t=' + Date.now() }
     setImages(newImg)
     setImgPreviews(prev => { const n = {...prev}; delete n[i]; return n })
     await saveConfig('menu_images', newImg)
@@ -946,11 +885,9 @@ export default function StaffPage() {
     const reader = new FileReader()
     reader.onload = ev => setQrPreview(ev.target.result)
     reader.readAsDataURL(file)
-    const contentType = file.type || 'image/jpeg'
-    const { error } = await supabase.storage.from('bcb - upload').upload('qr/payment.jpg', file, { upsert: true, contentType })
-    if (error) { console.error('uploadQR error:', error); showToast('❌ ' + (error.message || 'ຜິດ'), 'red'); setQrPreview(null); return }
-    const { data } = supabase.storage.from('bcb - upload').getPublicUrl('qr/payment.jpg')
-    const qrUrl = data.publicUrl + '?t=' + Date.now()
+    const data = await uploadToR2(file, 'qr/payment.jpg')
+    if (!data.success) { showToast('❌ ' + (data.error || 'ຜິດ'), 'red'); setQrPreview(null); return }
+    const qrUrl = data.url + '?t=' + Date.now()
     setQrImage(qrUrl)
     setQrPreview(null)
     await saveConfig('qr_image', qrUrl)
@@ -985,32 +922,13 @@ export default function StaffPage() {
     const reader = new FileReader()
     reader.onload = ev => setLogoPreview(ev.target.result)
     reader.readAsDataURL(file)
-    const contentType = file.type || 'image/jpeg'
-    const { error } = await supabase.storage.from('bcb - upload').upload('shop/logo.jpg', file, { upsert: true, contentType })
-    if (error) { console.error('uploadLogo error:', error); showToast('❌ ' + (error.message || 'ອັບໂຫລດຜິດ'), 'red'); setLogoPreview(null); return }
-    const { data } = supabase.storage.from('bcb - upload').getPublicUrl('shop/logo.jpg')
-    const newInfo = { ...receiptDraft, logo: data.publicUrl + '?t=' + Date.now() }
+    const data = await uploadToR2(file, 'shop/logo.jpg')
+    if (!data.success) { showToast('❌ ' + (data.error || 'ອັບໂຫລດຜິດ'), 'red'); setLogoPreview(null); return }
+    const newInfo = { ...receiptDraft, logo: data.url + '?t=' + Date.now() }
     setShopInfo(newInfo); setReceiptDraft(newInfo)
     setLogoPreview(null)
     await saveConfig('shop_info', newInfo)
     showToast('ອັບໂຫລດໂລໂກ້ ✅', 'green')
-  }
-
-  async function uploadNotice(e) {
-    const file = e.target.files[0]
-    if (!file) return
-    const reader = new FileReader()
-    reader.onload = ev => setNoticePreview(ev.target.result)
-    reader.readAsDataURL(file)
-    const contentType = file.type || 'image/jpeg'
-    const ext = file.name.split('.').pop() || 'jpg'
-    const { error } = await supabase.storage.from('bcb - upload').upload(`shop/notice.${ext}`, file, { upsert: true, contentType })
-    if (error) { showToast('❌ ' + (error.message || 'ອັບໂຫລດຜິດ'), 'red'); setNoticePreview(null); return }
-    const { data } = supabase.storage.from('bcb - upload').getPublicUrl(`shop/notice.${ext}`)
-    const url = data.publicUrl + '?t=' + Date.now()
-    setNoticeImage(url); setNoticePreview(null)
-    await saveConfig('notice_image', url)
-    showToast('ອັບໂຫລດ Notice ✅', 'green')
   }
 
   async function removeLogo() {
@@ -1596,9 +1514,9 @@ export default function StaffPage() {
   )
 
   return (
-    <div className="h-dvh flex flex-col overflow-hidden" style={{ background: 'var(--cream)' }}>
+    <div style={{ display: 'grid', gridTemplateColumns: '64px 1fr', gridTemplateRows: '52px 1fr', height: '100dvh', overflow: 'hidden' }}>
       {/* Toast */}
-      <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-50 flex flex-col gap-2 items-center pointer-events-none">
+      <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 flex flex-col gap-2 items-center pointer-events-none">
         {toast.map(t => (
           <div key={t.id} className={`px-5 py-2 rounded-full text-sm font-black shadow-lg text-white ${
             t.type === 'green' ? 'bg-green-700' :
@@ -1609,61 +1527,69 @@ export default function StaffPage() {
         ))}
       </div>
 
-      {!isOnline && <div className="bg-red-700 text-white text-center py-2 text-sm font-black">⚠ ບໍ່ມີອິນເຕີເນັດ</div>}
-      {lowStockMenus.length > 0 && (
-        <div className="px-3 py-2 text-xs font-black" style={{ background: '#fef3c7', color: '#92400e' }}>
-          ⚠ ສຕ໋ອກໃກ້ໝົດ: {lowStockMenus.map(m => `${m.name} (ຮ້ານ:${m.shop} ອອນໄລ:${m.online})`).join(' · ')}
-        </div>
-      )}
-      {(() => {
-        const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
-        const oldSlips = orders.filter(o => (o.done || o.cancelled || o.status === 'rejected') && o.slip_url && new Date(o.created_at) < cutoff)
-        if (oldSlips.length === 0) return null
-        return (
-          <div className="px-3 py-2 flex items-center justify-between gap-2" style={{ background: '#fff7ed', borderBottom: '2px solid #fed7aa' }}>
-            <span className="text-xs font-black" style={{ color: '#c2410c' }}>🗄 ສລິບເກົ່າ {oldSlips.length} ໃບ ກຳລັງໃຊ້ Bandwidth ຟຣີ — ລຶບໄດ້ເລີຍ</span>
-            <button
-              onClick={cleanOldSlips}
-              disabled={cleaningSlips}
-              className="text-xs font-black px-3 py-1.5 rounded-lg flex-shrink-0"
-              style={{ background: '#c2410c', color: 'white' }}
-            >
-              {cleaningSlips ? '⏳...' : '🗑 ລຶບ'}
+      {/* Left Rail Nav */}
+      <nav style={{ gridRow: '1 / 3', background: 'var(--brown)', display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '10px 0', gap: '4px', borderRight: '2px solid var(--brown2)' }}>
+        <div style={{ width: 38, height: 38, borderRadius: 10, background: 'var(--brown3)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 900, fontSize: 12, color: '#fff', marginBottom: 8, fontFamily: 'serif' }}>BCB</div>
+        <button onClick={() => setTab('orders')} style={{ width: 48, height: 48, borderRadius: 12, border: 'none', background: tab === 'orders' ? 'rgba(255,255,255,0.16)' : 'transparent', color: tab === 'orders' ? '#fff' : 'rgba(255,255,255,0.45)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 3, cursor: 'pointer', position: 'relative' }}>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M8 7h8M8 12h8M8 17h5"/></svg>
+          <span style={{ fontSize: 9, fontWeight: 700 }}>ອໍເດີ</span>
+          {pendingOnline > 0 && <span style={{ position: 'absolute', top: 6, right: 6, minWidth: 16, height: 16, borderRadius: 8, background: '#ef4444', color: '#fff', fontSize: 9, fontWeight: 900, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 3px' }}>{pendingOnline}</span>}
+        </button>
+        <button onClick={() => setTab('stock')} style={{ width: 48, height: 48, borderRadius: 12, border: 'none', background: tab === 'stock' ? 'rgba(255,255,255,0.16)' : 'transparent', color: tab === 'stock' ? '#fff' : 'rgba(255,255,255,0.45)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 3, cursor: 'pointer' }}>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+          <span style={{ fontSize: 9, fontWeight: 700 }}>ສະຕ໋ອກ</span>
+        </button>
+        <button onClick={() => setTab('sales')} style={{ width: 48, height: 48, borderRadius: 12, border: 'none', background: tab === 'sales' ? 'rgba(255,255,255,0.16)' : 'transparent', color: tab === 'sales' ? '#fff' : 'rgba(255,255,255,0.45)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 3, cursor: 'pointer' }}>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+          <span style={{ fontSize: 9, fontWeight: 700 }}>ຍອດ</span>
+        </button>
+        <button onClick={() => setTab('chat')} style={{ width: 48, height: 48, borderRadius: 12, border: 'none', background: tab === 'chat' ? 'rgba(255,255,255,0.16)' : 'transparent', color: tab === 'chat' ? '#fff' : 'rgba(255,255,255,0.45)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 3, cursor: 'pointer', position: 'relative' }}>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+          <span style={{ fontSize: 9, fontWeight: 700 }}>ແຊດ</span>
+          {unreadChat > 0 && <span style={{ position: 'absolute', top: 6, right: 6, minWidth: 16, height: 16, borderRadius: 8, background: '#ef4444', color: '#fff', fontSize: 9, fontWeight: 900, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 3px' }}>{unreadChat > 9 ? '9+' : unreadChat}</span>}
+        </button>
+        <div style={{ flex: 1 }} />
+        <button onClick={() => setTab('settings')} style={{ width: 48, height: 48, borderRadius: 12, border: 'none', background: tab === 'settings' ? 'rgba(255,255,255,0.16)' : 'transparent', color: tab === 'settings' ? '#fff' : 'rgba(255,255,255,0.45)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 3, cursor: 'pointer' }}>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/></svg>
+          <span style={{ fontSize: 9, fontWeight: 700 }}>ຕັ້ງຄ່າ</span>
+        </button>
+      </nav>
+
+      {/* Top Bar */}
+      <header style={{ gridColumn: '2', gridRow: '1', background: 'var(--warm-white)', borderBottom: '1px solid var(--cream3)', display: 'flex', alignItems: 'center', gap: 10, padding: '0 14px', flexShrink: 0 }}>
+        <div style={{ width: 7, height: 7, borderRadius: '50%', background: liveStatus === 'live' ? '#22c55e' : '#f59e0b', flexShrink: 0, boxShadow: liveStatus === 'live' ? '0 0 0 3px rgba(34,197,94,0.2)' : 'none' }} />
+        <span style={{ fontWeight: 900, fontSize: 15, color: 'var(--brown)', flex: 1 }}>
+          { tab === 'orders' ? 'ອໍເດີ' : tab === 'stock' ? 'ສະຕ໋ອກ' : tab === 'sales' ? 'ຍອດຂາຍ' : tab === 'chat' ? 'ແຊດ' : 'ຕັ້ງຄ່າ' }
+        </span>
+        {tab === 'orders' && (
+          <>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '5px 10px', borderRadius: 20, fontSize: 12, fontWeight: 700, background: 'var(--cream2)', color: 'var(--brown2)', border: '1px solid var(--cream3)' }}>
+              <span>ລໍຖ້າ</span>
+              <span style={{ fontSize: 14, fontWeight: 900, color: 'var(--brown)', fontVariantNumeric: 'tabular-nums' }}>{waiting}</span>
+            </div>
+            <button onClick={connectUsbPrinter} style={{ fontSize: 11, fontWeight: 800, padding: '5px 10px', borderRadius: 8, border: `1.5px solid ${usbConnected ? '#86efac' : 'var(--cream3)'}`, background: 'transparent', color: usbConnected ? '#15803d' : 'var(--brown2)', cursor: 'pointer' }}>
+              {usbConnected ? '🖨 USB ✓' : 'USB'}
             </button>
+            <button onClick={connectPrinter} style={{ fontSize: 11, fontWeight: 800, padding: '5px 10px', borderRadius: 8, border: `1.5px solid ${btConnected ? '#86efac' : 'var(--cream3)'}`, background: 'transparent', color: btConnected ? '#15803d' : 'var(--brown2)', cursor: 'pointer' }}>
+              {btConnected ? '🖨 BT ✓' : 'BT'}
+            </button>
+            <button onClick={() => setSidebarOpen(s => !s)} title={sidebarOpen ? 'ເຊື່ອງ' : 'ສະແດງ'} style={{ fontSize: 14, padding: '5px 10px', borderRadius: 8, border: '1.5px solid var(--cream3)', background: sidebarOpen ? 'var(--brown)' : 'transparent', color: sidebarOpen ? 'var(--cream)' : 'var(--brown2)', cursor: 'pointer' }}>☰</button>
+          </>
+        )}
+      </header>
+
+      {/* Content Area */}
+      <div style={{ gridColumn: '2', gridRow: '2', overflowY: 'auto', overflowX: 'hidden', display: 'flex', flexDirection: 'column' }}>
+        {!isOnline && <div className="bg-red-700 text-white text-center py-2 text-sm font-black">⚠ ບໍ່ມີອິນເຕີເນັດ</div>}
+        {lowStockMenus.length > 0 && (
+          <div className="px-3 py-2 text-xs font-black" style={{ background: '#fef3c7', color: '#92400e' }}>
+            ⚠ ສຕ໋ອກໃກ້ໝົດ: {lowStockMenus.map(m => `${m.name} (ຮ້ານ:${m.shop} ອອນໄລ:${m.online})`).join(' · ')}
           </div>
-        )
-      })()}
+        )}
 
       {/* ─── ORDERS TAB ─── */}
       {tab === 'orders' && (
-        <div className="flex-1 flex flex-col overflow-hidden">
-          <div className="flex-shrink-0 flex items-center justify-between px-4 py-3" style={{ background: 'var(--brown)' }}>
-            <div className="flex items-center gap-2">
-              <div className="font-serif text-lg font-black" style={{ color: 'var(--cream)' }}>
-                {shopInfo.name}
-                {pendingOnline > 0 && <span className="ml-2 bg-red-500 text-white text-xs rounded-full px-2 py-0.5">{pendingOnline}</span>}
-              </div>
-              {/* Realtime status dot */}
-              <div className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-black"
-                style={{
-                  background: liveStatus === 'live' ? 'rgba(34,197,94,0.2)' : 'rgba(234,179,8,0.2)',
-                  color: liveStatus === 'live' ? '#86efac' : '#fde68a',
-                }}>
-                <span className="w-1.5 h-1.5 rounded-full flex-shrink-0"
-                  style={{ background: liveStatus === 'live' ? '#22c55e' : '#f59e0b' }} />
-                {liveStatus === 'live' ? 'LIVE' : '...'}
-              </div>
-            </div>
-            <div className="flex gap-2">
-              <button onClick={connectUsbPrinter} className={`text-xs font-black px-3 py-2 rounded-lg border ${usbConnected ? 'border-green-400 text-green-300' : 'border-[rgba(253,246,238,0.35)] text-[#fdf6ee]'}`}>
-                {usbConnected ? '🖨 USB ✓' : 'USB'}
-              </button>
-              <button onClick={connectPrinter} className={`text-xs font-black px-3 py-2 rounded-lg border ${btConnected ? 'border-green-400 text-green-300' : 'border-[rgba(253,246,238,0.35)] text-[#fdf6ee]'}`}>
-                {btConnected ? '🖨 BT ✓' : 'BT'}
-              </button>
-              <button onClick={() => alert('ຕ້ອງຊອກຫາ ↺ Reset ໃນລາຍການ')} className="text-xs font-black px-3 py-2 rounded-lg border border-red-400 text-red-300">↺</button>
-            </div>
-          </div>
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
 
           <div className="flex-shrink-0 grid grid-cols-3 gap-2 p-3">
             {[['ລໍຖ້າ', waiting, 'var(--brown)'], ['ສຳເລັດ', done, 'var(--green,#2d6a2d)'], ['ທັງໝົດ', orders.length, 'var(--gray3)']].map(([l, n, c]) => (
@@ -2003,25 +1929,6 @@ export default function StaffPage() {
                     </div>
                   </div>
 
-                  {/* Notice Image */}
-                  <div>
-                    <div className="text-xs font-black uppercase tracking-widest mb-2" style={{ color: 'var(--brown2)' }}>ຮູບແຈ້ງການ (Preorder Notice)</div>
-                    <div className="flex gap-3 items-center">
-                      <div className={`w-20 h-20 rounded-2xl border-2 overflow-hidden flex items-center justify-center flex-shrink-0 relative ${noticePreview || noticeImage ? 'border-[#a0522d]' : 'border-dashed border-[#e8d5c0]'}`} style={{ background: 'var(--cream)' }}>
-                        {noticePreview
-                          ? <><img src={noticePreview} className="w-full h-full object-cover" alt="preview" /><span className="absolute inset-0 flex items-center justify-center text-xs font-black text-white bg-black/40">...</span></>
-                          : noticeImage ? <img src={noticeImage} className="w-full h-full object-cover" alt="notice" /> : <span className="text-3xl">📢</span>}
-                      </div>
-                      <div className="flex flex-col gap-2">
-                        <label className="px-3 py-2 rounded-xl border-2 border-[#3d1f0a] text-xs font-black cursor-pointer text-center" style={{ color: 'var(--brown)', background: 'var(--warm-white)' }}>
-                          📤 ອັບໂຫລດຮູບ
-                          <input type="file" accept="image/*" className="hidden" onChange={uploadNotice} />
-                        </label>
-                        {noticeImage && <button onClick={async () => { setNoticeImage(''); await saveConfig('notice_image', '') }} className="text-xs text-red-500 font-black text-center">✕ ລຶບຮູບ</button>}
-                      </div>
-                    </div>
-                  </div>
-
                   {/* Form fields */}
                   {[
                     ['ຊື່ຮ້ານ · Shop Name', 'name', 'text'],
@@ -2138,6 +2045,78 @@ export default function StaffPage() {
                     </div>
                   ))}
                   <button onClick={saveBranches} className="btn-primary text-sm py-3">💾 ບັນທຶກສາຂາ</button>
+                </div>
+              </details>
+
+              {/* Slip Gallery */}
+              <details className="card">
+                <summary className="font-black text-xs tracking-widest uppercase cursor-pointer" style={{ color: 'var(--brown3)' }}>
+                  {'🗑 ຈັດການສລິບ'}
+                  {orders.filter(o => o.slip_url).length > 0 && (
+                    <span className="ml-1 px-1.5 py-0.5 rounded-full text-xs" style={{ background: '#fef2f2', color: '#dc2626' }}>
+                      {orders.filter(o => o.slip_url).length}
+                    </span>
+                  )}
+                </summary>
+                <div className="mt-3">
+                  {orders.filter(o => o.slip_url).length === 0 ? (
+                    <div className="text-center py-4 text-xs font-bold" style={{ color: 'var(--cream3)' }}>ບໍ່ມີສລິບ</div>
+                  ) : (
+                    <>
+                      <div className="flex gap-2 mb-3 flex-wrap items-center">
+                        <button
+                          onClick={() => setSelectedSlipIds(new Set(orders.filter(o => o.slip_url).map(o => o.id)))}
+                          className="text-xs px-2.5 py-1.5 rounded-lg font-black"
+                          style={{ background: 'var(--cream2)', color: 'var(--brown2)', border: '1.5px solid var(--cream3)' }}>
+                          ເລືອກທັງໝົດ
+                        </button>
+                        {selectedSlipIds.size > 0 && (
+                          <>
+                            <button
+                              onClick={() => setSelectedSlipIds(new Set())}
+                              className="text-xs px-2.5 py-1.5 rounded-lg font-black"
+                              style={{ background: 'var(--cream2)', color: 'var(--brown2)', border: '1.5px solid var(--cream3)' }}>
+                              ຍົກເລີກ
+                            </button>
+                            <button
+                              onClick={() => showConfirm(`ລຶບສລິບ ${selectedSlipIds.size} ໃບ ແທ້ບໍ?`, deleteSelectedSlips)}
+                              disabled={deletingSlips}
+                              className="text-xs px-2.5 py-1.5 rounded-lg font-black"
+                              style={{ background: '#fef2f2', color: '#dc2626', border: '1.5px solid #fca5a5' }}>
+                              {deletingSlips ? '⏳...' : `🗑 ລຶບ (${selectedSlipIds.size})`}
+                            </button>
+                          </>
+                        )}
+                      </div>
+                      <div className="grid grid-cols-3 gap-2">
+                        {orders.filter(o => o.slip_url).sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).map(o => {
+                          const isSelected = selectedSlipIds.has(o.id)
+                          const date = new Date(o.created_at).toLocaleDateString('lo-LA', { day: '2-digit', month: '2-digit' })
+                          return (
+                            <div
+                              key={o.id}
+                              onClick={() => setSelectedSlipIds(prev => {
+                                const n = new Set(prev)
+                                if (n.has(o.id)) n.delete(o.id); else n.add(o.id)
+                                return n
+                              })}
+                              className="relative cursor-pointer rounded-xl overflow-hidden select-none"
+                              style={{ border: isSelected ? '2.5px solid #dc2626' : '2px solid var(--cream3)' }}>
+                              <img src={o.slip_url} alt={`slip ${o.qnum}`} className="w-full aspect-square object-cover" />
+                              {isSelected && (
+                                <div className="absolute inset-0 flex items-center justify-center" style={{ background: 'rgba(220,38,38,0.25)' }}>
+                                  <span className="w-6 h-6 rounded-full bg-red-600 flex items-center justify-center text-white font-black text-sm">✓</span>
+                                </div>
+                              )}
+                              <div className="absolute bottom-0 left-0 right-0 px-1 py-0.5 text-white font-black truncate" style={{ background: 'rgba(61,31,10,0.75)', fontSize: 9 }}>
+                                #{o.qnum} · {date}
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </>
+                  )}
                 </div>
               </details>
 
@@ -2272,10 +2251,6 @@ export default function StaffPage() {
                             </div>
                             <div className="text-sm font-black" style={{ color: 'var(--brown)' }}>
                               ລວມ: {(o.total || 0).toLocaleString()} ກີບ
-                            </div>
-                            <div className="flex gap-2 mt-2">
-                              <button onClick={() => announce(o.qnum)} className="flex-1 py-2 rounded-xl text-sm font-black" style={{ background: 'var(--brown2)', color: 'var(--cream)' }}>📢 ເອີ້ນຄິວ #{String(o.qnum).padStart(4,'0')}</button>
-                              {o.slip_url && <button onClick={() => setSlipModal({ url: o.slip_url, qnum: o.qnum })} className="py-2 px-3 rounded-xl text-sm font-black bg-orange-50 text-orange-700">🧾 ສລິບ</button>}
                             </div>
                           </div>
                         </div>
@@ -2443,7 +2418,6 @@ export default function StaffPage() {
                             <>
                               <button onClick={() => doneOrder(o)} className="flex-[4] py-3 rounded-xl text-sm font-black" style={{ background: 'var(--brown)', color: 'var(--cream)' }}>✓ Done</button>
                               <button onClick={() => announce(o.qnum)} className="flex-[2] py-3 rounded-xl text-sm font-black" style={{ background: 'var(--brown2)', color: 'var(--cream)' }}>📢</button>
-                              {o.slip_url && <button onClick={() => setSlipModal({ url: o.slip_url, qnum: o.qnum })} className="py-3 px-3 rounded-xl text-sm font-black bg-orange-50 text-orange-700">🧾</button>}
                               <button onClick={() => smartPrint(o)} className="py-3 px-3 rounded-xl text-sm font-black bg-blue-50 text-blue-700">🖨</button>
                               <button onClick={() => cancelOrder(o)} className="py-3 px-3 rounded-xl text-sm font-black border-2 border-red-400 text-red-600">✕</button>
                             </>
@@ -2510,11 +2484,9 @@ export default function StaffPage() {
                                     <img src={o.slip_url} className="w-16 rounded-lg border border-[#e8d5c0]" alt="slip" />
                                   </div>
                                 )}
-                                <div className="flex gap-2 mt-1 flex-wrap">
+                                <div className="flex gap-2 mt-1">
                                   {o.cancelled && <button onClick={() => undoOrder(o.id, 'cancelled')} className="text-xs py-1.5 px-3 rounded-lg border-2 border-[#e8d5c0] font-black" style={{ color: 'var(--gray3)' }}>↩ ຄືນ</button>}
                                   {o.done && <button onClick={() => undoOrder(o.id, 'done')} className="text-xs py-1.5 px-3 rounded-lg border-2 border-[#e8d5c0] font-black" style={{ color: 'var(--gray3)' }}>↩ ຍົກເລີກ Done</button>}
-                                  {o.slip_url && <button onClick={() => setSlipModal({ url: o.slip_url, qnum: o.qnum })} className="text-xs py-1.5 px-3 rounded-lg bg-orange-50 text-orange-700 font-black">🧾 ສລິບ</button>}
-                                  <button onClick={() => announce(o.qnum)} className="text-xs py-1.5 px-3 rounded-lg font-black" style={{ background: 'var(--brown2)', color: 'var(--cream)' }}>📢 ຄິວ</button>
                                   <button onClick={() => smartPrint(o)} className="text-xs py-1.5 px-3 rounded-lg bg-blue-50 text-blue-700 font-black">🖨</button>
                                 </div>
                               </div>
@@ -2526,18 +2498,15 @@ export default function StaffPage() {
                   )}
                 </div>
               )}
-              </div>{/* end scroll area */}
-            </div>{/* end Orders Main */}
-          </div>{/* end sidebar+orders grid */}
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
       {/* ─── SALES TAB ─── */}
       {tab === 'sales' && (
-        <div className="flex-1 overflow-y-auto pb-16">
-          <div className="sticky top-0 z-10 px-4 py-3" style={{ background: 'var(--brown)' }}>
-            <div className="font-serif text-lg font-black" style={{ color: 'var(--cream)' }}>ຍອດຂາຍ · Sales</div>
-          </div>
+        <div>
           <div className="max-w-lg mx-auto p-4">
             <select value={salesDate} onChange={e => setSalesDate(e.target.value)} className="input-field mb-4">
               {salesDates.map(d => <option key={d} value={d}>{d}</option>)}
@@ -2696,7 +2665,7 @@ export default function StaffPage() {
             </div>
           ) : (
             // Conversation messages
-            <div className="flex-1 flex flex-col overflow-hidden">
+            <div className="flex flex-col" style={{ height: chatVH ?? 'calc(100dvh - 52px)' }}>
               <div className="flex items-center gap-3 px-4 py-3 flex-shrink-0" style={{ background: 'var(--brown)' }}>
                 <button onClick={() => { setActiveChatPhone(null); setChatMessages([]) }}
                   className="text-xl font-black" style={{ color: 'var(--cream)' }}>←</button>
@@ -2717,7 +2686,7 @@ export default function StaffPage() {
                   🤖 {aiPausedPhones.has(activeChatPhone) ? 'AI OFF' : 'AI ON'}
                 </button>
               </div>
-              <div ref={chatMsgsRef} className="flex-1 overflow-y-auto p-4 flex flex-col gap-3">
+              <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3">
                 {chatMessages.map(msg => {
                   const isStaffSide = msg.sender === 'staff' || msg.sender === 'ai'
                   const isAi = msg.sender === 'ai'
@@ -2736,39 +2705,19 @@ export default function StaffPage() {
                         </div>
                       )}
                       {isAi && <div className="text-[10px] font-black mb-1 px-1 text-right" style={{ color: '#16a34a' }}>🤖 AI</div>}
-                      <div
-                        onTouchStart={() => isStaffSide && startLongPress(msg.id)}
-                        onTouchEnd={cancelLongPress}
-                        onTouchMove={cancelLongPress}
-                        onContextMenu={e => { if(isStaffSide){ e.preventDefault(); setDeletingMsgId(msg.id) } }}
-                        className="px-4 py-2.5 rounded-2xl text-sm font-bold leading-snug select-none"
+                      <div className="px-4 py-2.5 rounded-2xl text-sm font-bold leading-snug"
                         style={{
-                          background: deletingMsgId === msg.id ? '#fee2e2' : isAi ? '#f0fdf4' : isStaffSide ? 'var(--brown)' : 'white',
+                          background: isAi ? '#f0fdf4' : isStaffSide ? 'var(--brown)' : 'white',
                           color: isAi ? '#166534' : isStaffSide ? 'var(--cream)' : 'var(--brown)',
-                          border: isAi ? '1.5px solid #86efac' : deletingMsgId === msg.id ? '1.5px solid #fca5a5' : msg.sender === 'customer' ? '1.5px solid var(--cream3)' : 'none',
+                          border: isAi ? '1.5px solid #86efac' : msg.sender === 'customer' ? '1.5px solid var(--cream3)' : 'none',
                           borderBottomRightRadius: isStaffSide ? 4 : undefined,
                           borderBottomLeftRadius: msg.sender === 'customer' ? 4 : undefined,
-                          opacity: msg.id?.startsWith?.('tmp-') ? 0.6 : 1,
                         }}>
                         {msg.text}
                       </div>
-                      {deletingMsgId === msg.id && (
-                        <div className="flex gap-1 mt-1 justify-end">
-                          <button onClick={() => deleteMessage(msg.id)}
-                            className="px-3 py-1 rounded-lg text-xs font-black"
-                            style={{ background: '#ef4444', color: 'white' }}>
-                            🗑 ລຶບ
-                          </button>
-                          <button onClick={() => setDeletingMsgId(null)}
-                            className="px-3 py-1 rounded-lg text-xs font-black"
-                            style={{ background: 'var(--cream2)', color: 'var(--brown)' }}>
-                            ຍົກເລີກ
-                          </button>
-                        </div>
-                      )}
                       <div className="text-[10px] font-bold mt-1 px-1"
                         style={{ color: 'var(--gray3)', textAlign: isStaffSide ? 'right' : 'left' }}>
-                        {msg.id?.startsWith?.('tmp-') ? '⏳' : new Date(msg.created_at).toLocaleTimeString('lo-LA', { hour: '2-digit', minute: '2-digit' })}
+                        {new Date(msg.created_at).toLocaleTimeString('lo-LA', { hour: '2-digit', minute: '2-digit' })}
                       </div>
                     </div>
                   </div>
@@ -2776,20 +2725,11 @@ export default function StaffPage() {
                 })}
                 <div ref={chatBottomRef} />
               </div>
-              <div className="p-3 flex gap-2 flex-shrink-0 border-t border-[#e8d5c0]" style={{ background: 'white', paddingBottom: kbOffset ? kbOffset + 12 + 'px' : undefined }}>
-                <button
-                  onTouchStart={e => { e.preventDefault(); startVoice() }}
-                  onTouchEnd={e => { e.preventDefault(); stopVoice() }}
-                  onMouseDown={startVoice} onMouseUp={stopVoice} onMouseLeave={stopVoice}
-                  className="w-10 h-10 rounded-xl flex items-center justify-center text-lg flex-shrink-0 transition-all"
-                  style={{ background: voiceRecording ? '#ef4444' : 'var(--cream2)', color: voiceRecording ? 'white' : 'var(--brown)' }}>
-                  {voiceRecording ? '⏹' : '🎤'}
-                </button>
+              <div className="p-3 flex gap-2 flex-shrink-0 border-t border-[#e8d5c0]" style={{ background: 'white' }}>
                 <input value={chatInput} onChange={e => setChatInput(e.target.value)}
                   onKeyDown={e => e.key === 'Enter' && !e.shiftKey && sendStaffMsg()}
-                  placeholder={voiceRecording ? '🎤 ກຳລັງຟັງ...' : 'ຕອບຂໍ້ຄວາມ...'}
-                  className="input-field flex-1 py-2.5 text-sm" />
-                <button onClick={sendStaffMsg} disabled={!chatInput.trim()}
+                  placeholder="ຕອບຂໍ້ຄວາມ..." className="input-field flex-1 py-2.5 text-sm" />
+                <button onClick={sendStaffMsg} disabled={chatSending || !chatInput.trim()}
                   className="px-5 py-2.5 rounded-xl font-black text-sm flex-shrink-0"
                   style={{
                     background: chatInput.trim() ? 'var(--brown)' : 'var(--cream3)',
@@ -2803,36 +2743,322 @@ export default function StaffPage() {
         </div>
       )}
 
+      {/* ─── STOCK TAB ─── */}
+      {tab === 'stock' && (
+        <div style={{ padding: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+            <span style={{ fontSize: 13, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--gray3)' }}>ສະຕ໋ອກ ປະຈຳວັນ</span>
+            <button onClick={saveStock} className="btn-primary" style={{ fontSize: 12, padding: '7px 14px', width: 'auto' }}>💾 ບັນທຶກ</button>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr repeat(3, 70px)', gap: 8, fontSize: 11, fontWeight: 700, color: 'var(--gray3)', padding: '0 4px 6px', borderBottom: '1px solid var(--cream3)', marginBottom: 6 }}>
+            <span>ເມນູ</span>
+            <span style={{ textAlign: 'center' }}>ລວມ</span>
+            <span style={{ textAlign: 'center' }}>ຮ້ານ</span>
+            <span style={{ textAlign: 'center' }}>Online</span>
+          </div>
+          {menus.map((m, i) => {
+            const sh = stockShop[i]||0, on = stockOnline[i]||0, tot = stockTotal[i]||0
+            return (
+              <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr repeat(3, 70px)', gap: 8, alignItems: 'center', padding: '10px 4px', borderBottom: '1px solid var(--cream3)' }}>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--brown)' }}>{m.lo || m}</div>
+                  {sh === 0 && <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 4, background: '#fef2f2', color: '#dc2626', display: 'inline-block', marginTop: 2 }}>ໝົດ</span>}
+                  {sh > 0 && sh <= 5 && <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 4, background: '#fffbeb', color: '#d97706', display: 'inline-block', marginTop: 2 }}>ໃກ້ໝົດ</span>}
+                </div>
+                <div style={{ textAlign: 'center', fontSize: 20, fontWeight: 900, color: 'var(--brown)', fontVariantNumeric: 'tabular-nums' }}>{tot}</div>
+                <input type="text" inputMode="numeric" value={sh}
+                  onChange={e => updateStock('shop', i, e.target.value)}
+                  style={{ width: 60, height: 36, borderRadius: 8, border: '1.5px solid var(--cream3)', background: 'var(--warm-white)', color: 'var(--brown)', textAlign: 'center', fontSize: 15, fontWeight: 700, display: 'block', margin: 'auto' }} />
+                <input type="text" inputMode="numeric" value={on}
+                  onChange={e => updateStock('online', i, e.target.value)}
+                  style={{ width: 60, height: 36, borderRadius: 8, border: '1.5px solid var(--cream3)', background: 'var(--warm-white)', color: 'var(--brown)', textAlign: 'center', fontSize: 15, fontWeight: 700, display: 'block', margin: 'auto' }} />
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+      {/* ─── SETTINGS TAB ─── */}
+      {tab === 'settings' && (
+        <div className="flex flex-col gap-3 p-3">
+
+          {/* Quick links */}
+          <div className="flex gap-2">
+            <a href="/qr" target="_blank" rel="noopener noreferrer" className="card flex-1 flex items-center gap-2 active:scale-95 transition-all" style={{ textDecoration: 'none' }}>
+              <span className="text-xl">📱</span>
+              <div className="flex-1 min-w-0">
+                <div className="font-black text-xs" style={{ color: 'var(--brown)' }}>QR Pre-Order</div>
+              </div>
+              <span style={{ color: 'var(--gray3)', fontSize: 12 }}>↗</span>
+            </a>
+            <a href="/kitchen" target="_blank" rel="noopener noreferrer" className="card flex-1 flex items-center gap-2 active:scale-95 transition-all" style={{ textDecoration: 'none' }}>
+              <span className="text-xl">🍳</span>
+              <div className="flex-1 min-w-0">
+                <div className="font-black text-xs" style={{ color: 'var(--brown)' }}>ຈໍຄົວ</div>
+              </div>
+              <span style={{ color: 'var(--gray3)', fontSize: 12 }}>↗</span>
+            </a>
+          </div>
+
+          {/* General settings */}
+          <details className="card" open>
+            <summary className="font-black text-xs tracking-widest uppercase cursor-pointer" style={{ color: 'var(--brown3)' }}>⚙ ຕັ້ງຄ່າທົ່ວໄປ</summary>
+            <div className="mt-3 flex flex-col gap-2">
+              {[
+                ['soundOn', '🔊 ສຽງຮຽກຄິວ'],
+                ['walkinOn', '🏪 ເປີດ Walk-in'],
+                ['onlineOn', '🌐 ເປີດ Online'],
+                ['aiOn', '🤖 AI ຕອບແຊັດ'],
+                ['autoprintOn', '🖨 ພິມອັດຕະໂນມັດ'],
+              ].map(([k, l]) => (
+                <div key={k} className="flex justify-between items-center py-2 border-b border-[#e8d5c0]">
+                  <span className="text-sm font-bold" style={{ color: 'var(--brown)' }}>{l}</span>
+                  <button onClick={() => toggleSetting(k)} className={`w-12 h-7 rounded-full transition-colors relative ${settings[k] ? 'bg-[#3d1f0a]' : 'bg-[#e8d5c0]'}`}>
+                    <span className={`absolute w-5 h-5 bg-white rounded-full top-1 transition-all ${settings[k] ? 'left-6' : 'left-1'}`} />
+                  </button>
+                </div>
+              ))}
+              <div className="border-t border-[#e8d5c0] pt-3 mt-1 flex flex-col gap-2">
+                <div className="text-xs font-black uppercase tracking-widest" style={{ color: 'var(--brown3)' }}>🕐 ເວລາຮັບ Preorder</div>
+                <div className="flex gap-2 items-center">
+                  <div className="flex-1">
+                    <div className="text-xs font-bold mb-1" style={{ color: 'var(--gray3)' }}>ເລີ່ມ</div>
+                    <input type="time" value={settings.pickupTimeStart || '15:30'} onChange={e => { const s = { ...settings, pickupTimeStart: e.target.value }; setSettings(s); saveConfig('settings', s) }} className="input-field text-sm py-2" />
+                  </div>
+                  <span className="font-black mt-4" style={{ color: 'var(--brown2)' }}>–</span>
+                  <div className="flex-1">
+                    <div className="text-xs font-bold mb-1" style={{ color: 'var(--gray3)' }}>ສິ້ນສຸດ</div>
+                    <input type="time" value={settings.pickupTimeEnd || '19:00'} onChange={e => { const s = { ...settings, pickupTimeEnd: e.target.value }; setSettings(s); saveConfig('settings', s) }} className="input-field text-sm py-2" />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </details>
+
+          {/* Queue reset */}
+          <details className="card">
+            <summary className="font-black text-xs tracking-widest uppercase cursor-pointer" style={{ color: 'var(--brown3)' }}>🔢 ລີເຊັດຄິວ</summary>
+            <div className="mt-3 flex flex-col gap-2">
+              {[
+                ['ລີເຊັດຄິວ Preorder → 0001', 'ຕັ້ງໃໝ່ຄິວ Online', () => showConfirm('ລີເຊັດຄິວ Preorder ເປັນ 0001 ແທ້ບໍ?', async () => { await saveConfig('next_queue', '0'); showToast('ລີເຊັດຄິວ Preorder ✅', 'green') })],
+                ['ລີເຊັດຄິວ Walk-in → 0001', 'ຕັ້ງໃໝ່ຄິວໜ້າຮ້ານ', () => showConfirm('ລີເຊັດຄິວ Walk-in ເປັນ 0001 ແທ້ບໍ?', async () => { await saveConfig('next_queue_walkin', '0'); showToast('ລີເຊັດຄິວ Walk-in ✅', 'green') })],
+              ].map(([label, desc, fn]) => (
+                <div key={label} className="flex items-center justify-between py-1 border-b border-[#f5ebe0]">
+                  <div>
+                    <div className="text-sm font-bold" style={{ color: 'var(--brown)' }}>{label}</div>
+                    <div className="text-xs font-bold mt-0.5" style={{ color: 'var(--gray3)' }}>{desc}</div>
+                  </div>
+                  <button onClick={fn} className="text-xs px-3 py-2 rounded-xl font-black flex-shrink-0" style={{ background: '#fef2f2', color: '#dc2626', border: '1.5px solid #fca5a5' }}>ລີເຊັດ</button>
+                </div>
+              ))}
+              <div className="pt-2">
+                <div className="text-xs font-black uppercase tracking-widest mb-2" style={{ color: 'var(--brown3)' }}>🔐 Code Walk-in</div>
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="flex-1 px-3 py-2 rounded-xl font-black text-lg tracking-[0.2em] text-center" style={{ background: 'var(--cream2)', color: walkinCode ? 'var(--brown)' : 'var(--cream3)', border: '2px solid var(--cream3)' }}>
+                    {walkinCode || '— — — — — —'}
+                  </div>
+                  <button onClick={async () => { const code = Math.random().toString(36).substring(2, 8).toUpperCase(); setWalkinCode(code); await saveConfig('walkin_code', code); showToast(`🔐 Code ໃໝ່: ${code}`, 'green') }} className="px-3 py-2 rounded-xl font-black text-sm flex-shrink-0" style={{ background: 'var(--brown)', color: 'var(--cream)' }}>🔄 ສ້າງ</button>
+                </div>
+                {walkinCode && <button onClick={async () => { await saveConfig('walkin_code', ''); setWalkinCode(''); showToast('ປິດ Code Walk-in ແລ້ວ', 'orange') }} className="text-xs px-3 py-1.5 rounded-lg font-black" style={{ background: '#fef2f2', color: '#dc2626', border: '1.5px solid #fca5a5' }}>ປິດລະຫັດ</button>}
+              </div>
+            </div>
+          </details>
+
+          {/* PIN */}
+          <details className="card">
+            <summary className="font-black text-xs tracking-widest uppercase cursor-pointer" style={{ color: 'var(--brown3)' }}>🔒 ລະຫັດຜ່ານ</summary>
+            <div className="mt-3 flex flex-col gap-2">
+              {[['staff', 'ລະຫັດ Staff', staffPin], ['profit', 'ລະຫັດ Profit', profitPin]].map(([type, label, pin]) => (
+                <div key={type} className="flex items-center justify-between py-1 border-b border-[#f5ebe0]">
+                  <div>
+                    <span className="text-sm font-bold" style={{ color: 'var(--brown)' }}>{label}</span>
+                    <span className="ml-1.5 text-xs font-bold" style={{ color: pin ? '#16a34a' : 'var(--gray3)' }}>{pin ? '● ຕັ້ງແລ້ວ' : '○ ຍັງບໍ່ຕັ້ງ'}</span>
+                  </div>
+                  <div className="flex gap-1.5">
+                    <button onClick={() => openPinSetting(type)} className="text-xs px-2.5 py-1.5 rounded-lg font-black" style={{ background: 'var(--cream2)', color: 'var(--brown2)', border: '1.5px solid var(--cream3)' }}>{pin ? '🔑 ປ່ຽນ' : '+ ຕັ້ງ'}</button>
+                    {pin && <button onClick={() => openRemovePin(type)} className="text-xs px-2.5 py-1.5 rounded-lg font-black" style={{ background: '#fef2f2', color: '#dc2626', border: '1.5px solid #fca5a5' }}>ລຶບ</button>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </details>
+
+          {/* Menu & Price */}
+          <details className="card">
+            <summary className="font-black text-xs tracking-widest uppercase cursor-pointer" style={{ color: 'var(--brown3)' }}>🍱 ເມນູ & ລາຄາ</summary>
+            <div className="mt-3">
+              {menus.map((m, i) => (
+                <div key={i} className="flex gap-2 items-center py-2 border-b border-[#f5ebe0]">
+                  <span className="text-xs font-black w-4 flex-shrink-0" style={{ color: 'var(--cream3)' }}>{i+1}</span>
+                  <div className="flex-1 flex flex-col gap-1 min-w-0">
+                    <input id={`mn2-${i}`} defaultValue={m.lo} className="input-field text-xs py-2" />
+                    <div className="flex gap-1">
+                      <input id={`mp2-${i}`} defaultValue={prices[i] || ''} type="text" inputMode="numeric" placeholder="ລາຄາ" className="input-field text-xs py-2 flex-1" />
+                      <input id={`mc2-${i}`} defaultValue={costs[i] || ''} type="text" inputMode="numeric" placeholder="ຕົ້ນທຶນ" className="input-field text-xs py-2 flex-1" style={{ borderColor: '#fbbf24' }} />
+                    </div>
+                  </div>
+                  <div className="flex flex-col items-center gap-1 flex-shrink-0">
+                    <label className="w-10 h-10 rounded-lg border-2 border-dashed border-[#e8d5c0] flex items-center justify-center cursor-pointer overflow-hidden relative">
+                      {imgPreviews[i] ? <><img src={imgPreviews[i]} className="w-full h-full object-cover" /><span className="absolute inset-0 flex items-center justify-center text-xs font-black text-white bg-black/40">...</span></> : images[i] ? <img src={images[i]} className="w-full h-full object-cover" /> : <span className="text-xl">{EMOJIS[i]||'🍱'}</span>}
+                      <input type="file" accept="image/*" className="hidden" onChange={e => uploadMenuImg(e, i)} />
+                    </label>
+                    {images[i] && !imgPreviews[i] ? <button onClick={() => removeMenuImg(i)} className="text-[10px] text-red-500 font-black">✕ຮູບ</button> : <button onClick={() => showConfirm(`ລຶບເມນູ "${m.lo}"?`, () => removeMenu(i))} className="text-[10px] font-black text-red-400">🗑</button>}
+                  </div>
+                </div>
+              ))}
+              <div className="flex gap-2 mt-3">
+                <button onClick={() => { const ms = document.querySelectorAll('[id^="mn2-"]'), ps = document.querySelectorAll('[id^="mp2-"]'), cs = document.querySelectorAll('[id^="mc2-"]'); const nm = menus.map((m,i) => ({ ...m, lo: ms[i]?.value ?? m.lo })); const np = prices.map((p,i) => ps[i]?.value !== undefined ? Number(ps[i].value) || p : p); const nc = costs.map((c,i) => cs[i]?.value !== undefined ? Number(cs[i].value) || 0 : c || 0); saveMenus(nm, np, nc) }} className="btn-primary flex-1 text-sm py-3">💾 ບັນທຶກ</button>
+                <button onClick={addMenu} className="px-4 py-3 rounded-xl font-black text-sm flex-shrink-0" style={{ background: 'var(--cream2)', color: 'var(--brown)', border: '1.5px solid var(--cream3)' }}>+ ເພີ່ມ</button>
+              </div>
+            </div>
+          </details>
+
+          {/* QR Payment */}
+          <details className="card">
+            <summary className="font-black text-xs tracking-widest uppercase cursor-pointer" style={{ color: 'var(--brown3)' }}>📱 QR ຊຳລະ</summary>
+            <div className="mt-3 flex flex-col items-center gap-3">
+              <div className="w-40 h-40 rounded-xl border-2 border-dashed border-[#e8d5c0] flex items-center justify-center overflow-hidden relative">
+                {qrPreview ? <><img src={qrPreview} className="w-full h-full object-contain" /><span className="absolute inset-0 flex items-center justify-center text-sm font-black text-white bg-black/40">ກຳລັງອັບ...</span></> : qrImage ? <img src={qrImage} className="w-full h-full object-contain" /> : <span className="text-sm" style={{ color: 'var(--gray3)' }}>ຍັງບໍ່ມີ</span>}
+              </div>
+              <label className="btn-outline text-sm py-2 cursor-pointer text-center">📤 ອັບໂຫລດ QR<input type="file" accept="image/*" className="hidden" onChange={uploadQR} /></label>
+            </div>
+          </details>
+
+          {/* Receipt */}
+          <details className="card">
+            <summary className="font-black text-xs tracking-widest uppercase cursor-pointer" style={{ color: 'var(--brown3)' }}>🧾 ຕັ້ງຄ່າໃບເສດ</summary>
+            <div className="mt-4 flex flex-col gap-4">
+              <div>
+                <div className="text-xs font-black uppercase tracking-widest mb-2" style={{ color: 'var(--brown2)' }}>ໂລໂກ້ຮ້ານ</div>
+                <div className="flex gap-3 items-center">
+                  <div className={`w-20 h-20 rounded-2xl border-2 overflow-hidden flex items-center justify-center flex-shrink-0 relative ${logoPreview || receiptDraft.logo ? 'border-[#a0522d]' : 'border-dashed border-[#e8d5c0]'}`} style={{ background: 'var(--cream)' }}>
+                    {logoPreview ? <><img src={logoPreview} className="w-full h-full object-cover" alt="preview" /><span className="absolute inset-0 flex items-center justify-center text-xs font-black text-white bg-black/40">...</span></> : receiptDraft.logo ? <img src={receiptDraft.logo} className="w-full h-full object-cover" alt="logo" /> : <span className="text-4xl">🏪</span>}
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <label className="px-3 py-2 rounded-xl border-2 border-[#3d1f0a] text-xs font-black cursor-pointer text-center" style={{ color: 'var(--brown)', background: 'var(--warm-white)' }}>📤 ອັບໂຫລດໂລໂກ້<input type="file" accept="image/*" className="hidden" onChange={uploadLogo} /></label>
+                    {receiptDraft.logo && <button onClick={removeLogo} className="text-xs text-red-500 font-black text-center">✕ ລຶບໂລໂກ້</button>}
+                  </div>
+                </div>
+              </div>
+              {[['ຊື່ຮ້ານ · Shop Name', 'name', 'text'], ['ທີ່ຢູ່ · Address', 'address', 'text'], ['ເບີໂທ · Phone', 'phone', 'tel']].map(([label, key, type]) => (
+                <div key={key}>
+                  <label className="text-xs font-black uppercase tracking-widest block mb-1" style={{ color: 'var(--brown2)' }}>{label}</label>
+                  <input type={type} value={receiptDraft[key] || ''} onChange={e => setReceiptDraft(p => ({ ...p, [key]: e.target.value }))} className="input-field text-sm py-2" />
+                </div>
+              ))}
+              <div>
+                <label className="text-xs font-black uppercase tracking-widest block mb-1" style={{ color: 'var(--brown2)' }}>ຂໍ້ຄວາມໃຕ້ໃບເສດ · Footer</label>
+                <textarea value={receiptDraft.footer || ''} onChange={e => setReceiptDraft(p => ({ ...p, footer: e.target.value }))} className="input-field text-sm py-2" rows={2} placeholder="ຂອບໃຈທີ່ໃຊ້ບໍລິການ" />
+              </div>
+              <div>
+                <div className="text-xs font-black uppercase tracking-widest mb-2" style={{ color: 'var(--brown2)' }}>ຄວາມກວ້າງກະດາດ · Paper Width</div>
+                <div className="flex gap-2">
+                  {[[384, '58mm'], [576, '80mm']].map(([pw, label]) => (
+                    <button key={pw} onClick={() => setReceiptDraft(p => ({ ...p, printerWidth: pw }))} className="flex-1 py-2.5 rounded-xl font-black text-sm border-2 transition-all" style={{ borderColor: receiptDraft.printerWidth === pw ? '#3d1f0a' : '#e8d5c0', background: receiptDraft.printerWidth === pw ? '#3d1f0a' : 'var(--warm-white)', color: receiptDraft.printerWidth === pw ? '#fdf6ee' : 'var(--brown)' }}>{label}</button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <div className="text-xs font-black uppercase tracking-widest" style={{ color: 'var(--brown2)' }}>ຕົວຢ່າງໃບເສດ</div>
+                  <button onClick={() => generatePreview(receiptDraft)} disabled={previewLoading} className="text-xs font-black px-3 py-1.5 rounded-lg border-2 border-[#3d1f0a]" style={{ color: 'var(--brown)', background: 'var(--warm-white)' }}>{previewLoading ? '⏳' : '👁 ເບິ່ງ'}</button>
+                </div>
+                {receiptPreviewUrl ? <div className="rounded-xl overflow-hidden border-2" style={{ borderColor: 'var(--cream3)', background: '#f5f5f5' }}><img src={receiptPreviewUrl} alt="Receipt Preview" style={{ width: '100%', maxWidth: 300, display: 'block', margin: '0 auto' }} /></div> : <div className="rounded-xl py-8 text-center text-xs" style={{ background: 'var(--cream2)', color: 'var(--gray3)' }}>ກົດ "ເບິ່ງ" ເພື່ອເບິ່ງຕົວຢ່າງ</div>}
+              </div>
+              <button onClick={saveShopInfo} className="btn-primary text-sm py-3">💾 ບັນທຶກຕັ້ງຄ່າ</button>
+            </div>
+          </details>
+
+          {/* Branches */}
+          <details className="card">
+            <summary className="font-black text-xs tracking-widest uppercase cursor-pointer" style={{ color: 'var(--brown3)' }}>📍 ສາຂາ · Branches</summary>
+            <div className="mt-3 flex flex-col gap-4">
+              {branches.map((b, idx) => (
+                <div key={b.id} className="rounded-xl overflow-hidden" style={{ border: '2px solid var(--cream3)' }}>
+                  <div className="flex items-center justify-between px-3 py-2.5" style={{ background: b.visible ? 'var(--brown)' : 'var(--cream2)' }}>
+                    <div>
+                      <div className="font-black text-sm" style={{ color: b.visible ? 'var(--cream)' : 'var(--brown)' }}>{b.name}</div>
+                      <div className="text-xs font-bold" style={{ color: b.visible ? 'rgba(253,246,238,0.65)' : 'var(--gray3)' }}>{b.nameEn}</div>
+                    </div>
+                    <button onClick={() => updateBranch(idx, 'visible', !b.visible)} className={`w-12 h-7 rounded-full transition-colors relative flex-shrink-0 ${b.visible ? 'bg-green-500' : 'bg-[#e8d5c0]'}`}>
+                      <span className={`absolute w-5 h-5 bg-white rounded-full top-1 transition-all shadow ${b.visible ? 'left-6' : 'left-1'}`} />
+                    </button>
+                  </div>
+                  <div className="p-3 flex flex-col gap-2" style={{ background: 'var(--warm-white)' }}>
+                    {[['schedule','🗓 ເວລາທຳການ'],['mapUrl','📍 Maps URL'],['facebookUrl','📘 Facebook URL'],['tiktokUrl','🎵 TikTok URL'],['phone1','📞 ເບີໂທ 1'],['phone2','📞 ເບີໂທ 2'],['whatsapp','💬 WhatsApp']].map(([field, label]) => (
+                      <div key={field}>
+                        <label className="text-xs font-black tracking-widest uppercase block mb-1" style={{ color: 'var(--brown2)' }}>{label}</label>
+                        <input type="text" value={b[field] || ''} onChange={e => updateBranch(idx, field, e.target.value)} className="input-field text-xs py-2" />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+              <button onClick={saveBranches} className="btn-primary text-sm py-3">💾 ບັນທຶກສາຂາ</button>
+            </div>
+          </details>
+
+          {/* Slip Gallery */}
+          <details className="card">
+            <summary className="font-black text-xs tracking-widest uppercase cursor-pointer" style={{ color: 'var(--brown3)' }}>
+              {'🗑 ຈັດການສລິບ'}
+              {orders.filter(o => o.slip_url).length > 0 && <span className="ml-1 px-1.5 py-0.5 rounded-full text-xs" style={{ background: '#fef2f2', color: '#dc2626' }}>{orders.filter(o => o.slip_url).length}</span>}
+            </summary>
+            <div className="mt-3">
+              {orders.filter(o => o.slip_url).length === 0 ? (
+                <div className="text-center py-4 text-xs font-bold" style={{ color: 'var(--cream3)' }}>ບໍ່ມີສລິບ</div>
+              ) : (
+                <>
+                  <div className="flex gap-2 mb-3 flex-wrap items-center">
+                    <button onClick={() => setSelectedSlipIds(new Set(orders.filter(o => o.slip_url).map(o => o.id)))} className="text-xs px-2.5 py-1.5 rounded-lg font-black" style={{ background: 'var(--cream2)', color: 'var(--brown2)', border: '1.5px solid var(--cream3)' }}>ເລືອກທັງໝົດ</button>
+                    {selectedSlipIds.size > 0 && (
+                      <>
+                        <button onClick={() => setSelectedSlipIds(new Set())} className="text-xs px-2.5 py-1.5 rounded-lg font-black" style={{ background: 'var(--cream2)', color: 'var(--brown2)', border: '1.5px solid var(--cream3)' }}>ຍົກເລີກ</button>
+                        <button onClick={() => showConfirm(`ລຶບສລິບ ${selectedSlipIds.size} ໃບ ແທ້ບໍ?`, deleteSelectedSlips)} disabled={deletingSlips} className="text-xs px-2.5 py-1.5 rounded-lg font-black" style={{ background: '#fef2f2', color: '#dc2626', border: '1.5px solid #fca5a5' }}>{deletingSlips ? '⏳...' : `🗑 ລຶບ (${selectedSlipIds.size})`}</button>
+                      </>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-3 gap-2">
+                    {orders.filter(o => o.slip_url).sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).map(o => {
+                      const isSelected = selectedSlipIds.has(o.id)
+                      return (
+                        <div key={o.id} onClick={() => setSelectedSlipIds(prev => { const n = new Set(prev); if (n.has(o.id)) n.delete(o.id); else n.add(o.id); return n })} className="relative cursor-pointer rounded-xl overflow-hidden select-none" style={{ border: isSelected ? '2.5px solid #dc2626' : '2px solid var(--cream3)' }}>
+                          <img src={o.slip_url} alt={`slip ${o.qnum}`} className="w-full aspect-square object-cover" />
+                          {isSelected && <div className="absolute inset-0 flex items-center justify-center" style={{ background: 'rgba(220,38,38,0.25)' }}><span className="w-6 h-6 rounded-full bg-red-600 flex items-center justify-center text-white font-black text-sm">✓</span></div>}
+                          <div className="absolute bottom-0 left-0 right-0 px-1 py-0.5 text-white font-black truncate" style={{ background: 'rgba(61,31,10,0.75)', fontSize: 9 }}>#{o.qnum}</div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </>
+              )}
+            </div>
+          </details>
+
+          {/* Export / Import */}
+          <details className="card">
+            <summary className="font-black text-xs tracking-widest uppercase cursor-pointer" style={{ color: 'var(--brown3)' }}>💾 ຂໍ້ມູນ · Data</summary>
+            <div className="mt-3 flex flex-col gap-2">
+              <button onClick={exportData} className="btn-primary text-sm py-3">📥 Export JSON</button>
+              <label className="btn-outline text-sm py-3 text-center cursor-pointer">📤 Import JSON<input type="file" accept=".json" className="hidden" onChange={importData} /></label>
+            </div>
+          </details>
+
+        </div>
+      )}
+
+      </div>
+
       {/* Quick Order FAB */}
       {tab === 'orders' && !qoOpen && (
         <button
           onClick={() => { resetQo(); setQoOpen(true) }}
-          className="fixed bottom-20 right-4 z-40 w-16 h-16 rounded-full flex items-center justify-center text-3xl active:scale-95 transition-all"
+          className="fixed bottom-4 right-4 z-40 w-16 h-16 rounded-full flex items-center justify-center text-3xl active:scale-95 transition-all"
           style={{ background: 'var(--brown)', color: 'var(--cream)', boxShadow: '0 4px 20px rgba(61,31,10,0.45)', border: '3px solid var(--cream)' }}
         >
           🛒
         </button>
       )}
-
-      {/* Bottom Nav */}
-      <div className="flex flex-shrink-0" style={{ background: 'var(--brown)', borderTop: '2px solid var(--brown2)' }}>
-        {[['orders','📋','ອໍເດີ'],['sales','📊','ຍອດຂາຍ']].map(([t,icon,l]) => (
-          <button key={t} onClick={() => setTab(t)} className={`flex-1 flex flex-col items-center py-3 gap-1 border-none text-xs font-bold ${tab===t ? 'text-[#fdf6ee]' : 'text-[rgba(253,246,238,0.45)]'}`} style={{ background: 'transparent' }}>
-            <span className="text-2xl">{icon}</span>{l}
-          </button>
-        ))}
-        <button onClick={() => setTab('chat')} className={`flex-1 flex flex-col items-center py-3 gap-1 border-none text-xs font-bold relative ${tab==='chat' ? 'text-[#fdf6ee]' : 'text-[rgba(253,246,238,0.45)]'}`} style={{ background: 'transparent' }}>
-          <span className="text-2xl relative inline-block">
-            💬
-            {unreadChat > 0 && (
-              <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[9px] font-black rounded-full w-4 h-4 flex items-center justify-center leading-none">
-                {unreadChat > 9 ? '9+' : unreadChat}
-              </span>
-            )}
-          </span>
-          ແຊດ
-        </button>
-      </div>
 
       {/* Quick Order Modal */}
       {qoOpen && (

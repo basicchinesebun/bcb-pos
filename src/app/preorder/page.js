@@ -501,14 +501,15 @@ export default function PreOrderPage() {
         <>
           <div className="flex-1 overflow-y-auto p-2 sm:p-3">
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
-              {menus.map((m, i) => {
+              {menus.map((_, i) => i).sort((a, b) => ((stock[a]||0) === 0 ? 1 : 0) - ((stock[b]||0) === 0 ? 1 : 0)).map((i, pos) => {
+                const m = menus[i]
                 const qty = selected[i] || 0
                 const s = stock[i] || 0
                 const isOut = s === 0
                 const isSel = qty > 0
                 const img = images[i]
-                const isLastLoneMobile = menus.length % 2 === 1 && i === menus.length - 1
-                const isLastLoneMd = menus.length % 3 === 1 && i === menus.length - 1
+                const isLastLoneMobile = menus.length % 2 === 1 && pos === menus.length - 1
+                const isLastLoneMd = menus.length % 3 === 1 && pos === menus.length - 1
                 let loneClass = ''
                 if (isLastLoneMobile) loneClass += ' col-span-2 w-1/2 mx-auto'
                 if (isLastLoneMobile || isLastLoneMd) loneClass += ' md:col-span-1 md:w-full md:mx-0'
