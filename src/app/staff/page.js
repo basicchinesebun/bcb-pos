@@ -234,7 +234,7 @@ export default function StaffPage() {
   // iOS Safari keyboard: track visualViewport so chat input stays above keyboard
   useEffect(() => {
     if (tab !== 'chat' || !activeChatPhone) { setChatVH(null); return }
-    function update() { setChatVH((window.visualViewport?.height ?? window.innerHeight) - 56 + 'px') }
+    function update() { setChatVH((window.visualViewport?.height ?? window.innerHeight) - 52 + 'px') }
     update()
     window.visualViewport?.addEventListener('resize', update)
     return () => window.visualViewport?.removeEventListener('resize', update)
@@ -2665,7 +2665,7 @@ export default function StaffPage() {
             </div>
           ) : (
             // Conversation messages
-            <div className="flex flex-col" style={{ height: chatVH ?? 'calc(100dvh - 56px)' }}>
+            <div className="flex flex-col" style={{ height: chatVH ?? 'calc(100dvh - 52px)' }}>
               <div className="flex items-center gap-3 px-4 py-3 flex-shrink-0" style={{ background: 'var(--brown)' }}>
                 <button onClick={() => { setActiveChatPhone(null); setChatMessages([]) }}
                   className="text-xl font-black" style={{ color: 'var(--cream)' }}>←</button>
@@ -2780,19 +2780,270 @@ export default function StaffPage() {
 
       {/* ─── SETTINGS TAB ─── */}
       {tab === 'settings' && (
-        <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <a href="/qr" target="_blank" rel="noopener noreferrer"
-            className="card flex items-center gap-3 active:scale-95 transition-all"
-            style={{ textDecoration: 'none' }}>
-            <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 text-xl"
-              style={{ background: 'var(--cream2)' }}>📱</div>
-            <div className="flex-1">
-              <div className="font-black text-sm" style={{ color: 'var(--brown)' }}>QR Code Pre-Order</div>
-              <div className="text-xs font-bold" style={{ color: 'var(--gray3)' }}>ສະແດງ QR ໃຫ້ລູກຄ້າສະແກນ</div>
+        <div className="flex flex-col gap-3 p-3">
+
+          {/* Quick links */}
+          <div className="flex gap-2">
+            <a href="/qr" target="_blank" rel="noopener noreferrer" className="card flex-1 flex items-center gap-2 active:scale-95 transition-all" style={{ textDecoration: 'none' }}>
+              <span className="text-xl">📱</span>
+              <div className="flex-1 min-w-0">
+                <div className="font-black text-xs" style={{ color: 'var(--brown)' }}>QR Pre-Order</div>
+              </div>
+              <span style={{ color: 'var(--gray3)', fontSize: 12 }}>↗</span>
+            </a>
+            <a href="/kitchen" target="_blank" rel="noopener noreferrer" className="card flex-1 flex items-center gap-2 active:scale-95 transition-all" style={{ textDecoration: 'none' }}>
+              <span className="text-xl">🍳</span>
+              <div className="flex-1 min-w-0">
+                <div className="font-black text-xs" style={{ color: 'var(--brown)' }}>ຈໍຄົວ</div>
+              </div>
+              <span style={{ color: 'var(--gray3)', fontSize: 12 }}>↗</span>
+            </a>
+          </div>
+
+          {/* General settings */}
+          <details className="card" open>
+            <summary className="font-black text-xs tracking-widest uppercase cursor-pointer" style={{ color: 'var(--brown3)' }}>⚙ ຕັ້ງຄ່າທົ່ວໄປ</summary>
+            <div className="mt-3 flex flex-col gap-2">
+              {[
+                ['soundOn', '🔊 ສຽງຮຽກຄິວ'],
+                ['walkinOn', '🏪 ເປີດ Walk-in'],
+                ['onlineOn', '🌐 ເປີດ Online'],
+                ['aiOn', '🤖 AI ຕອບແຊັດ'],
+                ['autoprintOn', '🖨 ພິມອັດຕະໂນມັດ'],
+              ].map(([k, l]) => (
+                <div key={k} className="flex justify-between items-center py-2 border-b border-[#e8d5c0]">
+                  <span className="text-sm font-bold" style={{ color: 'var(--brown)' }}>{l}</span>
+                  <button onClick={() => toggleSetting(k)} className={`w-12 h-7 rounded-full transition-colors relative ${settings[k] ? 'bg-[#3d1f0a]' : 'bg-[#e8d5c0]'}`}>
+                    <span className={`absolute w-5 h-5 bg-white rounded-full top-1 transition-all ${settings[k] ? 'left-6' : 'left-1'}`} />
+                  </button>
+                </div>
+              ))}
+              <div className="border-t border-[#e8d5c0] pt-3 mt-1 flex flex-col gap-2">
+                <div className="text-xs font-black uppercase tracking-widest" style={{ color: 'var(--brown3)' }}>🕐 ເວລາຮັບ Preorder</div>
+                <div className="flex gap-2 items-center">
+                  <div className="flex-1">
+                    <div className="text-xs font-bold mb-1" style={{ color: 'var(--gray3)' }}>ເລີ່ມ</div>
+                    <input type="time" value={settings.pickupTimeStart || '15:30'} onChange={e => { const s = { ...settings, pickupTimeStart: e.target.value }; setSettings(s); saveConfig('settings', s) }} className="input-field text-sm py-2" />
+                  </div>
+                  <span className="font-black mt-4" style={{ color: 'var(--brown2)' }}>–</span>
+                  <div className="flex-1">
+                    <div className="text-xs font-bold mb-1" style={{ color: 'var(--gray3)' }}>ສິ້ນສຸດ</div>
+                    <input type="time" value={settings.pickupTimeEnd || '19:00'} onChange={e => { const s = { ...settings, pickupTimeEnd: e.target.value }; setSettings(s); saveConfig('settings', s) }} className="input-field text-sm py-2" />
+                  </div>
+                </div>
+              </div>
             </div>
-            <div className="text-xs font-black px-2 py-1 rounded-lg" style={{ background: 'var(--brown)', color: 'var(--cream)' }}>ເປີດ →</div>
-          </a>
-          <div className="text-xs font-bold py-4 text-center" style={{ color: 'var(--gray3)' }}>ຕັ້ງຄ່າເພີ່ມເຕີມຢູ່ໃນ Sidebar ຂອງໜ້າ Orders ☰</div>
+          </details>
+
+          {/* Queue reset */}
+          <details className="card">
+            <summary className="font-black text-xs tracking-widest uppercase cursor-pointer" style={{ color: 'var(--brown3)' }}>🔢 ລີເຊັດຄິວ</summary>
+            <div className="mt-3 flex flex-col gap-2">
+              {[
+                ['ລີເຊັດຄິວ Preorder → 0001', 'ຕັ້ງໃໝ່ຄິວ Online', () => showConfirm('ລີເຊັດຄິວ Preorder ເປັນ 0001 ແທ້ບໍ?', async () => { await saveConfig('next_queue', '0'); showToast('ລີເຊັດຄິວ Preorder ✅', 'green') })],
+                ['ລີເຊັດຄິວ Walk-in → 0001', 'ຕັ້ງໃໝ່ຄິວໜ້າຮ້ານ', () => showConfirm('ລີເຊັດຄິວ Walk-in ເປັນ 0001 ແທ້ບໍ?', async () => { await saveConfig('next_queue_walkin', '0'); showToast('ລີເຊັດຄິວ Walk-in ✅', 'green') })],
+              ].map(([label, desc, fn]) => (
+                <div key={label} className="flex items-center justify-between py-1 border-b border-[#f5ebe0]">
+                  <div>
+                    <div className="text-sm font-bold" style={{ color: 'var(--brown)' }}>{label}</div>
+                    <div className="text-xs font-bold mt-0.5" style={{ color: 'var(--gray3)' }}>{desc}</div>
+                  </div>
+                  <button onClick={fn} className="text-xs px-3 py-2 rounded-xl font-black flex-shrink-0" style={{ background: '#fef2f2', color: '#dc2626', border: '1.5px solid #fca5a5' }}>ລີເຊັດ</button>
+                </div>
+              ))}
+              <div className="pt-2">
+                <div className="text-xs font-black uppercase tracking-widest mb-2" style={{ color: 'var(--brown3)' }}>🔐 Code Walk-in</div>
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="flex-1 px-3 py-2 rounded-xl font-black text-lg tracking-[0.2em] text-center" style={{ background: 'var(--cream2)', color: walkinCode ? 'var(--brown)' : 'var(--cream3)', border: '2px solid var(--cream3)' }}>
+                    {walkinCode || '— — — — — —'}
+                  </div>
+                  <button onClick={async () => { const code = Math.random().toString(36).substring(2, 8).toUpperCase(); setWalkinCode(code); await saveConfig('walkin_code', code); showToast(`🔐 Code ໃໝ່: ${code}`, 'green') }} className="px-3 py-2 rounded-xl font-black text-sm flex-shrink-0" style={{ background: 'var(--brown)', color: 'var(--cream)' }}>🔄 ສ້າງ</button>
+                </div>
+                {walkinCode && <button onClick={async () => { await saveConfig('walkin_code', ''); setWalkinCode(''); showToast('ປິດ Code Walk-in ແລ້ວ', 'orange') }} className="text-xs px-3 py-1.5 rounded-lg font-black" style={{ background: '#fef2f2', color: '#dc2626', border: '1.5px solid #fca5a5' }}>ປິດລະຫັດ</button>}
+              </div>
+            </div>
+          </details>
+
+          {/* PIN */}
+          <details className="card">
+            <summary className="font-black text-xs tracking-widest uppercase cursor-pointer" style={{ color: 'var(--brown3)' }}>🔒 ລະຫັດຜ່ານ</summary>
+            <div className="mt-3 flex flex-col gap-2">
+              {[['staff', 'ລະຫັດ Staff', staffPin], ['profit', 'ລະຫັດ Profit', profitPin]].map(([type, label, pin]) => (
+                <div key={type} className="flex items-center justify-between py-1 border-b border-[#f5ebe0]">
+                  <div>
+                    <span className="text-sm font-bold" style={{ color: 'var(--brown)' }}>{label}</span>
+                    <span className="ml-1.5 text-xs font-bold" style={{ color: pin ? '#16a34a' : 'var(--gray3)' }}>{pin ? '● ຕັ້ງແລ້ວ' : '○ ຍັງບໍ່ຕັ້ງ'}</span>
+                  </div>
+                  <div className="flex gap-1.5">
+                    <button onClick={() => openPinSetting(type)} className="text-xs px-2.5 py-1.5 rounded-lg font-black" style={{ background: 'var(--cream2)', color: 'var(--brown2)', border: '1.5px solid var(--cream3)' }}>{pin ? '🔑 ປ່ຽນ' : '+ ຕັ້ງ'}</button>
+                    {pin && <button onClick={() => openRemovePin(type)} className="text-xs px-2.5 py-1.5 rounded-lg font-black" style={{ background: '#fef2f2', color: '#dc2626', border: '1.5px solid #fca5a5' }}>ລຶບ</button>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </details>
+
+          {/* Menu & Price */}
+          <details className="card">
+            <summary className="font-black text-xs tracking-widest uppercase cursor-pointer" style={{ color: 'var(--brown3)' }}>🍱 ເມນູ & ລາຄາ</summary>
+            <div className="mt-3">
+              {menus.map((m, i) => (
+                <div key={i} className="flex gap-2 items-center py-2 border-b border-[#f5ebe0]">
+                  <span className="text-xs font-black w-4 flex-shrink-0" style={{ color: 'var(--cream3)' }}>{i+1}</span>
+                  <div className="flex-1 flex flex-col gap-1 min-w-0">
+                    <input id={`mn2-${i}`} defaultValue={m.lo} className="input-field text-xs py-2" />
+                    <div className="flex gap-1">
+                      <input id={`mp2-${i}`} defaultValue={prices[i] || ''} type="text" inputMode="numeric" placeholder="ລາຄາ" className="input-field text-xs py-2 flex-1" />
+                      <input id={`mc2-${i}`} defaultValue={costs[i] || ''} type="text" inputMode="numeric" placeholder="ຕົ້ນທຶນ" className="input-field text-xs py-2 flex-1" style={{ borderColor: '#fbbf24' }} />
+                    </div>
+                  </div>
+                  <div className="flex flex-col items-center gap-1 flex-shrink-0">
+                    <label className="w-10 h-10 rounded-lg border-2 border-dashed border-[#e8d5c0] flex items-center justify-center cursor-pointer overflow-hidden relative">
+                      {imgPreviews[i] ? <><img src={imgPreviews[i]} className="w-full h-full object-cover" /><span className="absolute inset-0 flex items-center justify-center text-xs font-black text-white bg-black/40">...</span></> : images[i] ? <img src={images[i]} className="w-full h-full object-cover" /> : <span className="text-xl">{EMOJIS[i]||'🍱'}</span>}
+                      <input type="file" accept="image/*" className="hidden" onChange={e => uploadMenuImg(e, i)} />
+                    </label>
+                    {images[i] && !imgPreviews[i] ? <button onClick={() => removeMenuImg(i)} className="text-[10px] text-red-500 font-black">✕ຮູບ</button> : <button onClick={() => showConfirm(`ລຶບເມນູ "${m.lo}"?`, () => removeMenu(i))} className="text-[10px] font-black text-red-400">🗑</button>}
+                  </div>
+                </div>
+              ))}
+              <div className="flex gap-2 mt-3">
+                <button onClick={() => { const ms = document.querySelectorAll('[id^="mn2-"]'), ps = document.querySelectorAll('[id^="mp2-"]'), cs = document.querySelectorAll('[id^="mc2-"]'); const nm = menus.map((m,i) => ({ ...m, lo: ms[i]?.value ?? m.lo })); const np = prices.map((p,i) => ps[i]?.value !== undefined ? Number(ps[i].value) || p : p); const nc = costs.map((c,i) => cs[i]?.value !== undefined ? Number(cs[i].value) || 0 : c || 0); saveMenus(nm, np, nc) }} className="btn-primary flex-1 text-sm py-3">💾 ບັນທຶກ</button>
+                <button onClick={addMenu} className="px-4 py-3 rounded-xl font-black text-sm flex-shrink-0" style={{ background: 'var(--cream2)', color: 'var(--brown)', border: '1.5px solid var(--cream3)' }}>+ ເພີ່ມ</button>
+              </div>
+            </div>
+          </details>
+
+          {/* QR Payment */}
+          <details className="card">
+            <summary className="font-black text-xs tracking-widest uppercase cursor-pointer" style={{ color: 'var(--brown3)' }}>📱 QR ຊຳລະ</summary>
+            <div className="mt-3 flex flex-col items-center gap-3">
+              <div className="w-40 h-40 rounded-xl border-2 border-dashed border-[#e8d5c0] flex items-center justify-center overflow-hidden relative">
+                {qrPreview ? <><img src={qrPreview} className="w-full h-full object-contain" /><span className="absolute inset-0 flex items-center justify-center text-sm font-black text-white bg-black/40">ກຳລັງອັບ...</span></> : qrImage ? <img src={qrImage} className="w-full h-full object-contain" /> : <span className="text-sm" style={{ color: 'var(--gray3)' }}>ຍັງບໍ່ມີ</span>}
+              </div>
+              <label className="btn-outline text-sm py-2 cursor-pointer text-center">📤 ອັບໂຫລດ QR<input type="file" accept="image/*" className="hidden" onChange={uploadQR} /></label>
+            </div>
+          </details>
+
+          {/* Receipt */}
+          <details className="card">
+            <summary className="font-black text-xs tracking-widest uppercase cursor-pointer" style={{ color: 'var(--brown3)' }}>🧾 ຕັ້ງຄ່າໃບເສດ</summary>
+            <div className="mt-4 flex flex-col gap-4">
+              <div>
+                <div className="text-xs font-black uppercase tracking-widest mb-2" style={{ color: 'var(--brown2)' }}>ໂລໂກ້ຮ້ານ</div>
+                <div className="flex gap-3 items-center">
+                  <div className={`w-20 h-20 rounded-2xl border-2 overflow-hidden flex items-center justify-center flex-shrink-0 relative ${logoPreview || receiptDraft.logo ? 'border-[#a0522d]' : 'border-dashed border-[#e8d5c0]'}`} style={{ background: 'var(--cream)' }}>
+                    {logoPreview ? <><img src={logoPreview} className="w-full h-full object-cover" alt="preview" /><span className="absolute inset-0 flex items-center justify-center text-xs font-black text-white bg-black/40">...</span></> : receiptDraft.logo ? <img src={receiptDraft.logo} className="w-full h-full object-cover" alt="logo" /> : <span className="text-4xl">🏪</span>}
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <label className="px-3 py-2 rounded-xl border-2 border-[#3d1f0a] text-xs font-black cursor-pointer text-center" style={{ color: 'var(--brown)', background: 'var(--warm-white)' }}>📤 ອັບໂຫລດໂລໂກ້<input type="file" accept="image/*" className="hidden" onChange={uploadLogo} /></label>
+                    {receiptDraft.logo && <button onClick={removeLogo} className="text-xs text-red-500 font-black text-center">✕ ລຶບໂລໂກ້</button>}
+                  </div>
+                </div>
+              </div>
+              {[['ຊື່ຮ້ານ · Shop Name', 'name', 'text'], ['ທີ່ຢູ່ · Address', 'address', 'text'], ['ເບີໂທ · Phone', 'phone', 'tel']].map(([label, key, type]) => (
+                <div key={key}>
+                  <label className="text-xs font-black uppercase tracking-widest block mb-1" style={{ color: 'var(--brown2)' }}>{label}</label>
+                  <input type={type} value={receiptDraft[key] || ''} onChange={e => setReceiptDraft(p => ({ ...p, [key]: e.target.value }))} className="input-field text-sm py-2" />
+                </div>
+              ))}
+              <div>
+                <label className="text-xs font-black uppercase tracking-widest block mb-1" style={{ color: 'var(--brown2)' }}>ຂໍ້ຄວາມໃຕ້ໃບເສດ · Footer</label>
+                <textarea value={receiptDraft.footer || ''} onChange={e => setReceiptDraft(p => ({ ...p, footer: e.target.value }))} className="input-field text-sm py-2" rows={2} placeholder="ຂອບໃຈທີ່ໃຊ້ບໍລິການ" />
+              </div>
+              <div>
+                <div className="text-xs font-black uppercase tracking-widest mb-2" style={{ color: 'var(--brown2)' }}>ຄວາມກວ້າງກະດາດ · Paper Width</div>
+                <div className="flex gap-2">
+                  {[[384, '58mm'], [576, '80mm']].map(([pw, label]) => (
+                    <button key={pw} onClick={() => setReceiptDraft(p => ({ ...p, printerWidth: pw }))} className="flex-1 py-2.5 rounded-xl font-black text-sm border-2 transition-all" style={{ borderColor: receiptDraft.printerWidth === pw ? '#3d1f0a' : '#e8d5c0', background: receiptDraft.printerWidth === pw ? '#3d1f0a' : 'var(--warm-white)', color: receiptDraft.printerWidth === pw ? '#fdf6ee' : 'var(--brown)' }}>{label}</button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <div className="text-xs font-black uppercase tracking-widest" style={{ color: 'var(--brown2)' }}>ຕົວຢ່າງໃບເສດ</div>
+                  <button onClick={() => generatePreview(receiptDraft)} disabled={previewLoading} className="text-xs font-black px-3 py-1.5 rounded-lg border-2 border-[#3d1f0a]" style={{ color: 'var(--brown)', background: 'var(--warm-white)' }}>{previewLoading ? '⏳' : '👁 ເບິ່ງ'}</button>
+                </div>
+                {receiptPreviewUrl ? <div className="rounded-xl overflow-hidden border-2" style={{ borderColor: 'var(--cream3)', background: '#f5f5f5' }}><img src={receiptPreviewUrl} alt="Receipt Preview" style={{ width: '100%', maxWidth: 300, display: 'block', margin: '0 auto' }} /></div> : <div className="rounded-xl py-8 text-center text-xs" style={{ background: 'var(--cream2)', color: 'var(--gray3)' }}>ກົດ "ເບິ່ງ" ເພື່ອເບິ່ງຕົວຢ່າງ</div>}
+              </div>
+              <button onClick={saveShopInfo} className="btn-primary text-sm py-3">💾 ບັນທຶກຕັ້ງຄ່າ</button>
+            </div>
+          </details>
+
+          {/* Branches */}
+          <details className="card">
+            <summary className="font-black text-xs tracking-widest uppercase cursor-pointer" style={{ color: 'var(--brown3)' }}>📍 ສາຂາ · Branches</summary>
+            <div className="mt-3 flex flex-col gap-4">
+              {branches.map((b, idx) => (
+                <div key={b.id} className="rounded-xl overflow-hidden" style={{ border: '2px solid var(--cream3)' }}>
+                  <div className="flex items-center justify-between px-3 py-2.5" style={{ background: b.visible ? 'var(--brown)' : 'var(--cream2)' }}>
+                    <div>
+                      <div className="font-black text-sm" style={{ color: b.visible ? 'var(--cream)' : 'var(--brown)' }}>{b.name}</div>
+                      <div className="text-xs font-bold" style={{ color: b.visible ? 'rgba(253,246,238,0.65)' : 'var(--gray3)' }}>{b.nameEn}</div>
+                    </div>
+                    <button onClick={() => updateBranch(idx, 'visible', !b.visible)} className={`w-12 h-7 rounded-full transition-colors relative flex-shrink-0 ${b.visible ? 'bg-green-500' : 'bg-[#e8d5c0]'}`}>
+                      <span className={`absolute w-5 h-5 bg-white rounded-full top-1 transition-all shadow ${b.visible ? 'left-6' : 'left-1'}`} />
+                    </button>
+                  </div>
+                  <div className="p-3 flex flex-col gap-2" style={{ background: 'var(--warm-white)' }}>
+                    {[['schedule','🗓 ເວລາທຳການ'],['mapUrl','📍 Maps URL'],['facebookUrl','📘 Facebook URL'],['tiktokUrl','🎵 TikTok URL'],['phone1','📞 ເບີໂທ 1'],['phone2','📞 ເບີໂທ 2'],['whatsapp','💬 WhatsApp']].map(([field, label]) => (
+                      <div key={field}>
+                        <label className="text-xs font-black tracking-widest uppercase block mb-1" style={{ color: 'var(--brown2)' }}>{label}</label>
+                        <input type="text" value={b[field] || ''} onChange={e => updateBranch(idx, field, e.target.value)} className="input-field text-xs py-2" />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+              <button onClick={saveBranches} className="btn-primary text-sm py-3">💾 ບັນທຶກສາຂາ</button>
+            </div>
+          </details>
+
+          {/* Slip Gallery */}
+          <details className="card">
+            <summary className="font-black text-xs tracking-widest uppercase cursor-pointer" style={{ color: 'var(--brown3)' }}>
+              {'🗑 ຈັດການສລິບ'}
+              {orders.filter(o => o.slip_url).length > 0 && <span className="ml-1 px-1.5 py-0.5 rounded-full text-xs" style={{ background: '#fef2f2', color: '#dc2626' }}>{orders.filter(o => o.slip_url).length}</span>}
+            </summary>
+            <div className="mt-3">
+              {orders.filter(o => o.slip_url).length === 0 ? (
+                <div className="text-center py-4 text-xs font-bold" style={{ color: 'var(--cream3)' }}>ບໍ່ມີສລິບ</div>
+              ) : (
+                <>
+                  <div className="flex gap-2 mb-3 flex-wrap items-center">
+                    <button onClick={() => setSelectedSlipIds(new Set(orders.filter(o => o.slip_url).map(o => o.id)))} className="text-xs px-2.5 py-1.5 rounded-lg font-black" style={{ background: 'var(--cream2)', color: 'var(--brown2)', border: '1.5px solid var(--cream3)' }}>ເລືອກທັງໝົດ</button>
+                    {selectedSlipIds.size > 0 && (
+                      <>
+                        <button onClick={() => setSelectedSlipIds(new Set())} className="text-xs px-2.5 py-1.5 rounded-lg font-black" style={{ background: 'var(--cream2)', color: 'var(--brown2)', border: '1.5px solid var(--cream3)' }}>ຍົກເລີກ</button>
+                        <button onClick={() => showConfirm(`ລຶບສລິບ ${selectedSlipIds.size} ໃບ ແທ້ບໍ?`, deleteSelectedSlips)} disabled={deletingSlips} className="text-xs px-2.5 py-1.5 rounded-lg font-black" style={{ background: '#fef2f2', color: '#dc2626', border: '1.5px solid #fca5a5' }}>{deletingSlips ? '⏳...' : `🗑 ລຶບ (${selectedSlipIds.size})`}</button>
+                      </>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-3 gap-2">
+                    {orders.filter(o => o.slip_url).sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).map(o => {
+                      const isSelected = selectedSlipIds.has(o.id)
+                      return (
+                        <div key={o.id} onClick={() => setSelectedSlipIds(prev => { const n = new Set(prev); if (n.has(o.id)) n.delete(o.id); else n.add(o.id); return n })} className="relative cursor-pointer rounded-xl overflow-hidden select-none" style={{ border: isSelected ? '2.5px solid #dc2626' : '2px solid var(--cream3)' }}>
+                          <img src={o.slip_url} alt={`slip ${o.qnum}`} className="w-full aspect-square object-cover" />
+                          {isSelected && <div className="absolute inset-0 flex items-center justify-center" style={{ background: 'rgba(220,38,38,0.25)' }}><span className="w-6 h-6 rounded-full bg-red-600 flex items-center justify-center text-white font-black text-sm">✓</span></div>}
+                          <div className="absolute bottom-0 left-0 right-0 px-1 py-0.5 text-white font-black truncate" style={{ background: 'rgba(61,31,10,0.75)', fontSize: 9 }}>#{o.qnum}</div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </>
+              )}
+            </div>
+          </details>
+
+          {/* Export / Import */}
+          <details className="card">
+            <summary className="font-black text-xs tracking-widest uppercase cursor-pointer" style={{ color: 'var(--brown3)' }}>💾 ຂໍ້ມູນ · Data</summary>
+            <div className="mt-3 flex flex-col gap-2">
+              <button onClick={exportData} className="btn-primary text-sm py-3">📥 Export JSON</button>
+              <label className="btn-outline text-sm py-3 text-center cursor-pointer">📤 Import JSON<input type="file" accept=".json" className="hidden" onChange={importData} /></label>
+            </div>
+          </details>
+
         </div>
       )}
 
