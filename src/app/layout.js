@@ -11,7 +11,7 @@ const FONT_PRECONNECT = [
   { rel: 'preconnect', href: 'https://fonts.googleapis.com' },
   { rel: 'preconnect', href: 'https://fonts.gstatic.com', crossOrigin: 'anonymous' },
 ]
-const FONT_HREF = 'https://fonts.googleapis.com/css2?family=Noto+Sans+Lao:wght@400;700;900&family=Playfair+Display:wght@700;900&display=swap'
+const FONT_HREF = 'https://fonts.googleapis.com/css2?family=Noto+Serif+Lao:wght@400;700;900&family=Playfair+Display:wght@700;900&display=swap'
 
 export const viewport = {
   width: 'device-width',
