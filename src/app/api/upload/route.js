@@ -15,7 +15,7 @@ export async function POST(req) {
     const buffer = Buffer.from(await file.arrayBuffer())
 
     const { error } = await supabase.storage
-      .from('bcb-uploads')
+      .from('bcb - upload')
       .upload(path, buffer, {
         contentType: file.type || 'image/jpeg',
         upsert: true,
@@ -23,7 +23,7 @@ export async function POST(req) {
 
     if (error) return Response.json({ error: error.message }, { status: 500 })
 
-    const { data } = supabase.storage.from('bcb-uploads').getPublicUrl(path)
+    const { data } = supabase.storage.from('bcb - upload').getPublicUrl(path)
     return Response.json({ success: true, url: data.publicUrl })
   } catch (e) {
     console.error('upload error:', e)
