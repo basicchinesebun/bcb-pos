@@ -28,7 +28,7 @@ html {
 }
 
 body {
-  font-family: 'Noto Serif Lao', serif;
+  font-family: var(--font-lao), 'Noto Serif Lao', serif;
   background: #fdf6ee;
   color: var(--brown);
   min-height: 100vh;

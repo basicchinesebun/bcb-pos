@@ -21,8 +21,8 @@ module.exports = {
         warm: '#fffbf6',
       },
       fontFamily: {
-        lao: ['Noto Serif Lao', 'serif'],
-        serif: ['Playfair Display', 'serif'],
+        lao: ['var(--font-lao)', 'Noto Serif Lao', 'serif'],
+        serif: ['var(--font-serif)', 'Playfair Display', 'serif'],
       },
     },
   },
