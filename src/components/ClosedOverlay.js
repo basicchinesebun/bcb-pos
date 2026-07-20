@@ -1,8 +1,52 @@
+'use client'
+import { useState, useEffect, useRef } from 'react'
+import { supabase } from '../lib/supabase'
+
+const STATUS = {
+  pending:   { label: 'ລໍຖ້າຢືນຢັນ', cls: 'bg-yellow-50 text-yellow-700' },
+  confirmed: { label: 'ຢືນຢັນແລ້ວ',  cls: 'bg-green-50 text-green-700' },
+  rejected:  { label: 'ຖືກປະຕິເສດ', cls: 'bg-red-50 text-red-600' },
+  done:      { label: 'ສຳເລັດ',       cls: 'bg-blue-50 text-blue-700' },
+}
+
 export default function ClosedOverlay({ shopInfo = {}, branches = [], subtitle = '' }) {
   const firstBranch = branches.find(b => b.visible)
   const waUrl = firstBranch?.whatsapp
     ? `https://wa.me/${firstBranch.whatsapp.replace(/\D/g, '')}?text=${encodeURIComponent('ສະບາຍດີ! ຂ້ອຍຢາກສອບຖາມຂໍ້ມູນ')}`
     : null
+
+  const [query, setQuery] = useState('')
+  const [results, setResults] = useState(null)
+  const [loading, setLoading] = useState(false)
+  const timerRef = useRef(null)
+
+  useEffect(() => {
+    const q = query.trim()
+    if (!q) { setResults(null); return }
+    clearTimeout(timerRef.current)
+    timerRef.current = setTimeout(async () => {
+      setLoading(true)
+      try {
+        const qnum = parseInt(q)
+        let req = supabase
+          .from('orders')
+          .select('id, qnum, status, total, customer, items, done, cancelled, created_at')
+          .order('created_at', { ascending: false })
+          .limit(10)
+
+        if (!isNaN(qnum) && String(qnum) === q) {
+          req = req.eq('qnum', qnum)
+        } else {
+          req = req.ilike('customer', `%${q}%`)
+        }
+        const { data } = await req
+        setResults(data || [])
+      } finally {
+        setLoading(false)
+      }
+    }, 400)
+    return () => clearTimeout(timerRef.current)
+  }, [query])
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col overflow-y-auto" style={{ background: 'var(--cream)' }}>
@@ -38,6 +82,72 @@ export default function ClosedOverlay({ shopInfo = {}, branches = [], subtitle =
             {subtitle}
           </div>
         ) : null}
+      </div>
+
+      {/* Order search */}
+      <div className="px-5 pb-4 max-w-sm mx-auto w-full">
+        <div className="font-black text-sm mb-2" style={{ color: 'var(--brown)' }}>
+          🔍 ຕິດຕາມ Order ຂອງທ່ານ
+        </div>
+        <input
+          type="text"
+          value={query}
+          onChange={e => setQuery(e.target.value)}
+          placeholder="ຊື່ · ເບີໂທ · ເລກຄິວ"
+          className="input-field"
+          style={{ fontSize: 16 }}
+        />
+
+        {/* Loading */}
+        {loading && (
+          <div className="text-center py-4 text-sm font-bold" style={{ color: 'var(--gray3)' }}>
+            ກຳລັງຊອກຫາ...
+          </div>
+        )}
+
+        {/* No results */}
+        {!loading && results !== null && results.length === 0 && (
+          <div className="text-center py-4 text-sm font-bold" style={{ color: 'var(--gray3)' }}>
+            ບໍ່ພົບ Order
+          </div>
+        )}
+
+        {/* Results */}
+        {!loading && results && results.length > 0 && (
+          <div className="flex flex-col gap-2 mt-3">
+            {results.map(o => {
+              const c = (() => { try { return typeof o.customer === 'string' ? JSON.parse(o.customer) : (o.customer || {}) } catch { return {} } })()
+              const st = o.cancelled ? { label: 'ຍົກເລີກ', cls: 'bg-gray-100 text-gray-500' }
+                       : o.done      ? STATUS.done
+                       : STATUS[o.status] || STATUS.pending
+              const items = (() => { try { return Array.isArray(o.items) ? o.items : JSON.parse(o.items || '[]') } catch { return [] } })()
+              return (
+                <div key={o.id} className="rounded-2xl px-4 py-3.5" style={{ background: 'var(--warm-white)', border: '2px solid var(--cream3)' }}>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="font-black text-base" style={{ color: 'var(--brown)' }}>
+                      #{String(o.qnum).padStart(4, '0')}
+                    </span>
+                    <span className={`tag text-xs font-black px-3 py-1 rounded-full ${st.cls}`}>
+                      {st.label}
+                    </span>
+                  </div>
+                  {c.name && (
+                    <div className="text-sm font-bold" style={{ color: 'var(--brown2)' }}>👤 {c.name}</div>
+                  )}
+                  {items.length > 0 && (
+                    <div className="text-xs mt-1 font-bold" style={{ color: 'var(--gray3)' }}>
+                      {items.slice(0, 3).map(it => `${it.name || it.menu} ×${it.qty}`).join(', ')}
+                      {items.length > 3 ? ` +${items.length - 3}` : ''}
+                    </div>
+                  )}
+                  <div className="text-xs font-black mt-1.5" style={{ color: 'var(--brown3)' }}>
+                    {(o.total || 0).toLocaleString()} ກີບ
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
       </div>
 
       {/* Contact cards */}
