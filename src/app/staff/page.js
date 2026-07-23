@@ -232,20 +232,29 @@ export default function StaffPage() {
     chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [chatMessages])
 
-  // iOS Safari keyboard: use position:fixed + visualViewport so chat stays locked to screen
+  // iOS Safari keyboard: lock body + track visualViewport height
   useEffect(() => {
-    if (tab !== 'chat' || !activeChatPhone) { setChatVH(null); setChatTop(0); return }
+    if (tab !== 'chat' || !activeChatPhone) {
+      document.body.style.position = ''
+      document.body.style.overflow = ''
+      document.body.style.width = ''
+      setChatVH(null)
+      return
+    }
+    document.body.style.position = 'fixed'
+    document.body.style.overflow = 'hidden'
+    document.body.style.width = '100%'
     function update() {
       const vv = window.visualViewport
       setChatVH(Math.round(vv?.height ?? window.innerHeight) + 'px')
-      setChatTop(Math.round(vv?.offsetTop ?? 0))
     }
     update()
     window.visualViewport?.addEventListener('resize', update)
-    window.visualViewport?.addEventListener('scroll', update)
     return () => {
       window.visualViewport?.removeEventListener('resize', update)
-      window.visualViewport?.removeEventListener('scroll', update)
+      document.body.style.position = ''
+      document.body.style.overflow = ''
+      document.body.style.width = ''
     }
   }, [tab, activeChatPhone])
 
@@ -1549,7 +1558,10 @@ export default function StaffPage() {
   )
 
   return (
-    <div className="h-dvh flex flex-col overflow-hidden" style={{ background: 'var(--cream)' }}>
+    <div
+      className="flex flex-col overflow-hidden"
+      style={{ background: 'var(--cream)', height: chatVH && tab === 'chat' && activeChatPhone ? chatVH : '100dvh' }}
+    >
       {/* Toast */}
       <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-50 flex flex-col gap-2 items-center pointer-events-none">
         {toast.map(t => (
@@ -2678,10 +2690,7 @@ export default function StaffPage() {
             </div>
           ) : (
             // Conversation messages
-            <div className="flex flex-col" style={chatVH ? {
-              position: 'fixed', top: chatTop, left: 0, right: 0,
-              height: chatVH, zIndex: 20, background: 'var(--cream)'
-            } : { flex: 1, minHeight: 0 }}>
+            <div className="flex flex-col" style={{ flex: 1, minHeight: 0 }}>
               <div className="flex items-center gap-3 px-4 py-3 flex-shrink-0" style={{ background: 'var(--brown)' }}>
                 <button onClick={() => { setActiveChatPhone(null); setChatMessages([]) }}
                   className="text-xl font-black" style={{ color: 'var(--cream)' }}>←</button>
