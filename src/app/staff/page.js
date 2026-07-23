@@ -1554,9 +1554,10 @@ export default function StaffPage() {
       </div>
 
       {!isOnline && <div className="bg-red-700 text-white text-center py-2 text-sm font-black">⚠ ບໍ່ມີອິນເຕີເນັດ</div>}
-      {lowStockMenus.length > 0 && (
-        <div className="px-3 py-2 text-xs font-black" style={{ background: '#fef3c7', color: '#92400e' }}>
-          ⚠ ສຕ໋ອກໃກ້ໝົດ: {lowStockMenus.map(m => `${m.name} (ຮ້ານ:${m.shop} ອອນໄລ:${m.online})`).join(' · ')}
+      {lowStockMenus.length > 0 && tab !== 'chat' && (
+        <div className="px-3 py-2 text-xs font-black flex items-start gap-2" style={{ background: '#fef3c7', color: '#92400e' }}>
+          <span className="flex-shrink-0">⚠</span>
+          <span className="line-clamp-2">ສຕ໋ອກໃກ້ໝົດ: {lowStockMenus.map(m => `${m.name} (ຮ້ານ:${m.shop})`).join(' · ')}</span>
         </div>
       )}
 
@@ -2668,7 +2669,7 @@ export default function StaffPage() {
             </div>
           ) : (
             // Conversation messages
-            <div className="flex flex-col" style={{ height: chatVH ?? 'calc(100dvh - 56px)' }}>
+            <div className="flex flex-col" style={{ height: chatVH ?? '100%', flex: chatVH ? 'none' : 1, minHeight: 0 }}>
               <div className="flex items-center gap-3 px-4 py-3 flex-shrink-0" style={{ background: 'var(--brown)' }}>
                 <button onClick={() => { setActiveChatPhone(null); setChatMessages([]) }}
                   className="text-xl font-black" style={{ color: 'var(--cream)' }}>←</button>
