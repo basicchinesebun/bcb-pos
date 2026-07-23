@@ -1369,7 +1369,6 @@ export default function StaffPage() {
     push(() => { y += Math.round(8 * s); dash() })
     push(() => { ctx.font = f(17); ctx.textAlign = 'center'; ctx.fillStyle = '#000'; ctx.fillText('ເລກຄິວ · QUEUE', W/2, y += Math.round(22 * s)) })
     push(() => { ctx.font = f(88, '900'); ctx.textAlign = 'center'; ctx.fillText(String(o.qnum).padStart(4, '0'), W/2, y += Math.round(96 * s)) })
-    if (custName) push(() => { ctx.font = f(18); ctx.textAlign = 'center'; ctx.fillText(custName, W/2, y += Math.round(26 * s)) })
     push(() => { ctx.font = f(18); ctx.textAlign = 'center'; ctx.fillStyle = '#000'; ctx.fillText(dateStr, W/2, y += Math.round(24 * s)) })
     push(() => { y += Math.round(8 * s); dash() })
     items.forEach(it => push(() => {
