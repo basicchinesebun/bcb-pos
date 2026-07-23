@@ -1379,9 +1379,36 @@ export default function StaffPage() {
     }))
     push(() => { y += Math.round(8 * s); dash() })
     push(() => {
-      ctx.font = f(22, '900'); ctx.textAlign = 'left'; ctx.fillStyle = '#000'
-      ctx.fillText('ລວມ · TOTAL', 10, y += Math.round(30 * s))
-      ctx.textAlign = 'right'; ctx.fillText((o.total || 0).toLocaleString() + ' ກີບ', W - 10, y)
+      const bx = Math.round(16 * s)
+      const totalStr = (o.total || 0).toLocaleString()
+      ctx.font = f(26, '900')
+      const numW = ctx.measureText(totalStr).width
+      ctx.font = f(12, '700')
+      const curW = ctx.measureText('ກີບ').width
+      const gap = Math.round(4 * s)
+      const totalTextW = numW + gap + curW
+      const boxTopPad = Math.round(14 * s)
+      const labelH = Math.round(Math.round(11 * s) * 1.4)
+      const gapInner = Math.round(8 * s)
+      const amountH = Math.round(Math.round(26 * s) * 1.4)
+      const boxH = boxTopPad + labelH + gapInner + amountH + Math.round(14 * s)
+      y += Math.round(8 * s)
+      const boxY = y
+      const boxW = W - bx * 2
+      ctx.strokeStyle = '#000'; ctx.lineWidth = Math.max(2, Math.round(2 * s)); ctx.setLineDash([])
+      ctx.beginPath()
+      if (ctx.roundRect) { ctx.roundRect(bx, boxY, boxW, boxH, Math.round(8 * s)) } else { ctx.rect(bx, boxY, boxW, boxH) }
+      ctx.stroke()
+      const labelBaseline = boxY + boxTopPad + labelH * 0.75
+      ctx.font = f(11, '700'); ctx.textAlign = 'center'; ctx.fillStyle = '#555'
+      ctx.fillText('ລວມທັງໝົດ · Total', W / 2, labelBaseline)
+      const amountBaseline = labelBaseline + gapInner + amountH * 0.8
+      const startX = (W - totalTextW) / 2
+      ctx.font = f(26, '900'); ctx.textAlign = 'left'; ctx.fillStyle = '#000'
+      ctx.fillText(totalStr, startX, amountBaseline)
+      ctx.font = f(12, '700')
+      ctx.fillText('ກີບ', startX + numW + gap, amountBaseline)
+      y = boxY + boxH
     })
     push(() => { ctx.font = f(17); ctx.textAlign = 'center'; ctx.fillStyle = '#000'; ctx.fillText(si.footer || 'ຂອບໃຈທີ່ໃຊ້ບໍລິການ', W/2, y += Math.round(30 * s)) })
     push(() => { y += Math.round(16 * s) })
