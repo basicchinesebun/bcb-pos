@@ -92,8 +92,7 @@ export default function StaffPage() {
   const [qoSubmitting, setQoSubmitting] = useState(false)
   const [qoPackToast, setQoPackToast] = useState(null)
   const [qoName, setQoName] = useState('')
-  const [chatVH, setChatVH] = useState(null)
-  const [chatTop, setChatTop] = useState(0)
+  const [chatKbH, setChatKbH] = useState(0)
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [batchOpen, setBatchOpen] = useState(false)
   const [batchSelected, setBatchSelected] = useState(new Set())
@@ -232,23 +231,16 @@ export default function StaffPage() {
     chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [chatMessages])
 
-  // iOS Safari keyboard: force scroll=0 whenever iOS tries to scroll, resize root to visual viewport
+  // Messenger-style: track keyboard height, chat overlay uses bottom:kbH
   useEffect(() => {
-    if (tab !== 'chat' || !activeChatPhone) { setChatVH(null); return }
+    if (tab !== 'chat' || !activeChatPhone) { setChatKbH(0); return }
     function update() {
-      if (window.scrollY !== 0) window.scrollTo({ top: 0, behavior: 'instant' })
       const vv = window.visualViewport
-      setChatVH(Math.round(vv?.height ?? window.innerHeight) + 'px')
+      setChatKbH(Math.max(0, window.innerHeight - (vv?.height ?? window.innerHeight)))
     }
     update()
     window.visualViewport?.addEventListener('resize', update)
-    window.visualViewport?.addEventListener('scroll', update)
-    window.addEventListener('scroll', update)
-    return () => {
-      window.visualViewport?.removeEventListener('resize', update)
-      window.visualViewport?.removeEventListener('scroll', update)
-      window.removeEventListener('scroll', update)
-    }
+    return () => window.visualViewport?.removeEventListener('resize', update)
   }, [tab, activeChatPhone])
 
   function showToast(msg, type = '') {
@@ -2680,7 +2672,10 @@ export default function StaffPage() {
             </div>
           ) : (
             // Conversation messages
-            <div className="flex flex-col" style={{ height: chatVH ?? '100%', flex: chatVH ? 'none' : 1, minHeight: 0 }}>
+            <div className="flex flex-col" style={{
+              position: 'fixed', top: 0, left: 0, right: 0, bottom: chatKbH,
+              zIndex: 30, background: 'var(--cream)'
+            }}>
               <div className="flex items-center gap-3 px-4 py-3 flex-shrink-0" style={{ background: 'var(--brown)' }}>
                 <button onClick={() => { setActiveChatPhone(null); setChatMessages([]) }}
                   className="text-xl font-black" style={{ color: 'var(--cream)' }}>←</button>
