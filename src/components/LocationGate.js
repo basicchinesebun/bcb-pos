@@ -1,8 +1,14 @@
 'use client'
 import { useState } from 'react'
 
+function detectInAppBrowser() {
+  if (typeof navigator === 'undefined') return false
+  const ua = navigator.userAgent || ''
+  return /FBAN|FBAV|FB_IAB|FBIOS|Instagram|Line\/\d|KAKAOTALK|MicroMessenger/.test(ua)
+}
+
 export default function LocationGate({ onDone }) {
-  const [state, setState] = useState('idle') // idle | loading | denied
+  const [state, setState] = useState(() => detectInAppBrowser() ? 'inapp' : 'idle')
 
   async function requestLocation() {
     setState('loading')
@@ -68,7 +74,23 @@ export default function LocationGate({ onDone }) {
         className="w-full max-w-sm rounded-2xl p-6 mt-4 flex flex-col gap-4"
         style={{ background: '#FAF2E7' }}
       >
-        {state !== 'denied' ? (
+        {state === 'inapp' ? (
+          <div className="flex flex-col items-center gap-3 text-center">
+            <span className="text-3xl">🌐</span>
+            <p className="font-black text-lg" style={{ color: '#2E1C12' }}>
+              ກະລຸນາເປີດໃນ Chrome
+            </p>
+            <p className="text-sm leading-relaxed" style={{ color: '#5C4033' }}>
+              ບຣາວເຊີຂອງ Facebook/Instagram ບໍ່ຮອງຮັບການດຶງທີ່ຕັ້ງ
+            </p>
+            <div className="w-full rounded-xl p-3 text-left text-xs font-bold leading-6" style={{ background: '#F0E5D8', color: '#2E1C12' }}>
+              <div className="font-black mb-1">📱 Android:</div>
+              <div>ກົດ ⋮ ດ້ານເທິງຂວາ → "ເປີດໃນ Chrome"</div>
+              <div className="font-black mt-2 mb-1">🍎 iPhone:</div>
+              <div>ກົດ ··· ດ້ານລຸ່ມ → "ເປີດໃນ Safari"</div>
+            </div>
+          </div>
+        ) : state !== 'denied' ? (
           <>
             <div className="flex flex-col items-center gap-2 text-center">
               <span className="text-3xl">📍</span>
