@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../../lib/supabase'
 import ContactSection from '../../components/ContactSection'
 import ClosedOverlay from '../../components/ClosedOverlay'
+import LocationGate from '../../components/LocationGate'
 
 const EMOJIS = ['🥟','🍫','🍵','🧁','🍞','🥐','🍮']
 
@@ -50,6 +51,15 @@ export default function PreOrderPage() {
   const [shopInfo, setShopInfo] = useState({ name: 'Basic Chinese Bun' })
   const [branches, setBranches] = useState([])
   const [loading, setLoading] = useState(true)
+  const [showLocationGate, setShowLocationGate] = useState(() => {
+    if (typeof window === 'undefined') return false
+    try {
+      const saved = localStorage.getItem('bcb-location')
+      if (!saved) return true
+      const { ts } = JSON.parse(saved)
+      return (Date.now() - ts) > 7 * 24 * 60 * 60 * 1000 // show again after 7 days
+    } catch (_) { return true }
+  })
   const [chatOpen, setChatOpen] = useState(false)
   const [chatVH, setChatVH] = useState(null)
   const [chatCustomer, setChatCustomer] = useState(null) // { name, phone, qnum }
@@ -282,6 +292,9 @@ export default function PreOrderPage() {
         .filter(Boolean)
         .join(' | ')
 
+      let locationMeta = null
+      try { locationMeta = JSON.parse(localStorage.getItem('bcb-location') || 'null') } catch (_) {}
+
       const { data: order, error: orderErr } = await supabase.from('orders').insert({
         qnum: qnumData,
         type: 'online',
@@ -289,7 +302,7 @@ export default function PreOrderPage() {
         items: JSON.stringify(items),
         total: totalPrice,
         bag_label: packingLabel,
-        customer: JSON.stringify(form),
+        customer: JSON.stringify({ ...form, location: locationMeta }),
         slip_url: slipUrl,
         done: false,
         cancelled: false,
@@ -364,6 +377,10 @@ export default function PreOrderPage() {
       </div>
     </div>
   )
+
+  if (showLocationGate) {
+    return <LocationGate onDone={() => setShowLocationGate(false)} />
+  }
 
   return (
     <div
