@@ -78,16 +78,25 @@ export default function LocationGate({ onDone }) {
           <div className="flex flex-col items-center gap-3 text-center">
             <span className="text-3xl">🌐</span>
             <p className="font-black text-lg" style={{ color: '#2E1C12' }}>
-              ກະລຸນາເປີດໃນ Chrome
+              ກະລຸນາເປີດໃນ Chrome ຫຼື Safari
             </p>
             <p className="text-sm leading-relaxed" style={{ color: '#5C4033' }}>
-              ບຣາວເຊີຂອງ Facebook/Instagram ບໍ່ຮອງຮັບການດຶງທີ່ຕັ້ງ
+              ກະລຸນາກ໋ອບປີ້ລິ້ງດ້ານລຸ່ມ ແລ້ວໄປເປີດໃນແອັບ Chrome ຫຼື Safari ຈາກນັ້ນວາງລິ້ງໃນຊ່ອງຊອກຫາໄດ້ເລີຍ
             </p>
-            <div className="w-full rounded-xl p-3 text-left text-xs font-bold leading-6" style={{ background: '#F0E5D8', color: '#2E1C12' }}>
-              <div className="font-black mb-1">📱 Android:</div>
-              <div>ກົດ ⋮ ດ້ານເທິງຂວາ → "ເປີດໃນ Chrome"</div>
-              <div className="font-black mt-2 mb-1">🍎 iPhone:</div>
-              <div>ກົດ ··· ດ້ານລຸ່ມ → "ເປີດໃນ Safari"</div>
+            <div
+              className="w-full rounded-xl px-3 py-2.5 flex items-center justify-between gap-2"
+              style={{ background: '#F0E5D8', border: '1.5px solid #E8D5C0' }}
+            >
+              <span className="text-xs font-black truncate flex-1 text-left" style={{ color: '#2E1C12' }}>
+                basicchinesebun.com/preorder
+              </span>
+              <button
+                onClick={() => { try { navigator.clipboard.writeText('https://basicchinesebun.com/preorder') } catch (_) {} }}
+                className="text-xs font-black px-2 py-1 rounded-lg flex-shrink-0"
+                style={{ background: '#2E1C12', color: '#FAF2E7' }}
+              >
+                ກ໋ອບປີ້
+              </button>
             </div>
           </div>
         ) : state !== 'denied' ? (
