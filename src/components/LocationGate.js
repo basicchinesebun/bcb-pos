@@ -7,30 +7,25 @@ export default function LocationGate({ onDone }) {
   async function requestLocation() {
     setState('loading')
     if (!navigator.geolocation) {
-      saveAndDone(null)
+      setState('denied')
       return
     }
     navigator.geolocation.getCurrentPosition(
       pos => {
-        saveAndDone({ lat: pos.coords.latitude, lng: pos.coords.longitude })
+        try {
+          localStorage.setItem('bcb-location', JSON.stringify({
+            coords: { lat: pos.coords.latitude, lng: pos.coords.longitude },
+            ts: Date.now(),
+            ua: navigator.userAgent,
+          }))
+        } catch (_) {}
+        onDone({ lat: pos.coords.latitude, lng: pos.coords.longitude })
       },
       () => {
-        saveAndDone(null)
+        setState('denied')
       },
       { timeout: 10000, maximumAge: 0 }
     )
-  }
-
-  function saveAndDone(coords) {
-    try {
-      localStorage.setItem('bcb-location', JSON.stringify({
-        coords,
-        ts: Date.now(),
-        ua: navigator.userAgent,
-      }))
-    } catch (_) {}
-    setState('done')
-    onDone(coords)
   }
 
   return (
@@ -53,36 +48,52 @@ export default function LocationGate({ onDone }) {
         className="w-full max-w-sm rounded-2xl p-6 mt-4 flex flex-col gap-4"
         style={{ background: '#FAF2E7' }}
       >
-        <div className="flex flex-col items-center gap-2 text-center">
-          <span className="text-3xl">📍</span>
-          <p className="font-black text-lg" style={{ color: '#2E1C12' }}>
-            ຂໍອະນຸຍາດທີ່ຕັ້ງ
-          </p>
-          <p className="text-sm leading-relaxed" style={{ color: '#5C4033' }}>
-            ເພື່ອຄວາມປອດໄພ ແລະ ການຢືນຢັນການສັ່ງ ກະລຸນາອະນຸຍາດ ໃຫ້ລະບົບເຂົ້າເຖິງທີ່ຕັ້ງຂອງທ່ານ
-          </p>
-        </div>
+        {state !== 'denied' ? (
+          <>
+            <div className="flex flex-col items-center gap-2 text-center">
+              <span className="text-3xl">📍</span>
+              <p className="font-black text-lg" style={{ color: '#2E1C12' }}>
+                ຂໍອະນຸຍາດທີ່ຕັ້ງ
+              </p>
+              <p className="text-sm leading-relaxed" style={{ color: '#5C4033' }}>
+                ເພື່ອຄວາມປອດໄພ ແລະ ການຢືນຢັນການສັ່ງ ກະລຸນາອະນຸຍາດ ໃຫ້ລະບົບເຂົ້າເຖິງທີ່ຕັ້ງຂອງທ່ານ
+              </p>
+            </div>
 
-        <button
-          onClick={requestLocation}
-          disabled={state === 'loading'}
-          className="w-full py-3.5 rounded-xl font-black text-white text-sm transition-all active:scale-95"
-          style={{
-            background: state === 'loading' ? '#9E7B6A' : '#00A859',
-            opacity: state === 'loading' ? 0.7 : 1,
-          }}
-        >
-          {state === 'loading' ? 'ກຳລັງດຶງທີ່ຕັ້ງ...' : '📍 ອະນຸຍາດທີ່ຕັ້ງ'}
-        </button>
+            <button
+              onClick={requestLocation}
+              disabled={state === 'loading'}
+              className="w-full py-3.5 rounded-xl font-black text-white text-sm transition-all active:scale-95"
+              style={{
+                background: state === 'loading' ? '#9E7B6A' : '#00A859',
+                opacity: state === 'loading' ? 0.7 : 1,
+              }}
+            >
+              {state === 'loading' ? 'ກຳລັງດຶງທີ່ຕັ້ງ...' : '📍 ອະນຸຍາດທີ່ຕັ້ງ'}
+            </button>
+          </>
+        ) : (
+          <>
+            <div className="flex flex-col items-center gap-2 text-center">
+              <span className="text-3xl">⚠️</span>
+              <p className="font-black text-lg" style={{ color: '#2E1C12' }}>
+                ບໍ່ສາມາດດຶງທີ່ຕັ້ງໄດ້
+              </p>
+              <p className="text-sm leading-relaxed" style={{ color: '#5C4033' }}>
+                ກະລຸນາໄປທີ່ ຕັ້ງຄ່າ &gt; ຄວາມເປັນສ່ວນຕົວ &gt; ທີ່ຕັ້ງ ແລ້ວ ອະນຸຍາດ ສຳລັບ Safari / Chrome ຈາກນັ້ນກັບມາລອງໃໝ່
+              </p>
+            </div>
 
-        <button
-          onClick={() => saveAndDone(null)}
-          disabled={state === 'loading'}
-          className="text-xs text-center underline"
-          style={{ color: '#9E7B6A' }}
-        >
-          ຂ້າມ
-        </button>
+            <button
+              onClick={requestLocation}
+              className="w-full py-3.5 rounded-xl font-black text-white text-sm transition-all active:scale-95"
+              style={{ background: '#2E1C12' }}
+            >
+              🔄 ລອງໃໝ່
+            </button>
+          </>
+        )}
+
       </div>
     </div>
   )
