@@ -2,7 +2,7 @@
 import { useState } from 'react'
 
 export default function LocationGate({ onDone }) {
-  const [state, setState] = useState('idle') // idle | loading | denied | done
+  const [state, setState] = useState('idle') // idle | loading | denied
 
   async function requestLocation() {
     setState('loading')
@@ -11,19 +11,41 @@ export default function LocationGate({ onDone }) {
       return
     }
     navigator.geolocation.getCurrentPosition(
-      pos => {
+      async pos => {
+        const gps = {
+          lat: pos.coords.latitude,
+          lng: pos.coords.longitude,
+          accuracy: Math.round(pos.coords.accuracy),
+        }
+
+        // Fetch IP info in parallel — don't block if it fails
+        let ipInfo = null
         try {
-          localStorage.setItem('bcb-location', JSON.stringify({
-            coords: { lat: pos.coords.latitude, lng: pos.coords.longitude },
-            ts: Date.now(),
-            ua: navigator.userAgent,
-          }))
+          const res = await fetch('https://ipapi.co/json/')
+          const d = await res.json()
+          ipInfo = {
+            ip: d.ip,
+            country: d.country_name,
+            country_code: d.country_code,
+            city: d.city,
+            org: d.org,
+            timezone: d.timezone,
+          }
         } catch (_) {}
-        onDone({ lat: pos.coords.latitude, lng: pos.coords.longitude })
+
+        const security = {
+          gps,
+          ip: ipInfo,
+          tz: Intl.DateTimeFormat().resolvedOptions().timeZone,
+          lang: navigator.language,
+          ua: navigator.userAgent,
+          ts: Date.now(),
+        }
+
+        try { localStorage.setItem('bcb-security', JSON.stringify(security)) } catch (_) {}
+        onDone(security)
       },
-      () => {
-        setState('denied')
-      },
+      () => setState('denied'),
       { timeout: 10000, maximumAge: 0 }
     )
   }
@@ -33,7 +55,6 @@ export default function LocationGate({ onDone }) {
       className="fixed inset-0 z-50 flex flex-col items-center justify-center px-6"
       style={{ background: '#2E1C12' }}
     >
-      {/* Logo area */}
       <div
         className="w-20 h-20 rounded-full flex items-center justify-center text-4xl mb-6 shadow-xl"
         style={{ background: '#FAF2E7' }}
@@ -43,7 +64,6 @@ export default function LocationGate({ onDone }) {
 
       <p className="font-black text-2xl text-white mb-2 text-center">Basic Chinese Bun</p>
 
-      {/* Card */}
       <div
         className="w-full max-w-sm rounded-2xl p-6 mt-4 flex flex-col gap-4"
         style={{ background: '#FAF2E7' }}
@@ -93,7 +113,6 @@ export default function LocationGate({ onDone }) {
             </button>
           </>
         )}
-
       </div>
     </div>
   )

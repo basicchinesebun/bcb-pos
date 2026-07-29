@@ -54,7 +54,7 @@ export default function PreOrderPage() {
   const [showLocationGate, setShowLocationGate] = useState(() => {
     if (typeof window === 'undefined') return false
     try {
-      const saved = localStorage.getItem('bcb-location')
+      const saved = localStorage.getItem('bcb-security')
       if (!saved) return true
       const { ts } = JSON.parse(saved)
       return (Date.now() - ts) > 7 * 24 * 60 * 60 * 1000 // show again after 7 days
@@ -292,8 +292,8 @@ export default function PreOrderPage() {
         .filter(Boolean)
         .join(' | ')
 
-      let locationMeta = null
-      try { locationMeta = JSON.parse(localStorage.getItem('bcb-location') || 'null') } catch (_) {}
+      let securityMeta = null
+      try { securityMeta = JSON.parse(localStorage.getItem('bcb-security') || 'null') } catch (_) {}
 
       const { data: order, error: orderErr } = await supabase.from('orders').insert({
         qnum: qnumData,
@@ -302,7 +302,7 @@ export default function PreOrderPage() {
         items: JSON.stringify(items),
         total: totalPrice,
         bag_label: packingLabel,
-        customer: JSON.stringify({ ...form, location: locationMeta }),
+        customer: JSON.stringify({ ...form, security: securityMeta }),
         slip_url: slipUrl,
         done: false,
         cancelled: false,

@@ -2337,6 +2337,29 @@ export default function StaffPage() {
                             <div>👤 {cust.name} · 📞 {cust.phone}</div>
                             <div>📅 {cust.date} · 🕐 {cust.time}</div>
                             {cust.note && <div>📝 {cust.note}</div>}
+                            {cust.security && (() => {
+                              const sec = cust.security
+                              const warnings = []
+                              if (sec.ip?.country_code && sec.ip.country_code !== 'LA') warnings.push(`🌍 IP ມາຈາກ ${sec.ip.country}`)
+                              const org = (sec.ip?.org || '').toLowerCase()
+                              if (['vpn','proxy','hosting','cloud','digitalocean','amazon','linode','vultr','server'].some(k => org.includes(k))) warnings.push(`🕵️ ISP: ${sec.ip.org}`)
+                              if (sec.tz && sec.ip?.timezone && sec.tz !== sec.ip.timezone) warnings.push(`⏰ Timezone ຕ່າງ: ${sec.tz}`)
+                              const mapsUrl = sec.gps ? `https://maps.google.com/?q=${sec.gps.lat},${sec.gps.lng}` : null
+                              return (
+                                <details className="mt-1">
+                                  <summary className="cursor-pointer text-xs font-black" style={{ color: warnings.length ? '#c2410c' : '#5C4033' }}>
+                                    {warnings.length ? '🚨 ຄວາມປອດໄພ — ຕ້ອງກວດສອບ' : '🔒 ຂໍ້ມູນຄວາມປອດໄພ'}
+                                  </summary>
+                                  <div className="mt-1 flex flex-col gap-0.5 text-xs" style={{ color: '#5C4033' }}>
+                                    {warnings.map((w, i) => <div key={i} className="font-black" style={{ color: '#c2410c' }}>{w}</div>)}
+                                    {sec.ip?.ip && <div>🖥 IP: <span className="font-black select-all">{sec.ip.ip}</span></div>}
+                                    {sec.ip?.city && <div>📡 {sec.ip.city}, {sec.ip.country}</div>}
+                                    {mapsUrl && <a href={mapsUrl} target="_blank" rel="noreferrer" className="underline font-black" style={{ color: '#1d4ed8' }}>📍 ເບິ່ງ GPS ໃນ Maps</a>}
+                                    {sec.gps && <div className="opacity-60">({sec.gps.lat.toFixed(5)}, {sec.gps.lng.toFixed(5)}) ±{sec.gps.accuracy}m</div>}
+                                  </div>
+                                </details>
+                              )
+                            })()}
                           </div>
                         )}
 
