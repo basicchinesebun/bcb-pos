@@ -99,7 +99,10 @@ export default function QRPage() {
   return (
     <div className="min-h-dvh" style={{ background: 'var(--cream)' }}>
       <div className="text-center py-5 sticky top-0 z-10" style={{ background: 'var(--brown)' }}>
-        <div className="font-serif text-xl font-black" style={{ color: 'var(--cream)' }}>🥟 Basic Chinese Bun</div>
+        <div className="flex items-center gap-2 justify-center">
+          <img src="/logo.jpg" alt="logo" className="w-7 h-7 rounded-full object-cover" />
+          <span className="font-serif text-xl font-black" style={{ color: 'var(--cream)' }}>Basic Chinese Bun</span>
+        </div>
         <div className="text-xs font-bold tracking-widest uppercase mt-1" style={{ color: 'rgba(253,246,238,0.55)' }}>QR Code</div>
       </div>
 

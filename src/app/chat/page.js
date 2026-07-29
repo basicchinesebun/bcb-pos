@@ -130,7 +130,8 @@ export default function CustomerChatPage() {
       {/* Desktop: shop page + floating widget */}
       <div className="hidden md:flex flex-col min-h-dvh" style={{ background: '#FAF2E7' }}>
         <div className="flex items-center gap-4 px-8 py-4" style={{ background: '#2E1C12' }}>
-          <span className="font-black text-xl text-white">Basic Chinese Bun 🥟</span>
+          <img src="/logo.jpg" alt="logo" className="w-8 h-8 rounded-full object-cover" />
+          <span className="font-black text-xl text-white">Basic Chinese Bun</span>
         </div>
         <div className="flex-1 flex items-center justify-center">
           <p className="text-lg font-bold" style={{ color: '#9E7B6A' }}>

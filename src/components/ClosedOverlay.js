@@ -53,13 +53,9 @@ export default function ClosedOverlay({ shopInfo = {}, branches = [], subtitle =
 
       {/* Brown header */}
       <div className="text-center px-6 pt-10 pb-8 flex-shrink-0" style={{ background: 'var(--brown)' }}>
-        {shopInfo.logo ? (
-          <div className="w-20 h-20 rounded-2xl overflow-hidden mx-auto mb-4 border-2" style={{ borderColor: 'rgba(253,246,238,0.25)' }}>
-            <img src={shopInfo.logo} className="w-full h-full object-cover" alt="logo" />
-          </div>
-        ) : (
-          <div className="text-5xl mb-4">🥟</div>
-        )}
+        <div className="w-20 h-20 rounded-full overflow-hidden mx-auto mb-4 border-2" style={{ borderColor: 'rgba(253,246,238,0.25)' }}>
+          <img src={shopInfo.logo || '/logo.jpg'} className="w-full h-full object-cover" alt="logo" />
+        </div>
         <div className="font-serif text-2xl font-black" style={{ color: 'var(--cream)' }}>
           {shopInfo.name || 'Basic Chinese Bun'}
         </div>

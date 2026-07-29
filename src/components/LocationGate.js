@@ -61,14 +61,9 @@ export default function LocationGate({ onDone }) {
       className="fixed inset-0 z-50 flex flex-col items-center justify-center px-6"
       style={{ background: '#2E1C12' }}
     >
-      <div
-        className="w-20 h-20 rounded-full flex items-center justify-center text-4xl mb-6 shadow-xl"
-        style={{ background: '#FAF2E7' }}
-      >
-        🥟
+      <div className="w-24 h-24 rounded-full overflow-hidden mb-4 shadow-xl flex-shrink-0">
+        <img src="/logo.jpg" alt="Basic Chinese Bun" className="w-full h-full object-cover" />
       </div>
-
-      <p className="font-black text-2xl text-white mb-2 text-center">Basic Chinese Bun</p>
 
       <div
         className="w-full max-w-sm rounded-2xl p-6 mt-4 flex flex-col gap-4"

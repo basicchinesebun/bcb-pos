@@ -1491,7 +1491,10 @@ export default function StaffPage() {
         <div className="w-16 h-16 rounded-full border-4 animate-spin"
           style={{ borderColor: 'rgba(253,246,238,0.15)', borderTopColor: '#fdf6ee' }} />
         <div className="text-center">
-          <div className="font-serif text-xl font-black" style={{ color: '#fdf6ee' }}>🥟 Basic Chinese Bun</div>
+          <div className="flex items-center gap-2 justify-center">
+            <img src="/logo.jpg" alt="logo" className="w-7 h-7 rounded-full object-cover" />
+            <span className="font-serif text-xl font-black" style={{ color: '#fdf6ee' }}>Basic Chinese Bun</span>
+          </div>
           <div className="text-sm font-bold mt-2" style={{ color: 'rgba(253,246,238,0.5)' }}>ກຳລັງໂຫຼດ...</div>
         </div>
       </div>
