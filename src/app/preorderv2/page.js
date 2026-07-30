@@ -107,15 +107,7 @@ export default function PreorderV2Page() {
   const visibleMenus = menus.map((m, i) => ({ m, i })).filter(({ i }) => stock.length === 0 || (stock[i] ?? 1) > 0)
 
   return (
-    <>
-      <style>{`
-        @keyframes bcbFloat {
-          0%,100% { transform: translateY(0px) rotateY(-6deg) rotateX(3deg); }
-          50%      { transform: translateY(-14px) rotateY(6deg) rotateX(-3deg); }
-        }
-      `}</style>
-
-      <div style={{ minHeight: '100dvh', background: '#FAF2E7', fontFamily: 'system-ui, sans-serif' }}>
+    <div style={{ minHeight: '100dvh', background: '#FAF2E7', fontFamily: 'system-ui, sans-serif' }}>
 
         {/* ── Hero ── */}
         <div style={{
@@ -229,7 +221,6 @@ export default function PreorderV2Page() {
         }}>
           {shopInfo.name || 'Basic Chinese Bun'} · {shopInfo.address || 'ວຽງຈັນ, ລາວ'}
         </div>
-      </div>
-    </>
+    </div>
   )
 }
