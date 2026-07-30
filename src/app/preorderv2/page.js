@@ -1,14 +1,14 @@
 import { supabase } from '../../lib/supabase'
 
-const GRADIENTS = [
-  ['#8B4513', '#3d1f00'],
-  ['#1B5E20', '#0a2e10'],
-  ['#1A237E', '#0d1240'],
-  ['#4A148C', '#200a40'],
-  ['#1B5E20', '#0a2e10'],
-  ['#BF360C', '#5c1800'],
-  ['#006064', '#002a2e'],
-  ['#4A148C', '#200a40'],
+const CARD_GRADIENTS = [
+  'linear-gradient(150deg, #8B2500 0%, #3D0F00 100%)',
+  'linear-gradient(150deg, #0D4A1F 0%, #042410 100%)',
+  'linear-gradient(150deg, #1A1A6B 0%, #0A0A35 100%)',
+  'linear-gradient(150deg, #5B0B8C 0%, #2A0542 100%)',
+  'linear-gradient(150deg, #7A3200 0%, #380E00 100%)',
+  'linear-gradient(150deg, #004D5C 0%, #001F25 100%)',
+  'linear-gradient(150deg, #6B1A1A 0%, #300808 100%)',
+  'linear-gradient(150deg, #1A6B3A 0%, #0A3520 100%)',
 ]
 
 async function getShopData() {
@@ -51,74 +51,125 @@ export default async function PreorderV2Page() {
     .filter(({ i }) => stock.length === 0 || (stock[i] ?? 1) > 0)
 
   return (
-    <div style={{ minHeight: '100vh', background: '#F5EDE0', fontFamily: 'system-ui, sans-serif', overflowX: 'hidden' }}>
+    <div style={{
+      minHeight: '100vh',
+      background: '#100A05',
+      fontFamily: 'system-ui, -apple-system, sans-serif',
+      overflowX: 'hidden',
+      color: '#FFFBF5',
+    }}>
 
       {/* ── Hero ── */}
       <div style={{
-        background: 'linear-gradient(170deg, #1a0e07 0%, #2E1C12 60%, #3a2218 100%)',
-        padding: '56px 24px 80px',
-        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 20,
+        minHeight: '56vh',
+        background: 'radial-gradient(ellipse 90% 70% at 50% 45%, #2C1608 0%, #1C0D04 55%, #100A05 100%)',
+        padding: '52px 24px 60px',
+        display: 'flex', flexDirection: 'column', alignItems: 'center',
+        justifyContent: 'center', gap: 18,
         textAlign: 'center',
-        position: 'relative', overflow: 'hidden',
+        position: 'relative',
       }}>
-        {/* bg circles */}
-        <div style={{ position:'absolute', top:-60, right:-60, width:200, height:200, borderRadius:'50%', background:'rgba(255,216,122,.05)', pointerEvents:'none' }} />
-        <div style={{ position:'absolute', bottom:10, left:-50, width:160, height:160, borderRadius:'50%', background:'rgba(255,216,122,.04)', pointerEvents:'none' }} />
-        <div style={{ position:'absolute', top:'40%', right:'-10%', width:100, height:100, borderRadius:'50%', background:'rgba(255,255,255,.025)', pointerEvents:'none' }} />
+
+        {/* dot grid texture */}
+        <div style={{
+          position: 'absolute', inset: 0,
+          backgroundImage: 'radial-gradient(circle, rgba(255,200,80,.045) 1px, transparent 1px)',
+          backgroundSize: '26px 26px',
+          pointerEvents: 'none',
+        }} />
 
         {/* logo */}
-        <div style={{
-          width: 104, height: 104, borderRadius: '50%', overflow: 'hidden',
-          border: '2.5px solid rgba(255,216,122,.5)',
-          boxShadow: '0 0 0 10px rgba(255,216,122,.07), 0 20px 60px rgba(0,0,0,.55)',
-        }}>
-          <img src={txt(shopInfo.logo) || '/logo.jpg'} alt="logo" style={{ width:'100%', height:'100%', objectFit:'cover' }} />
+        <div style={{ position: 'relative', width: 100, height: 100 }}>
+          <div style={{
+            position: 'absolute', inset: -10,
+            borderRadius: '50%',
+            background: 'radial-gradient(circle, rgba(255,180,50,.2) 0%, transparent 70%)',
+          }} />
+          <div style={{
+            width: 100, height: 100, borderRadius: '50%', overflow: 'hidden',
+            border: '2px solid rgba(255,200,80,.45)',
+            boxShadow: '0 0 0 7px rgba(255,170,40,.07), 0 0 50px rgba(255,140,40,.18)',
+          }}>
+            <img
+              src={txt(shopInfo.logo) || '/logo.jpg'}
+              alt="logo"
+              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+            />
+          </div>
         </div>
 
-        {/* name + tag */}
-        <div style={{ display:'flex', flexDirection:'column', gap:8, alignItems:'center' }}>
-          <div style={{ color:'#FAF2E7', fontWeight:900, fontSize:'2rem', letterSpacing:'-.02em', lineHeight:1.1 }}>
+        {/* name + tagline */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'center' }}>
+          <h1 style={{
+            margin: 0,
+            color: '#FFFBF5', fontWeight: 900, fontSize: '2.4rem',
+            letterSpacing: '-.03em', lineHeight: 1.05,
+          }}>
             {txt(shopInfo.name, 'Basic Chinese Bun')}
-          </div>
-          <div style={{ color:'rgba(255,216,122,.8)', fontSize:'.82rem', fontWeight:700, letterSpacing:'.06em' }}>
-            ສາລາເປົາ · ໝົມປັງໂຕ · ສົດໃໝ່ທຸກວັນ
-          </div>
+          </h1>
+          <p style={{
+            margin: 0,
+            color: 'rgba(255,208,80,.65)', fontSize: '.78rem',
+            fontWeight: 600, letterSpacing: '.08em',
+          }}>
+            ສາລາເປົາ &nbsp;·&nbsp; ໝົມປັງໂຕ &nbsp;·&nbsp; ສົດໃໝ່ທຸກວັນ
+          </p>
         </div>
 
-        {/* badge */}
+        {/* open badge */}
         <div style={{
-          background:'rgba(255,216,122,.12)',
-          border:'1px solid rgba(255,216,122,.28)',
-          borderRadius:99, padding:'7px 18px',
-          fontSize:'.72rem', fontWeight:800, color:'#FFD87A', letterSpacing:'.06em',
+          display: 'inline-flex', alignItems: 'center', gap: 8,
+          background: 'rgba(255,140,40,.13)',
+          border: '1px solid rgba(255,140,40,.28)',
+          borderRadius: 99, padding: '7px 18px',
         }}>
-          ✦ &nbsp;ເປີດຮັບຄຳສັ່ງທຸກວັນ&nbsp; ✦
+          <div style={{
+            width: 7, height: 7, borderRadius: '50%',
+            background: '#4ADE80',
+            boxShadow: '0 0 0 3px rgba(74,222,128,.25)',
+          }} />
+          <span style={{
+            color: '#FFD060', fontSize: '.72rem',
+            fontWeight: 800, letterSpacing: '.08em',
+          }}>
+            ເປີດຮັບຄຳສັ່ງທຸກວັນ
+          </span>
         </div>
       </div>
 
-      {/* ── Wave ── */}
-      <svg viewBox="0 0 400 48" preserveAspectRatio="none" style={{ display:'block', width:'100%', height:48, marginTop:-1, background:'linear-gradient(170deg,#1a0e07 0%,#2E1C12 60%,#3a2218 100%)' }}>
-        <path d="M0,16 C80,48 160,0 260,28 C320,42 370,14 400,20 L400,48 L0,48Z" fill="#F5EDE0"/>
-      </svg>
+      {/* ── thin gold rule ── */}
+      <div style={{
+        height: 1,
+        background: 'linear-gradient(90deg, transparent 0%, rgba(255,200,80,.12) 40%, rgba(255,200,80,.12) 60%, transparent 100%)',
+      }} />
 
       {/* ── Menu section ── */}
-      <div style={{ padding:'24px 20px 12px' }}>
+      <div style={{ padding: '28px 18px 16px' }}>
 
-        {/* header row */}
-        <div style={{ display:'flex', alignItems:'flex-end', justifyContent:'space-between', marginBottom:20 }}>
+        {/* header */}
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          marginBottom: 20,
+        }}>
           <div>
-            <div style={{ fontSize:'.7rem', fontWeight:800, color:'#C8956A', letterSpacing:'.1em', marginBottom:4 }}>
-              MENU
+            <div style={{
+              fontSize: '.62rem', fontWeight: 800, color: '#FF8C28',
+              letterSpacing: '.16em', marginBottom: 5,
+            }}>
+              ເມນູ · MENU
             </div>
-            <div style={{ fontWeight:900, fontSize:'1.3rem', color:'#1a0e07', lineHeight:1 }}>
+            <div style={{
+              fontWeight: 900, fontSize: '1.3rem', color: '#FFFBF5', lineHeight: 1,
+            }}>
               ເລືອກສິ່ງທີ່ຊອບ 🥟
             </div>
           </div>
           {visibleMenus.length > 0 && (
             <div style={{
-              background:'rgba(46,28,18,.08)',
-              borderRadius:99, padding:'4px 12px',
-              fontSize:'.72rem', fontWeight:800, color:'#7B4F2E',
+              background: 'rgba(255,140,40,.1)',
+              border: '1px solid rgba(255,140,40,.2)',
+              borderRadius: 99, padding: '5px 13px',
+              fontSize: '.7rem', fontWeight: 800, color: '#FF8C28',
             }}>
               {visibleMenus.length} ລາຍການ
             </div>
@@ -126,84 +177,108 @@ export default async function PreorderV2Page() {
         </div>
 
         {visibleMenus.length === 0 ? (
-          <div style={{ textAlign:'center', padding:'60px 0', color:'#9E7B6A', fontWeight:700 }}>
+          <div style={{
+            textAlign: 'center', padding: '60px 0',
+            color: 'rgba(255,251,245,.3)', fontWeight: 700,
+          }}>
             ສິນຄ້າໝົດຊົ່ວຄາວ
           </div>
         ) : (
           <div style={{
-            display:'flex', gap:14,
-            overflowX:'auto', paddingBottom:20, paddingTop:8,
-            scrollSnapType:'x mandatory',
-            WebkitOverflowScrolling:'touch',
-            marginLeft:-4, paddingLeft:4,
+            display: 'grid',
+            gridTemplateColumns: 'repeat(2, 1fr)',
+            gap: 12,
           }}>
-            {visibleMenus.map(({ m, i }) => {
-              const [colorA, colorB] = GRADIENTS[i % GRADIENTS.length]
-              return (
-                <a key={i} href="/preorder" style={{ flexShrink:0, scrollSnapAlign:'start', textDecoration:'none' }}>
+            {visibleMenus.map(({ m, i }) => (
+              <a
+                key={i}
+                href="/preorder"
+                style={{ textDecoration: 'none', display: 'block' }}
+              >
+                <div style={{
+                  borderRadius: 22,
+                  overflow: 'hidden',
+                  position: 'relative',
+                  aspectRatio: '3 / 4',
+                  background: CARD_GRADIENTS[i % CARD_GRADIENTS.length],
+                  border: '1px solid rgba(255,200,80,.07)',
+                  boxShadow: '0 8px 36px rgba(0,0,0,.55)',
+                  animation: `bcbFloat 3.6s ease-in-out ${(i * 0.55) % 2.8}s infinite`,
+                }}>
+
+                  {images[i] && (
+                    <img
+                      src={images[i]}
+                      alt={txt(m)}
+                      style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
+                    />
+                  )}
+
+                  {/* dark gradient overlay */}
                   <div style={{
-                    width:162, height:236,
-                    borderRadius:24,
-                    position:'relative', overflow:'hidden',
-                    boxShadow:'0 14px 44px rgba(46,28,18,.25), 0 4px 12px rgba(46,28,18,.12)',
-                    animation:`bcbFloat 3.6s ease-in-out ${(i * 0.55) % 2.8}s infinite`,
-                  }}>
-                    {images[i]
-                      ? <img src={images[i]} alt={txt(m)} style={{ position:'absolute', inset:0, width:'100%', height:'100%', objectFit:'cover' }} />
-                      : (
-                          <>
-                            <div style={{ position:'absolute', inset:0, background:`linear-gradient(150deg, ${colorA} 0%, ${colorB} 100%)` }} />
-                            <div style={{ position:'absolute', top:26, left:'50%', transform:'translateX(-50%)', fontSize:'4rem', filter:'drop-shadow(0 4px 12px rgba(0,0,0,.4))' }}>🥟</div>
-                          </>
-                        )
-                    }
+                    position: 'absolute', inset: 0,
+                    background: 'linear-gradient(to top, rgba(4,2,0,.96) 0%, rgba(4,2,0,.55) 45%, rgba(4,2,0,.08) 100%)',
+                  }} />
 
-                    {/* shine top-left */}
-                    <div style={{ position:'absolute', top:0, left:0, width:'55%', height:'42%', background:'linear-gradient(135deg,rgba(255,255,255,.15) 0%,transparent 100%)', pointerEvents:'none' }} />
+                  {/* shine */}
+                  <div style={{
+                    position: 'absolute', top: 0, left: 0, width: '50%', height: '36%',
+                    background: 'linear-gradient(135deg, rgba(255,255,255,.07) 0%, transparent 100%)',
+                    pointerEvents: 'none',
+                  }} />
 
-                    {/* gradient bottom overlay */}
-                    <div style={{ position:'absolute', inset:0, background:'linear-gradient(to top, rgba(8,4,1,.9) 40%, rgba(8,4,1,.2) 68%, transparent 100%)', pointerEvents:'none' }} />
-
-                    {/* text */}
-                    <div style={{ position:'absolute', bottom:0, left:0, right:0, padding:'12px 16px 18px' }}>
-                      <div style={{ color:'#fff', fontWeight:900, fontSize:'.92rem', lineHeight:1.25, marginBottom:5 }}>
-                        {txt(m, '?')}
+                  {/* text */}
+                  <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: '12px 13px 15px' }}>
+                    <div style={{
+                      color: '#FFFBF5', fontWeight: 900, fontSize: '.86rem',
+                      lineHeight: 1.3, marginBottom: 9,
+                    }}>
+                      {txt(m, '?')}
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <div style={{
+                        background: 'rgba(255,208,96,.14)',
+                        border: '1px solid rgba(255,208,96,.28)',
+                        borderRadius: 99, padding: '3px 9px',
+                        color: '#FFD060', fontWeight: 900, fontSize: '.7rem',
+                      }}>
+                        {Number(prices[i] ?? 0).toLocaleString()} ກີບ
                       </div>
-                      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
-                        <div style={{ color:'#FFD87A', fontWeight:800, fontSize:'.8rem' }}>
-                          {Number(prices[i] ?? 0).toLocaleString()} ກີບ
-                        </div>
-                        <div style={{ width:22, height:22, borderRadius:'50%', background:'rgba(255,255,255,.15)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'.65rem', color:'#fff' }}>
-                          +
-                        </div>
+                      <div style={{
+                        width: 26, height: 26, borderRadius: '50%',
+                        background: 'rgba(255,140,40,.22)',
+                        border: '1px solid rgba(255,140,40,.35)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        color: '#FF8C28', fontSize: '.85rem', fontWeight: 900,
+                        flexShrink: 0,
+                      }}>
+                        +
                       </div>
                     </div>
                   </div>
-                </a>
-              )
-            })}
+                </div>
+              </a>
+            ))}
           </div>
         )}
       </div>
 
       {/* ── CTA ── */}
-      <div style={{ padding:'16px 20px 52px', display:'flex', flexDirection:'column', gap:12 }}>
-
+      <div style={{ padding: '28px 18px 60px', display: 'flex', flexDirection: 'column', gap: 14 }}>
         <a href="/preorder" style={{
-          display:'flex', alignItems:'center', justifyContent:'center', gap:10,
-          background:'linear-gradient(135deg, #00C46B 0%, #009E56 100%)',
-          color:'#fff', fontWeight:900, fontSize:'1.05rem',
-          padding:'19px 0', borderRadius:99, textDecoration:'none',
-          boxShadow:'0 10px 32px rgba(0,168,89,.38), 0 2px 8px rgba(0,168,89,.2)',
-          letterSpacing:'.04em',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
+          background: 'linear-gradient(135deg, #FF8C28 0%, #E06010 100%)',
+          color: '#fff', fontWeight: 900, fontSize: '1.05rem',
+          padding: '18px 0', borderRadius: 99, textDecoration: 'none',
+          boxShadow: '0 12px 40px rgba(255,140,40,.32), 0 3px 10px rgba(255,100,0,.2)',
+          letterSpacing: '.04em',
         }}>
           <span>ສັ່ງດ່ວນ</span>
-          <span style={{ fontSize:'1.1em', marginTop:1 }}>→</span>
+          <span style={{ fontSize: '1.15em' }}>→</span>
         </a>
-
         <a href="/preorder" style={{
-          display:'block', color:'#9E7B6A', fontWeight:700,
-          fontSize:'.8rem', textAlign:'center', textDecoration:'none', padding:'2px 0',
+          display: 'block', color: 'rgba(255,251,245,.35)', fontWeight: 700,
+          fontSize: '.78rem', textAlign: 'center', textDecoration: 'none', padding: '2px 0',
         }}>
           ເບິ່ງລາຄາ · ຊ່ອງທາງຊຳລະ · ຕິດຕໍ່ຮ້ານ
         </a>
@@ -211,12 +286,15 @@ export default async function PreorderV2Page() {
 
       {/* ── Footer ── */}
       <div style={{
-        background:'#1a0e07', color:'rgba(253,246,238,.3)',
-        textAlign:'center', padding:'22px 20px',
-        fontSize:'.73rem', fontWeight:600, letterSpacing:'.04em',
+        borderTop: '1px solid rgba(255,200,80,.07)',
+        textAlign: 'center', padding: '20px',
+        fontSize: '.7rem', fontWeight: 600,
+        color: 'rgba(255,251,245,.18)',
+        letterSpacing: '.04em',
       }}>
         {txt(shopInfo.name, 'Basic Chinese Bun')} &nbsp;·&nbsp; {txt(shopInfo.address, 'ວຽງຈັນ, ລາວ')}
       </div>
+
     </div>
   )
 }
