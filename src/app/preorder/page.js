@@ -450,14 +450,14 @@ export default function PreOrderPage() {
       {/* ─── STEP 0: Customer Info ─── */}
       {step === 0 && (
         <>
-          <div className="flex-1 overflow-y-auto p-4">
-            <div className="max-w-lg mx-auto flex flex-col gap-4">
+          <div className="flex-1 overflow-y-auto p-4" style={{ position: 'relative' }}>
+            <img src="/bun-pattern.png" aria-hidden="true" alt=""
+              style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', opacity: 0.11, pointerEvents: 'none', zIndex: 0 }} />
+            <div className="max-w-lg mx-auto flex flex-col gap-4" style={{ position: 'relative', zIndex: 1 }}>
               {/* Welcome */}
-              <div className="text-center py-6" style={{ position: 'relative', overflow: 'hidden', borderRadius: 16 }}>
-                <img src="/bun-pattern.png" aria-hidden="true" alt=""
-                  style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', opacity: 0.13, pointerEvents: 'none' }} />
-                <div className="font-serif text-3xl font-black mb-1" style={{ position: 'relative', color: 'var(--brown)' }}>ຍິນດີຕ້ອນຮັບ 👋</div>
-                <div className="text-sm font-bold" style={{ position: 'relative', color: 'var(--gray3)' }}>ກະລຸນາໃສ່ຊື່ ແລະ ເບີໂທ ກ່ອນສັ່ງ</div>
+              <div className="text-center py-6">
+                <div className="font-serif text-3xl font-black mb-1" style={{ color: 'var(--brown)' }}>ຍິນດີຕ້ອນຮັບ 👋</div>
+                <div className="text-sm font-bold" style={{ color: 'var(--gray3)' }}>ກະລຸນາໃສ່ຊື່ ແລະ ເບີໂທ ກ່ອນສັ່ງ</div>
               </div>
               {/* Name */}
               <div>
