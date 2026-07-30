@@ -1,11 +1,16 @@
 import { supabase } from '../../lib/supabase'
 
-const GOLD_BALL = 'radial-gradient(circle at 35% 30%, #F5DC8A 0%, #C8851A 48%, #7A4E08 100%)'
+// BCB website palette (from globals.css / tailwind.config.js)
+// --brown:  #3d1f0a   --brown2: #6b3a1f   --brown3: #a0522d
+// --cream:  #fdf6ee   --cream2: #f5ebe0   --cream3: #e8d5c0
+
+const GOLD_BALL   = 'radial-gradient(circle at 35% 30%, #F5DC8A 0%, #C8851A 48%, #7A4E08 100%)'
 const PEDESTAL_TOP = 'radial-gradient(ellipse at 50% 35%, #F5DC8A 0%, #C8851A 40%, #7A4E08 100%)'
 
 const CARD_BG = [
-  '#3D1200','#0D3A16','#12124F','#440870',
-  '#522000','#003542','#4A1010','#104A28',
+  '#3d1f0a','#4a2510','#553018',
+  '#3d1f0a','#4a2510','#553018',
+  '#3d1f0a','#4a2510',
 ]
 
 const FEATURES = [
@@ -114,8 +119,8 @@ export default async function PreorderV2Page() {
 
   return (
     <div style={{
-      background:'#1E0B02',
-      color:'#FAF0E0',
+      background:'#3d1f0a',
+      color:'#fdf6ee',
       fontFamily:"'Noto Sans Lao',system-ui,-apple-system,sans-serif",
       minHeight:'100vh', overflowX:'hidden',
     }}>
@@ -150,7 +155,7 @@ export default async function PreorderV2Page() {
           </div>
           <a href="/preorder" style={{
             background:'linear-gradient(135deg,#C8951A,#8A6008)',
-            color:'#1A0800', fontWeight:900, fontSize:'.76rem',
+            color:'#3d1f0a', fontWeight:900, fontSize:'.76rem',
             padding:'9px 20px', borderRadius:99, textDecoration:'none',
             letterSpacing:'.06em', boxShadow:'0 4px 16px rgba(200,149,26,.3)',
           }}>ສັ່ງດ່ວນ</a>
@@ -173,10 +178,10 @@ export default async function PreorderV2Page() {
             <div style={{ flex:1, zIndex:1, minWidth:0 }}>
 
               <h1 style={{ margin:'0 0 12px', lineHeight:1.15 }}>
-                <span style={{ display:'block', fontSize:'2.4rem', fontWeight:900, color:'#FAF0E0', letterSpacing:'-.02em' }}>
+                <span style={{ display:'block', fontSize:'2.4rem', fontWeight:900, color:'#fdf6ee', letterSpacing:'-.02em' }}>
                   ສຳຜັດ
                 </span>
-                <span style={{ display:'block', fontSize:'2.4rem', fontWeight:900, color:'#FAF0E0', letterSpacing:'-.02em' }}>
+                <span style={{ display:'block', fontSize:'2.4rem', fontWeight:900, color:'#fdf6ee', letterSpacing:'-.02em' }}>
                   ສຸນທຣີ
                 </span>
                 <span style={{ display:'block', fontSize:'2.4rem', fontWeight:900, color:'#D4A832', letterSpacing:'-.02em' }}>
@@ -184,7 +189,7 @@ export default async function PreorderV2Page() {
                 </span>
               </h1>
 
-              <p style={{ margin:'0 0 22px', fontSize:'.7rem', color:'rgba(250,240,224,.4)', lineHeight:1.85, maxWidth:190 }}>
+              <p style={{ margin:'0 0 22px', fontSize:'.7rem', color:'rgba(253,246,238,.4)', lineHeight:1.85, maxWidth:190 }}>
                 ສາລາເປົາທຳມື ສົດໃໝ່ ນຶ່ງທຸກຮອບ ດ້ວຍວັດຖຸດິບຄຸນນະພາບ ສຳລັບທ່ານໂດຍສະເພາະ
               </p>
 
@@ -248,7 +253,7 @@ export default async function PreorderV2Page() {
             msOverflowStyle:'none', scrollbarWidth:'none',
           }}>
             {visible.length === 0 ? (
-              <p style={{ padding:'20px', color:'rgba(250,240,224,.3)', fontSize:'.8rem' }}>ສິນຄ້າໝົດຊົ່ວຄາວ</p>
+              <p style={{ padding:'20px', color:'rgba(253,246,238,.3)', fontSize:'.8rem' }}>ສິນຄ້າໝົດຊົ່ວຄາວ</p>
             ) : visible.map(({ m, i }) => (
               <a key={i} href="/preorder" style={{
                 flexShrink:0, scrollSnapAlign:'start',
@@ -272,7 +277,7 @@ export default async function PreorderV2Page() {
                   <div style={{
                     position:'absolute', top:7, left:7,
                     background:'linear-gradient(135deg,#C8951A,#8A5008)',
-                    color:'#1A0800', fontWeight:900, fontSize:'.56rem',
+                    color:'#3d1f0a', fontWeight:900, fontSize:'.56rem',
                     padding:'3px 8px', borderRadius:99,
                     boxShadow:'0 2px 6px rgba(0,0,0,.4)',
                   }}>
@@ -283,16 +288,16 @@ export default async function PreorderV2Page() {
                 {/* card body */}
                 <div style={{
                   borderRadius:22,
-                  background:'linear-gradient(160deg,#220E04,#190A02)',
-                  border:'1px solid rgba(200,149,26,.11)',
+                  background:'linear-gradient(160deg,#6b3a1f,#4a2510)',
+                  border:'1px solid rgba(160,82,45,.25)',
                   boxShadow:'0 8px 28px rgba(0,0,0,.5)',
                   padding:'60px 14px 18px',
                   textAlign:'center', position:'relative', zIndex:1,
                 }}>
-                  <div style={{ fontWeight:900, fontSize:'.88rem', color:'#FAF0E0', lineHeight:1.3, marginBottom:6 }}>
+                  <div style={{ fontWeight:900, fontSize:'.88rem', color:'#fdf6ee', lineHeight:1.3, marginBottom:6 }}>
                     {txt(m,'?')}
                   </div>
-                  <div style={{ fontSize:'.63rem', color:'rgba(250,240,224,.33)', lineHeight:1.65, marginBottom:14 }}>
+                  <div style={{ fontSize:'.63rem', color:'rgba(253,246,238,.33)', lineHeight:1.65, marginBottom:14 }}>
                     ສາລາເປົາ ສົດໃໝ່<br/>ຄຸນນະພາບສູງ
                   </div>
                   <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
@@ -303,7 +308,7 @@ export default async function PreorderV2Page() {
                       width:30, height:30, borderRadius:'50%',
                       background:'linear-gradient(135deg,#C8951A,#8A5008)',
                       display:'flex', alignItems:'center', justifyContent:'center',
-                      color:'#1A0800', fontWeight:900, fontSize:'1.1rem',
+                      color:'#3d1f0a', fontWeight:900, fontSize:'1.1rem',
                       boxShadow:'0 4px 12px rgba(200,149,26,.3)', flexShrink:0,
                     }}>+</div>
                   </div>
@@ -364,10 +369,10 @@ export default async function PreorderV2Page() {
                 }}>
                   {n}
                 </div>
-                <div style={{ fontWeight:900, fontSize:'.92rem', color:'#FAF0E0', marginBottom:8, lineHeight:1.3 }}>
+                <div style={{ fontWeight:900, fontSize:'.92rem', color:'#fdf6ee', marginBottom:8, lineHeight:1.3 }}>
                   {title}
                 </div>
-                <div style={{ fontSize:'.69rem', color:'rgba(250,240,224,.33)', lineHeight:1.75 }}>
+                <div style={{ fontSize:'.69rem', color:'rgba(253,246,238,.33)', lineHeight:1.75 }}>
                   {desc}
                 </div>
               </div>
@@ -379,8 +384,8 @@ export default async function PreorderV2Page() {
         <div style={{ padding:'0 16px 60px' }}>
           <div style={{
             borderRadius:24,
-            background:'#2E1507',
-            border:'1px solid rgba(200,149,26,.14)',
+            background:'#6b3a1f',
+            border:'1px solid rgba(160,82,45,.3)',
             boxShadow:'0 8px 40px rgba(0,0,0,.5)',
             padding:'36px 24px',
             position:'relative', overflow:'hidden',
@@ -392,7 +397,7 @@ export default async function PreorderV2Page() {
 
               {/* left: headline + button */}
               <div style={{ flex:1 }}>
-                <h2 style={{ margin:'0 0 20px', fontSize:'1.5rem', fontWeight:900, color:'#FAF0E0', lineHeight:1.28 }}>
+                <h2 style={{ margin:'0 0 20px', fontSize:'1.5rem', fontWeight:900, color:'#fdf6ee', lineHeight:1.28 }}>
                   ຮ່ວມຄົ້ນຫາ<br/>
                   ຊາລາເປົາໄສ້<br/>
                   <span style={{ color:'#D4A832' }}>ທີ່ໃຊ່ສຳລັບທ່ານ?</span>
@@ -400,7 +405,7 @@ export default async function PreorderV2Page() {
                 <a href="/preorder" style={{
                   display:'inline-flex', alignItems:'center', gap:7,
                   background:'linear-gradient(135deg,#C8951A,#8A5008)',
-                  color:'#1A0800', fontWeight:900, fontSize:'.86rem',
+                  color:'#3d1f0a', fontWeight:900, fontSize:'.86rem',
                   padding:'12px 22px', borderRadius:99, textDecoration:'none',
                   boxShadow:'0 8px 28px rgba(200,149,26,.28)',
                   letterSpacing:'.03em',
@@ -431,7 +436,7 @@ export default async function PreorderV2Page() {
           borderTop:'1px solid rgba(200,149,26,.07)',
           textAlign:'center', padding:'18px 20px',
           fontSize:'.64rem', fontWeight:600,
-          color:'rgba(250,240,224,.14)', letterSpacing:'.07em',
+          color:'rgba(253,246,238,.14)', letterSpacing:'.07em',
         }}>
           {shopName} &nbsp;·&nbsp; {txt(shopInfo.address,'ວຽງຈັນ, ລາວ')}
         </div>
