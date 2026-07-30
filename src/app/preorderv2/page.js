@@ -70,13 +70,20 @@ export default async function PreorderV2Page() {
         position: 'relative',
       }}>
 
-        {/* dot grid texture */}
-        <div style={{
-          position: 'absolute', inset: 0,
-          backgroundImage: 'radial-gradient(circle, rgba(255,200,80,.045) 1px, transparent 1px)',
-          backgroundSize: '26px 26px',
-          pointerEvents: 'none',
-        }} />
+        {/* bun illustration pattern — inverted + sepia + screen blend → amber line art */}
+        <img
+          src="/bun-pattern.png"
+          alt=""
+          aria-hidden="true"
+          style={{
+            position: 'absolute', inset: 0, width: '100%', height: '100%',
+            objectFit: 'cover', objectPosition: 'center',
+            filter: 'invert(1) sepia(1) saturate(2.5) brightness(1.4)',
+            mixBlendMode: 'screen',
+            opacity: 0.28,
+            pointerEvents: 'none',
+          }}
+        />
 
         {/* logo */}
         <div style={{ position: 'relative', width: 100, height: 100 }}>
