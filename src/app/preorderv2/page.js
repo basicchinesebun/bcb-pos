@@ -1,17 +1,12 @@
 import { supabase } from '../../lib/supabase'
 
-// BCB website palette (from globals.css / tailwind.config.js)
-// --brown:  #3d1f0a   --brown2: #6b3a1f   --brown3: #a0522d
-// --cream:  #fdf6ee   --cream2: #f5ebe0   --cream3: #e8d5c0
+// BCB website palette (globals.css / tailwind.config.js)
+// background: #fdf6ee (cream)   text: #3d1f0a (dark brown)
+// --cream2: #f5ebe0   --cream3: #e8d5c0   --warm: #fffbf6
+// --brown2: #6b3a1f   --brown3: #a0522d
 
-const GOLD_BALL   = 'radial-gradient(circle at 35% 30%, #F5DC8A 0%, #C8851A 48%, #7A4E08 100%)'
+const GOLD_BALL    = 'radial-gradient(circle at 35% 30%, #F5DC8A 0%, #C8851A 48%, #7A4E08 100%)'
 const PEDESTAL_TOP = 'radial-gradient(ellipse at 50% 35%, #F5DC8A 0%, #C8851A 40%, #7A4E08 100%)'
-
-const CARD_BG = [
-  '#3d1f0a','#4a2510','#553018',
-  '#3d1f0a','#4a2510','#553018',
-  '#3d1f0a','#4a2510',
-]
 
 const FEATURES = [
   { n:'1', title:'ວັດຖຸດິບພຣີມຽມ',   desc:'ຄັດສັນວັດຖຸດິບທີ່ດີທີ່ສຸດ ເພື່ອໃຫ້ທ່ານໄດ້ຮັບລົດຊາດທີ່ດີທີ່ສຸດທຸກຄັ້ງ' },
@@ -65,40 +60,42 @@ function Dot({ size = 12, style }) {
     <div style={{
       width: size, height: size, borderRadius: '50%',
       background: GOLD_BALL,
-      boxShadow: size >= 14 ? `0 4px 14px rgba(200,133,26,.55)` : undefined,
+      boxShadow: size >= 14 ? `0 4px 14px rgba(200,133,26,.45)` : undefined,
       flexShrink: 0,
       ...style,
     }} />
   )
 }
 
-/* ── bun image + gold pedestal ── */
+/* ── bun image (free-floating, no circle clip) + gold pedestal ── */
 function BunOnPedestal({ src, size = 150, pedestalW = 96 }) {
   return (
-    <div style={{ position:'relative', width: size, paddingBottom: 20, flexShrink: 0 }}>
-      {/* image circle */}
-      <div style={{
-        width: size, height: size, borderRadius:'50%', overflow:'hidden',
-        border:'2.5px solid rgba(200,149,26,.5)',
-        boxShadow:'0 20px 55px rgba(0,0,0,.75), 0 0 0 10px rgba(200,149,26,.06)',
-        position:'relative', zIndex:1,
-      }}>
-        <img src={src} alt="bun" style={{ width:'100%', height:'100%', objectFit:'cover' }} />
-      </div>
+    <div style={{ position:'relative', width: size, paddingBottom: 24, flexShrink: 0 }}>
+      {/* free-floating image — no border-radius clip */}
+      <img
+        src={src} alt="bun"
+        style={{
+          width: size, height: size,
+          objectFit: 'contain',
+          display: 'block',
+          position: 'relative', zIndex: 1,
+          filter: 'drop-shadow(0 18px 28px rgba(61,31,10,.22))',
+        }}
+      />
       {/* pedestal stem */}
       <div style={{
-        position:'absolute', bottom: 14, left:'50%', transform:'translateX(-50%)',
-        width: 10, height: 20,
+        position:'absolute', bottom: 17, left:'50%', transform:'translateX(-50%)',
+        width: 10, height: 22,
         background:'linear-gradient(90deg,#8A5008,#D4A832 40%,#8A5008)',
         zIndex: 0,
       }} />
       {/* pedestal plate */}
       <div style={{
-        position:'absolute', bottom: 4, left:'50%', transform:'translateX(-50%)',
-        width: pedestalW, height: 17,
+        position:'absolute', bottom: 5, left:'50%', transform:'translateX(-50%)',
+        width: pedestalW, height: 18,
         borderRadius:'50%',
         background: PEDESTAL_TOP,
-        boxShadow:'0 6px 22px rgba(200,133,26,.5), inset 0 3px 0 rgba(245,220,138,.3)',
+        boxShadow:'0 6px 22px rgba(200,133,26,.35), inset 0 3px 0 rgba(245,220,138,.3)',
         zIndex: 2,
       }} />
     </div>
@@ -119,329 +116,315 @@ export default async function PreorderV2Page() {
 
   return (
     <div style={{
-      background:'#3d1f0a',
-      color:'#fdf6ee',
+      background:'#fdf6ee',
+      color:'#3d1f0a',
       fontFamily:"'Noto Sans Lao',system-ui,-apple-system,sans-serif",
       minHeight:'100vh', overflowX:'hidden',
     }}>
 
-      {/* bun-pattern watermark */}
-      <div style={{
-        position:'fixed', inset:0,
-        backgroundImage:'url(/bun-pattern.png)',
-        backgroundSize:'220%', backgroundPosition:'60% 50%',
-        opacity:0.038, filter:'sepia(1) brightness(.5)',
-        pointerEvents:'none', zIndex:0,
-      }} />
-
-      <div style={{ position:'relative', zIndex:1 }}>
-
-        {/* ════ NAV ════ */}
-        <nav style={{
-          display:'flex', alignItems:'center', justifyContent:'space-between',
-          padding:'15px 22px',
-          borderBottom:'1px solid rgba(200,149,26,.08)',
-        }}>
-          <div style={{ display:'flex', alignItems:'center', gap:10 }}>
-            <div style={{
-              width:32, height:32, borderRadius:'50%', overflow:'hidden',
-              border:'1.5px solid rgba(200,149,26,.5)', flexShrink:0,
-            }}>
-              <img src={logoSrc} alt="logo" style={{ width:'100%', height:'100%', objectFit:'cover' }} />
-            </div>
-            <span style={{ fontWeight:900, fontSize:'.95rem', color:'#D4A832', letterSpacing:'.08em' }}>
-              BCB
-            </span>
-          </div>
-          <a href="/preorder" style={{
-            background:'linear-gradient(135deg,#C8951A,#8A6008)',
-            color:'#3d1f0a', fontWeight:900, fontSize:'.76rem',
-            padding:'9px 20px', borderRadius:99, textDecoration:'none',
-            letterSpacing:'.06em', boxShadow:'0 4px 16px rgba(200,149,26,.3)',
-          }}>ສັ່ງດ່ວນ</a>
-        </nav>
-
-        {/* ════ HERO ════ */}
-        <section style={{ padding:'36px 22px 32px', position:'relative', overflow:'hidden' }}>
-
-          {/* ambient glow top-right */}
+      {/* ════ NAV ════ */}
+      <nav style={{
+        display:'flex', alignItems:'center', justifyContent:'space-between',
+        padding:'15px 22px',
+        borderBottom:'1px solid #e8d5c0',
+        background:'#fdf6ee',
+      }}>
+        <div style={{ display:'flex', alignItems:'center', gap:10 }}>
           <div style={{
-            position:'absolute', top:-80, right:-60,
-            width:320, height:320, borderRadius:'50%',
-            background:'radial-gradient(circle,rgba(210,130,10,.2) 0%,transparent 65%)',
-            pointerEvents:'none',
-          }} />
-
-          <div style={{ display:'flex', alignItems:'center', gap:12 }}>
-
-            {/* ── LEFT text ── */}
-            <div style={{ flex:1, zIndex:1, minWidth:0 }}>
-
-              <h1 style={{ margin:'0 0 12px', lineHeight:1.15 }}>
-                <span style={{ display:'block', fontSize:'2.4rem', fontWeight:900, color:'#fdf6ee', letterSpacing:'-.02em' }}>
-                  ສຳຜັດ
-                </span>
-                <span style={{ display:'block', fontSize:'2.4rem', fontWeight:900, color:'#fdf6ee', letterSpacing:'-.02em' }}>
-                  ສຸນທຣີ
-                </span>
-                <span style={{ display:'block', fontSize:'2.4rem', fontWeight:900, color:'#D4A832', letterSpacing:'-.02em' }}>
-                  ຊາລາເປົາ
-                </span>
-              </h1>
-
-              <p style={{ margin:'0 0 22px', fontSize:'.7rem', color:'rgba(253,246,238,.4)', lineHeight:1.85, maxWidth:190 }}>
-                ສາລາເປົາທຳມື ສົດໃໝ່ ນຶ່ງທຸກຮອບ ດ້ວຍວັດຖຸດິບຄຸນນະພາບ ສຳລັບທ່ານໂດຍສະເພາະ
-              </p>
-
-              {/* outlined button — matching reference */}
-              <a href="/preorder" style={{
-                display:'inline-flex', alignItems:'center', gap:8,
-                border:'1.5px solid rgba(200,149,26,.65)',
-                color:'#D4A832', fontWeight:900, fontSize:'.83rem',
-                padding:'11px 22px', borderRadius:99, textDecoration:'none',
-                letterSpacing:'.04em',
-                background:'rgba(200,149,26,.07)',
-              }}>
-                ເລືອກເມນູ →
-              </a>
-            </div>
-
-            {/* ── RIGHT: buns + gold balls + cloud ── */}
-            <div style={{ flexShrink:0, width:158, position:'relative', height:240, zIndex:1 }}>
-
-              {/* cloud SVG top-right */}
-              <Cloud style={{ position:'absolute', top:-4, right:-4, width:60, opacity:.35 }} />
-
-              {/* secondary small circle — top-left (behind main) */}
-              {img1 && (
-                <div style={{
-                  position:'absolute', top:8, left:0,
-                  width:78, height:78, borderRadius:'50%', overflow:'hidden',
-                  border:'2px solid rgba(200,149,26,.35)',
-                  boxShadow:'0 8px 24px rgba(0,0,0,.55)',
-                  zIndex:1,
-                }}>
-                  <img src={img1} alt="bun2" style={{ width:'100%', height:'100%', objectFit:'cover' }} />
-                </div>
-              )}
-
-              {/* main large bun with pedestal — bottom right */}
-              <div style={{ position:'absolute', bottom:0, right:0, zIndex:2 }}>
-                <BunOnPedestal src={img0 || logoSrc} size={148} pedestalW={90} />
-              </div>
-
-              {/* gold balls */}
-              <Dot size={18} style={{ position:'absolute', top:0,   right:20 }} />
-              <Dot size={11} style={{ position:'absolute', top:60,  right:-4 }} />
-              <Dot size={14} style={{ position:'absolute', top:120, right:-8, boxShadow:'0 4px 12px rgba(200,133,26,.45)' }} />
-              <Dot size={8}  style={{ position:'absolute', top:30,  left:60 }} />
-              <Dot size={9}  style={{ position:'absolute', bottom:60, left:-4 }} />
-            </div>
-          </div>
-        </section>
-
-        {/* ════ MENU CARDS ════ */}
-        <section style={{ paddingBottom:8 }}>
-
-          {/* scroll row */}
-          <div style={{
-            display:'flex', gap:14,
-            overflowX:'auto',
-            padding:'62px 22px 8px',
-            scrollSnapType:'x mandatory',
-            WebkitOverflowScrolling:'touch',
-            msOverflowStyle:'none', scrollbarWidth:'none',
+            width:32, height:32, borderRadius:'50%', overflow:'hidden',
+            border:'1.5px solid #e8d5c0', flexShrink:0,
           }}>
-            {visible.length === 0 ? (
-              <p style={{ padding:'20px', color:'rgba(253,246,238,.3)', fontSize:'.8rem' }}>ສິນຄ້າໝົດຊົ່ວຄາວ</p>
-            ) : visible.map(({ m, i }) => (
-              <a key={i} href="/preorder" style={{
-                flexShrink:0, scrollSnapAlign:'start',
-                textDecoration:'none',
-                width:166, paddingTop:52,
-                position:'relative', display:'block',
-              }}>
-                {/* floating circle */}
-                <div style={{
-                  position:'absolute', top:0, left:'50%', transform:'translateX(-50%)',
-                  width:104, height:104, borderRadius:'50%', overflow:'hidden',
-                  border:'2px solid rgba(200,149,26,.4)',
-                  boxShadow:'0 10px 30px rgba(0,0,0,.65)',
-                  background: CARD_BG[i % CARD_BG.length],
-                  zIndex:2,
-                }}>
-                  {images[i] && (
-                    <img src={images[i]} alt={txt(m)} style={{ width:'100%', height:'100%', objectFit:'cover' }} />
-                  )}
-                  {/* price badge on circle */}
-                  <div style={{
-                    position:'absolute', top:7, left:7,
-                    background:'linear-gradient(135deg,#C8951A,#8A5008)',
-                    color:'#3d1f0a', fontWeight:900, fontSize:'.56rem',
-                    padding:'3px 8px', borderRadius:99,
-                    boxShadow:'0 2px 6px rgba(0,0,0,.4)',
-                  }}>
-                    {Number(prices[i] ?? 0).toLocaleString()}
-                  </div>
-                </div>
-
-                {/* card body */}
-                <div style={{
-                  borderRadius:22,
-                  background:'linear-gradient(160deg,#6b3a1f,#4a2510)',
-                  border:'1px solid rgba(160,82,45,.25)',
-                  boxShadow:'0 8px 28px rgba(0,0,0,.5)',
-                  padding:'60px 14px 18px',
-                  textAlign:'center', position:'relative', zIndex:1,
-                }}>
-                  <div style={{ fontWeight:900, fontSize:'.88rem', color:'#fdf6ee', lineHeight:1.3, marginBottom:6 }}>
-                    {txt(m,'?')}
-                  </div>
-                  <div style={{ fontSize:'.63rem', color:'rgba(253,246,238,.33)', lineHeight:1.65, marginBottom:14 }}>
-                    ສາລາເປົາ ສົດໃໝ່<br/>ຄຸນນະພາບສູງ
-                  </div>
-                  <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
-                    <span style={{ color:'#D4A832', fontWeight:900, fontSize:'.78rem' }}>
-                      {Number(prices[i] ?? 0).toLocaleString()} ກີບ
-                    </span>
-                    <div style={{
-                      width:30, height:30, borderRadius:'50%',
-                      background:'linear-gradient(135deg,#C8951A,#8A5008)',
-                      display:'flex', alignItems:'center', justifyContent:'center',
-                      color:'#3d1f0a', fontWeight:900, fontSize:'1.1rem',
-                      boxShadow:'0 4px 12px rgba(200,149,26,.3)', flexShrink:0,
-                    }}>+</div>
-                  </div>
-                </div>
-              </a>
-            ))}
+            <img src={logoSrc} alt="logo" style={{ width:'100%', height:'100%', objectFit:'cover' }} />
           </div>
+          <span style={{ fontWeight:900, fontSize:'.95rem', color:'#3d1f0a', letterSpacing:'.08em' }}>
+            BCB
+          </span>
+        </div>
+        <a href="/preorder" style={{
+          background:'#3d1f0a',
+          color:'#fdf6ee', fontWeight:900, fontSize:'.76rem',
+          padding:'9px 20px', borderRadius:99, textDecoration:'none',
+          letterSpacing:'.06em',
+        }}>ສັ່ງດ່ວນ</a>
+      </nav>
 
-          {/* "view all" link */}
-          <div style={{ textAlign:'center', padding:'16px 0 28px' }}>
-            <a href="/preorder" style={{ fontSize:'.73rem', color:'rgba(200,149,26,.55)', fontWeight:600, textDecoration:'none', letterSpacing:'.04em' }}>
-              ເບິ່ງທັງໝົດ →
+      {/* ════ HERO ════ */}
+      <section style={{ padding:'36px 22px 32px', position:'relative', overflow:'hidden', background:'#fdf6ee' }}>
+
+        {/* subtle gold glow top-right */}
+        <div style={{
+          position:'absolute', top:-60, right:-40,
+          width:260, height:260, borderRadius:'50%',
+          background:'radial-gradient(circle,rgba(200,149,26,.10) 0%,transparent 65%)',
+          pointerEvents:'none',
+        }} />
+
+        <div style={{ display:'flex', alignItems:'center', gap:12 }}>
+
+          {/* ── LEFT text ── */}
+          <div style={{ flex:1, zIndex:1, minWidth:0 }}>
+
+            <h1 style={{ margin:'0 0 12px', lineHeight:1.15 }}>
+              <span style={{ display:'block', fontSize:'2.4rem', fontWeight:900, color:'#3d1f0a', letterSpacing:'-.02em' }}>
+                ສຳຜັດ
+              </span>
+              <span style={{ display:'block', fontSize:'2.4rem', fontWeight:900, color:'#3d1f0a', letterSpacing:'-.02em' }}>
+                ສຸນທຣີ
+              </span>
+              <span style={{ display:'block', fontSize:'2.4rem', fontWeight:900, color:'#C8951A', letterSpacing:'-.02em' }}>
+                ຊາລາເປົາ
+              </span>
+            </h1>
+
+            <p style={{ margin:'0 0 22px', fontSize:'.7rem', color:'rgba(61,31,10,.45)', lineHeight:1.85, maxWidth:190 }}>
+              ສາລາເປົາທຳມື ສົດໃໝ່ ນຶ່ງທຸກຮອບ ດ້ວຍວັດຖຸດິບຄຸນນະພາບ ສຳລັບທ່ານໂດຍສະເພາະ
+            </p>
+
+            <a href="/preorder" style={{
+              display:'inline-flex', alignItems:'center', gap:8,
+              border:'1.5px solid #3d1f0a',
+              color:'#3d1f0a', fontWeight:900, fontSize:'.83rem',
+              padding:'11px 22px', borderRadius:99, textDecoration:'none',
+              letterSpacing:'.04em',
+            }}>
+              ເລືອກເມນູ →
             </a>
           </div>
-        </section>
 
-        {/* thin gold divider */}
-        <div style={{ height:1, margin:'0 22px', background:'linear-gradient(90deg,transparent,rgba(200,149,26,.14) 25%,rgba(200,149,26,.14) 75%,transparent)' }} />
+          {/* ── RIGHT: buns + gold balls + cloud ── */}
+          <div style={{ flexShrink:0, width:158, position:'relative', height:240, zIndex:1 }}>
 
-        {/* ════ FEATURES — ghost numbers ════ */}
-        <section style={{ padding:'52px 22px 60px', position:'relative', overflow:'hidden' }}>
+            {/* cloud SVG top-right */}
+            <Cloud style={{ position:'absolute', top:-4, right:-4, width:60, opacity:.3 }} />
 
-          {/* "BUNSENSE" centered label */}
-          <div style={{ textAlign:'center', marginBottom:44, position:'relative', zIndex:1 }}>
-            <span style={{ fontWeight:900, fontSize:'.76rem', color:'rgba(200,149,26,.5)', letterSpacing:'.4em' }}>
-              {shopName.toUpperCase()}
-            </span>
+            {/* secondary small bun image — top-left, free-floating */}
+            {img1 && (
+              <img
+                src={img1} alt="bun2"
+                style={{
+                  position:'absolute', top:8, left:0,
+                  width:78, height:78,
+                  objectFit:'contain',
+                  filter:'drop-shadow(0 8px 16px rgba(61,31,10,.2))',
+                  zIndex:1,
+                }}
+              />
+            )}
+
+            {/* main large bun with pedestal — bottom right */}
+            <div style={{ position:'absolute', bottom:0, right:0, zIndex:2 }}>
+              <BunOnPedestal src={img0 || logoSrc} size={148} pedestalW={90} />
+            </div>
+
+            {/* gold balls */}
+            <Dot size={18} style={{ position:'absolute', top:0,   right:20 }} />
+            <Dot size={11} style={{ position:'absolute', top:60,  right:-4 }} />
+            <Dot size={14} style={{ position:'absolute', top:120, right:-8 }} />
+            <Dot size={8}  style={{ position:'absolute', top:30,  left:60 }} />
+            <Dot size={9}  style={{ position:'absolute', bottom:60, left:-4 }} />
           </div>
+        </div>
+      </section>
 
-          {/* bamboo-steamer-like center decoration */}
-          <div style={{
-            position:'absolute', top:'50%', left:'50%',
-            transform:'translate(-50%,-50%)',
-            width:160, height:160,
-            borderRadius:16,
-            backgroundImage:'url(/bun-pattern.png)',
-            backgroundSize:'cover', backgroundPosition:'center',
-            opacity:0.07, filter:'sepia(1) brightness(.6)',
-            pointerEvents:'none', zIndex:0,
-          }} />
+      {/* thin gold divider */}
+      <div style={{ height:1, margin:'0 22px', background:'linear-gradient(90deg,transparent,rgba(200,149,26,.25) 25%,rgba(200,149,26,.25) 75%,transparent)' }} />
 
-          {/* scattered gold balls in features section */}
-          <Dot size={10} style={{ position:'absolute', top:40,   left:14,  opacity:.65 }} />
-          <Dot size={16} style={{ position:'absolute', bottom:40, right:14 }} />
-          <Dot size={8}  style={{ position:'absolute', top:'50%', right:8,  opacity:.6 }} />
+      {/* ════ MENU CARDS ════ */}
+      <section style={{ background:'#fffbf6', paddingBottom:8 }}>
 
-          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'52px 20px', position:'relative', zIndex:1 }}>
-            {FEATURES.map(({ n, title, desc }) => (
-              <div key={n}>
-                {/* very large ghost number */}
+        {/* scroll row */}
+        <div style={{
+          display:'flex', gap:14,
+          overflowX:'auto',
+          padding:'62px 22px 8px',
+          scrollSnapType:'x mandatory',
+          WebkitOverflowScrolling:'touch',
+          msOverflowStyle:'none', scrollbarWidth:'none',
+        }}>
+          {visible.length === 0 ? (
+            <p style={{ padding:'20px', color:'rgba(61,31,10,.3)', fontSize:'.8rem' }}>ສິນຄ້າໝົດຊົ່ວຄາວ</p>
+          ) : visible.map(({ m, i }) => (
+            <a key={i} href="/preorder" style={{
+              flexShrink:0, scrollSnapAlign:'start',
+              textDecoration:'none',
+              width:166, paddingTop:52,
+              position:'relative', display:'block',
+            }}>
+              {/* floating bun image — free-floating, no circle clip */}
+              <div style={{
+                position:'absolute', top:0, left:'50%', transform:'translateX(-50%)',
+                width:104, height:104,
+                zIndex:2, display:'flex', alignItems:'center', justifyContent:'center',
+              }}>
+                {images[i] ? (
+                  <img
+                    src={images[i]} alt={txt(m)}
+                    style={{
+                      width:104, height:104,
+                      objectFit:'contain',
+                      filter:'drop-shadow(0 10px 18px rgba(61,31,10,.25))',
+                    }}
+                  />
+                ) : (
+                  <div style={{
+                    width:80, height:80, borderRadius:'50%',
+                    background:'#e8d5c0', display:'flex', alignItems:'center', justifyContent:'center',
+                    fontSize:'1.8rem',
+                  }}>🥟</div>
+                )}
+                {/* price badge */}
                 <div style={{
-                  fontSize:'8rem', fontWeight:900, lineHeight:0.82,
-                  color:'rgba(200,149,26,.08)',
-                  letterSpacing:'-.05em',
-                  fontVariantNumeric:'tabular-nums',
-                  marginLeft:-8, marginBottom:10,
-                  userSelect:'none',
+                  position:'absolute', top:4, left:4,
+                  background:'#3d1f0a',
+                  color:'#fdf6ee', fontWeight:900, fontSize:'.56rem',
+                  padding:'3px 8px', borderRadius:99,
                 }}>
-                  {n}
-                </div>
-                <div style={{ fontWeight:900, fontSize:'.92rem', color:'#fdf6ee', marginBottom:8, lineHeight:1.3 }}>
-                  {title}
-                </div>
-                <div style={{ fontSize:'.69rem', color:'rgba(253,246,238,.33)', lineHeight:1.75 }}>
-                  {desc}
+                  {Number(prices[i] ?? 0).toLocaleString()}
                 </div>
               </div>
-            ))}
-          </div>
-        </section>
 
-        {/* ════ CTA CARD — rounded card, lighter bg ════ */}
-        <div style={{ padding:'0 16px 60px' }}>
-          <div style={{
-            borderRadius:24,
-            background:'#6b3a1f',
-            border:'1px solid rgba(160,82,45,.3)',
-            boxShadow:'0 8px 40px rgba(0,0,0,.5)',
-            padding:'36px 24px',
-            position:'relative', overflow:'hidden',
-          }}>
-            {/* cloud SVG left-bottom */}
-            <Cloud style={{ position:'absolute', bottom:18, left:12, width:56, opacity:.22 }} />
-
-            <div style={{ display:'flex', alignItems:'center', gap:18 }}>
-
-              {/* left: headline + button */}
-              <div style={{ flex:1 }}>
-                <h2 style={{ margin:'0 0 20px', fontSize:'1.5rem', fontWeight:900, color:'#fdf6ee', lineHeight:1.28 }}>
-                  ຮ່ວມຄົ້ນຫາ<br/>
-                  ຊາລາເປົາໄສ້<br/>
-                  <span style={{ color:'#D4A832' }}>ທີ່ໃຊ່ສຳລັບທ່ານ?</span>
-                </h2>
-                <a href="/preorder" style={{
-                  display:'inline-flex', alignItems:'center', gap:7,
-                  background:'linear-gradient(135deg,#C8951A,#8A5008)',
-                  color:'#3d1f0a', fontWeight:900, fontSize:'.86rem',
-                  padding:'12px 22px', borderRadius:99, textDecoration:'none',
-                  boxShadow:'0 8px 28px rgba(200,149,26,.28)',
-                  letterSpacing:'.03em',
-                }}>
-                  ຮ່ວມຄົ້ນຫ້າ
-                </a>
+              {/* card body */}
+              <div style={{
+                borderRadius:22,
+                background:'#fdf6ee',
+                border:'1px solid #e8d5c0',
+                boxShadow:'0 4px 16px rgba(61,31,10,.07)',
+                padding:'60px 14px 18px',
+                textAlign:'center', position:'relative', zIndex:1,
+              }}>
+                <div style={{ fontWeight:900, fontSize:'.88rem', color:'#3d1f0a', lineHeight:1.3, marginBottom:6 }}>
+                  {txt(m,'?')}
+                </div>
+                <div style={{ fontSize:'.63rem', color:'rgba(61,31,10,.4)', lineHeight:1.65, marginBottom:14 }}>
+                  ສາລາເປົາ ສົດໃໝ່<br/>ຄຸນນະພາບສູງ
+                </div>
+                <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+                  <span style={{ color:'#C8951A', fontWeight:900, fontSize:'.78rem' }}>
+                    {Number(prices[i] ?? 0).toLocaleString()} ກີບ
+                  </span>
+                  <div style={{
+                    width:30, height:30, borderRadius:'50%',
+                    background:'#3d1f0a',
+                    display:'flex', alignItems:'center', justifyContent:'center',
+                    color:'#fdf6ee', fontWeight:900, fontSize:'1.1rem',
+                    flexShrink:0,
+                  }}>+</div>
+                </div>
               </div>
+            </a>
+          ))}
+        </div>
 
-              {/* right: bun on pedestal + gold balls + cloud */}
-              <div style={{ flexShrink:0, position:'relative', paddingTop:8 }}>
-                {/* cloud top-right */}
-                <Cloud style={{ position:'absolute', top:-16, right:-8, width:44, opacity:.28 }} />
+        {/* "view all" link */}
+        <div style={{ textAlign:'center', padding:'16px 0 28px' }}>
+          <a href="/preorder" style={{ fontSize:'.73rem', color:'rgba(61,31,10,.4)', fontWeight:600, textDecoration:'none', letterSpacing:'.04em' }}>
+            ເບິ່ງທັງໝົດ →
+          </a>
+        </div>
+      </section>
 
-                <BunOnPedestal src={img0 || logoSrc} size={124} pedestalW={78} />
+      {/* thin gold divider */}
+      <div style={{ height:1, margin:'0 22px', background:'linear-gradient(90deg,transparent,rgba(200,149,26,.25) 25%,rgba(200,149,26,.25) 75%,transparent)' }} />
 
-                {/* gold balls */}
-                <Dot size={15} style={{ position:'absolute', top:-10, right:6 }} />
-                <Dot size={9}  style={{ position:'absolute', top:'38%', right:-12 }} />
-                <Dot size={11} style={{ position:'absolute', bottom:8, left:-6, boxShadow:'0 3px 10px rgba(200,133,26,.4)' }} />
-                <Dot size={7}  style={{ position:'absolute', top:10, left:-2 }} />
+      {/* ════ FEATURES — ghost numbers ════ */}
+      <section style={{ padding:'52px 22px 60px', position:'relative', overflow:'hidden', background:'#fdf6ee' }}>
+
+        {/* section label */}
+        <div style={{ textAlign:'center', marginBottom:44, position:'relative', zIndex:1 }}>
+          <span style={{ fontWeight:900, fontSize:'.76rem', color:'rgba(200,149,26,.65)', letterSpacing:'.4em' }}>
+            {shopName.toUpperCase()}
+          </span>
+        </div>
+
+        {/* scattered gold balls */}
+        <Dot size={10} style={{ position:'absolute', top:40,   left:14,  opacity:.55 }} />
+        <Dot size={16} style={{ position:'absolute', bottom:40, right:14, opacity:.7 }} />
+        <Dot size={8}  style={{ position:'absolute', top:'50%', right:8,  opacity:.5 }} />
+
+        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'52px 20px', position:'relative', zIndex:1 }}>
+          {FEATURES.map(({ n, title, desc }) => (
+            <div key={n}>
+              {/* ghost number */}
+              <div style={{
+                fontSize:'8rem', fontWeight:900, lineHeight:0.82,
+                color:'rgba(61,31,10,.055)',
+                letterSpacing:'-.05em',
+                fontVariantNumeric:'tabular-nums',
+                marginLeft:-8, marginBottom:10,
+                userSelect:'none',
+              }}>
+                {n}
               </div>
+              <div style={{ fontWeight:900, fontSize:'.92rem', color:'#3d1f0a', marginBottom:8, lineHeight:1.3 }}>
+                {title}
+              </div>
+              <div style={{ fontSize:'.69rem', color:'rgba(61,31,10,.45)', lineHeight:1.75 }}>
+                {desc}
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* ════ CTA CARD — dark statement card ════ */}
+      <div style={{ padding:'0 16px 60px', background:'#fdf6ee' }}>
+        <div style={{
+          borderRadius:24,
+          background:'#3d1f0a',
+          boxShadow:'0 8px 40px rgba(61,31,10,.2)',
+          padding:'36px 24px',
+          position:'relative', overflow:'hidden',
+        }}>
+          {/* cloud SVG */}
+          <Cloud style={{ position:'absolute', bottom:18, left:12, width:56, opacity:.18 }} />
+
+          <div style={{ display:'flex', alignItems:'center', gap:18 }}>
+
+            {/* left: headline + button */}
+            <div style={{ flex:1 }}>
+              <h2 style={{ margin:'0 0 20px', fontSize:'1.5rem', fontWeight:900, color:'#fdf6ee', lineHeight:1.28 }}>
+                ຮ່ວມຄົ້ນຫາ<br/>
+                ຊາລາເປົາໄສ້<br/>
+                <span style={{ color:'#D4A832' }}>ທີ່ໃຊ່ສຳລັບທ່ານ?</span>
+              </h2>
+              <a href="/preorder" style={{
+                display:'inline-flex', alignItems:'center', gap:7,
+                background:'#fdf6ee',
+                color:'#3d1f0a', fontWeight:900, fontSize:'.86rem',
+                padding:'12px 22px', borderRadius:99, textDecoration:'none',
+                letterSpacing:'.03em',
+              }}>
+                ຮ່ວມຄົ້ນຫາ
+              </a>
+            </div>
+
+            {/* right: bun free-floating + gold balls + cloud */}
+            <div style={{ flexShrink:0, position:'relative', paddingTop:8 }}>
+              <Cloud style={{ position:'absolute', top:-16, right:-8, width:44, opacity:.22 }} />
+
+              <BunOnPedestal src={img0 || logoSrc} size={124} pedestalW={78} />
+
+              {/* gold balls */}
+              <Dot size={15} style={{ position:'absolute', top:-10, right:6 }} />
+              <Dot size={9}  style={{ position:'absolute', top:'38%', right:-12 }} />
+              <Dot size={11} style={{ position:'absolute', bottom:8, left:-6 }} />
+              <Dot size={7}  style={{ position:'absolute', top:10, left:-2 }} />
             </div>
           </div>
         </div>
-
-        {/* ════ FOOTER ════ */}
-        <div style={{
-          borderTop:'1px solid rgba(200,149,26,.07)',
-          textAlign:'center', padding:'18px 20px',
-          fontSize:'.64rem', fontWeight:600,
-          color:'rgba(253,246,238,.14)', letterSpacing:'.07em',
-        }}>
-          {shopName} &nbsp;·&nbsp; {txt(shopInfo.address,'ວຽງຈັນ, ລາວ')}
-        </div>
-
       </div>
+
+      {/* ════ FOOTER ════ */}
+      <div style={{
+        borderTop:'1px solid #e8d5c0',
+        textAlign:'center', padding:'18px 20px',
+        background:'#fdf6ee',
+        fontSize:'.64rem', fontWeight:600,
+        color:'rgba(61,31,10,.3)', letterSpacing:'.07em',
+      }}>
+        {shopName} &nbsp;·&nbsp; {txt(shopInfo.address,'ວຽງຈັນ, ລາວ')}
+      </div>
+
     </div>
   )
 }
