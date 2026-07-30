@@ -16,7 +16,7 @@ const GOLD = 'radial-gradient(circle at 35% 30%, #F5DC8A 0%, #C8851A 48%, #7A4E0
 const FEATURES = [
   { n:'1', title:'ເຮັດໃໝ່ທຸກວັນ',  desc:'ສາລາເປົາອົບສົດໃໝ່ທຸກເຊົ້າ ບໍ່ມີ stock ຄ້າງ' },
   { n:'2', title:'ສ່ວນປະກອບດີ',    desc:'ໃຊ້ວັດຖຸດິບຄຸນນະພາບ ຄັດສັນມາຢ່າງດີ' },
-  { n:'3', title:'ສາລາເປົາສົດ',    desc:'ນຶ່ງໃໝ່ທຸກຮອບ ຮ້ອນໆ ນ້ຳໃສ ກ່ຽວ' },
+  { n:'3', title:'ສາລາເປົາສົດ',    desc:'ນຶ່ງໃໝ່ທຸກຮອບ ຮ້ອນໆ ນ້ຳໃສ' },
   { n:'4', title:'ສັ່ງລ່ວງໜ້າ',    desc:'ສັ່ງລ່ວງໜ້າ ຮັບຕາມເວລາທີ່ເລືອກ' },
 ]
 
@@ -57,8 +57,8 @@ export default async function PreorderV2Page() {
     .map((m, i) => ({ m, i }))
     .filter(({ i }) => stock.length === 0 || (stock[i] ?? 1) > 0)
 
-  const heroImgs = visibleMenus.slice(0, 3).map(({ i }) => images[i]).filter(Boolean)
-  const logoSrc  = txt(shopInfo.logo) || '/logo.jpg'
+  const heroImg = (visibleMenus[0] && images[visibleMenus[0].i]) || null
+  const logoSrc = txt(shopInfo.logo) || '/logo.jpg'
 
   return (
     <div style={{
@@ -70,16 +70,15 @@ export default async function PreorderV2Page() {
       position: 'relative',
     }}>
 
-      {/* ── page-wide bun watermark ── */}
+      {/* ── watermark — very subtle ── */}
       <div style={{
         position: 'absolute', inset: 0,
         backgroundImage: 'url(/bun-pattern.png)',
-        backgroundSize: 'cover',
+        backgroundSize: '120%',
         backgroundPosition: 'center top',
-        opacity: 0.045,
-        filter: 'sepia(1)',
-        pointerEvents: 'none',
-        zIndex: 0,
+        opacity: 0.028,
+        filter: 'sepia(1) brightness(0.6)',
+        pointerEvents: 'none', zIndex: 0,
       }} />
 
       <div style={{ position: 'relative', zIndex: 1 }}>
@@ -107,57 +106,46 @@ export default async function PreorderV2Page() {
             background: 'linear-gradient(135deg,#C8951A,#9A6E0E)',
             color: '#1A0C03', fontWeight: 900, fontSize: '.78rem',
             padding: '9px 18px', borderRadius: 99, textDecoration: 'none',
-            letterSpacing: '.04em',
-            boxShadow: '0 4px 14px rgba(200,149,26,.3)',
+            letterSpacing: '.04em', boxShadow: '0 4px 14px rgba(200,149,26,.3)',
             flexShrink: 0,
           }}>ສັ່ງດ່ວນ</a>
         </nav>
 
-        {/* ══ HERO — true 2-column flex, no absolute images ══ */}
+        {/* ══ HERO — flex row, content-height, single image ══ */}
         <section style={{
-          minHeight: '58vh',
           display: 'flex', alignItems: 'center',
-          padding: '40px 20px 40px',
-          gap: 0,
-          overflow: 'hidden',
-          position: 'relative',
+          gap: 16,
+          padding: '44px 20px 40px',
+          position: 'relative', overflow: 'hidden',
         }}>
 
-          {/* warm glow behind image column */}
+          {/* subtle glow behind the image side */}
           <div style={{
-            position: 'absolute', right: 0, top: 0, bottom: 0, width: '55%',
-            background: 'radial-gradient(ellipse 80% 70% at 70% 50%, rgba(44,22,8,.95) 0%, transparent 80%)',
+            position: 'absolute', right: 0, top: 0, bottom: 0, width: '50%',
+            background: 'radial-gradient(ellipse 100% 100% at 80% 50%, rgba(50,25,8,.8) 0%, transparent 70%)',
             pointerEvents: 'none',
           }} />
 
-          {/* Cloud — top-left */}
-          <svg viewBox="0 0 90 34" aria-hidden="true" style={{ position: 'absolute', top: 20, left: 14, width: 58, opacity: .18, pointerEvents: 'none' }}>
-            <path d="M12,26 Q10,16 20,17 Q17,7 28,10 Q30,3 42,7 Q52,3 54,10 Q64,7 62,17 Q72,16 70,26Z"
-              fill="none" stroke="#C8951A" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
-          </svg>
-          {/* Cloud — bottom-right area */}
-          <svg viewBox="0 0 60 22" aria-hidden="true" style={{ position: 'absolute', bottom: 32, right: '42%', width: 44, opacity: .12, pointerEvents: 'none' }}>
-            <path d="M8,17 Q6,10 13,11 Q11,4 19,6 Q20,1 28,4 Q35,1 37,6 Q44,4 42,11 Q48,10 46,17Z"
+          {/* Cloud deco — top-left */}
+          <svg viewBox="0 0 80 28" aria-hidden="true" style={{ position: 'absolute', top: 16, left: 16, width: 52, opacity: .16, pointerEvents: 'none' }}>
+            <path d="M10,22 Q8,13 17,14 Q15,6 24,8 Q26,2 35,5 Q44,2 46,8 Q54,6 52,14 Q60,13 58,22Z"
               fill="none" stroke="#C8951A" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
           </svg>
 
-          {/* ── Text column (55%) ── */}
-          <div style={{ flex: '0 0 55%', paddingRight: 8, zIndex: 1 }}>
-            <div style={{ fontSize: '.57rem', fontWeight: 800, color: '#C8951A', letterSpacing: '.2em', marginBottom: 12 }}>
+          {/* ── Text (flex: 1) ── */}
+          <div style={{ flex: 1, zIndex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: '.57rem', fontWeight: 800, color: '#C8951A', letterSpacing: '.2em', marginBottom: 10 }}>
               BASIC CHINESE BUN
             </div>
             <h1 style={{
-              margin: 0, fontSize: '2.05rem', fontWeight: 900,
+              margin: 0, fontSize: '2rem', fontWeight: 900,
               color: '#FAF0E0', lineHeight: 1.18, letterSpacing: '-.02em',
             }}>
               ສຳຜັດ<br/>
               <span style={{ color: '#E8BE70' }}>ຄວາມ</span><br/>
               ອຮ່ອຍ
             </h1>
-            <p style={{
-              margin: '10px 0 22px', fontSize: '.75rem',
-              color: 'rgba(250,240,224,.5)', lineHeight: 1.7,
-            }}>
+            <p style={{ margin: '10px 0 22px', fontSize: '.74rem', color: 'rgba(250,240,224,.5)', lineHeight: 1.7 }}>
               ສາລາເປົາ<br/>ສົດໃໝ່ທຸກວັນ
             </p>
             <a href="/preorder" style={{
@@ -171,75 +159,27 @@ export default async function PreorderV2Page() {
             </a>
           </div>
 
-          {/* ── Image column (45%) — pure flex, no absolute ── */}
-          <div style={{
-            flex: '0 0 45%',
-            display: 'flex', flexDirection: 'column',
-            alignItems: 'center', gap: 8,
-            position: 'relative', zIndex: 1,
-          }}>
-            {heroImgs.length > 0 ? (
-              <>
-                {/* Main large circle */}
-                <div style={{
-                  width: '88%', maxWidth: 132,
-                  aspectRatio: '1/1', borderRadius: '50%', overflow: 'hidden',
-                  border: '2.5px solid rgba(200,149,26,.5)',
-                  boxShadow: '0 18px 52px rgba(0,0,0,.7), 0 0 0 9px rgba(200,149,26,.05)',
-                  flexShrink: 0,
-                }}>
-                  <img src={heroImgs[0]} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                </div>
-                {/* Second circle — shifted right */}
-                {heroImgs[1] && (
-                  <div style={{
-                    width: '58%', maxWidth: 82,
-                    aspectRatio: '1/1', borderRadius: '50%', overflow: 'hidden',
-                    border: '2px solid rgba(200,149,26,.3)',
-                    boxShadow: '0 10px 28px rgba(0,0,0,.6)',
-                    alignSelf: 'flex-end', marginRight: '8%',
-                    marginTop: -16, flexShrink: 0,
-                  }}>
-                    <img src={heroImgs[1]} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                  </div>
-                )}
-                {/* Third circle — shifted left */}
-                {heroImgs[2] && (
-                  <div style={{
-                    width: '40%', maxWidth: 58,
-                    aspectRatio: '1/1', borderRadius: '50%', overflow: 'hidden',
-                    border: '1.5px solid rgba(200,149,26,.22)',
-                    boxShadow: '0 6px 16px rgba(0,0,0,.5)',
-                    alignSelf: 'flex-start', marginLeft: '10%',
-                    marginTop: -8, flexShrink: 0,
-                  }}>
-                    <img src={heroImgs[2]} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                  </div>
-                )}
-              </>
-            ) : (
-              <div style={{
-                width: '88%', maxWidth: 132,
-                aspectRatio: '1/1', borderRadius: '50%', overflow: 'hidden',
-                border: '2.5px solid rgba(200,149,26,.5)',
-                boxShadow: '0 18px 52px rgba(0,0,0,.7)',
-              }}>
-                <img src={logoSrc} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-              </div>
-            )}
-
-            {/* Gold balls — absolute within this column */}
-            <div style={{ position: 'absolute', top: 8, right: 6, width: 13, height: 13, borderRadius: '50%', background: GOLD, boxShadow: '0 3px 8px rgba(200,133,26,.4)' }} />
-            <div style={{ position: 'absolute', top: '38%', right: 0, width: 8, height: 8, borderRadius: '50%', background: GOLD }} />
-            <div style={{ position: 'absolute', bottom: 10, right: 14, width: 11, height: 11, borderRadius: '50%', background: GOLD, boxShadow: '0 3px 7px rgba(200,133,26,.3)' }} />
-            <div style={{ position: 'absolute', bottom: 22, left: 6, width: 7, height: 7, borderRadius: '50%', background: GOLD }} />
+          {/* ── Single hero image (fixed 144px) ── */}
+          <div style={{ flexShrink: 0, width: 144, position: 'relative', zIndex: 1 }}>
+            <div style={{
+              width: 144, height: 144, borderRadius: '50%', overflow: 'hidden',
+              border: '2.5px solid rgba(200,149,26,.5)',
+              boxShadow: '0 20px 50px rgba(0,0,0,.7), 0 0 0 10px rgba(200,149,26,.05)',
+            }}>
+              <img src={heroImg || logoSrc} alt="bun" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            </div>
+            {/* gold balls orbiting */}
+            <div style={{ position: 'absolute', top: -8,  right: -4,  width: 14, height: 14, borderRadius: '50%', background: GOLD, boxShadow: '0 3px 8px rgba(200,133,26,.4)' }} />
+            <div style={{ position: 'absolute', top: '40%', right: -10, width: 9, height: 9, borderRadius: '50%', background: GOLD }} />
+            <div style={{ position: 'absolute', bottom: -4, right: 10, width: 11, height: 11, borderRadius: '50%', background: GOLD, boxShadow: '0 3px 7px rgba(200,133,26,.3)' }} />
+            <div style={{ position: 'absolute', bottom: 12, left: -6, width: 7, height: 7, borderRadius: '50%', background: GOLD }} />
           </div>
         </section>
 
         {/* ── gold rule ── */}
         <div style={{ height: 1, background: 'linear-gradient(90deg,transparent,rgba(200,149,26,.15) 30%,rgba(200,149,26,.15) 70%,transparent)', margin: '0 20px' }} />
 
-        {/* ══ MENU CARDS — floating circle done properly ══ */}
+        {/* ══ MENU CARDS ══ */}
         <section style={{ padding: '28px 0 4px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', padding: '0 20px', marginBottom: 8 }}>
             <div>
@@ -254,7 +194,7 @@ export default async function PreorderV2Page() {
           {visibleMenus.length === 0 ? (
             <div style={{ textAlign: 'center', padding: '40px 0', color: 'rgba(250,240,224,.3)' }}>ສິນຄ້າໝົດຊົ່ວຄາວ</div>
           ) : (
-            /* paddingTop exposes floating circles; scroll container clips bottom only */
+            /* paddingTop:52 reveals floating circles above card top edge */
             <div style={{
               display: 'flex', gap: 12,
               overflowX: 'auto',
@@ -263,7 +203,7 @@ export default async function PreorderV2Page() {
               WebkitOverflowScrolling: 'touch',
             }}>
               {visibleMenus.map(({ m, i }) => (
-                /* paddingTop creates room for the circle floating above card body */
+                /* wrapper paddingTop = half circle height so circle floats above card */
                 <a key={i} href="/preorder" style={{
                   flexShrink: 0, scrollSnapAlign: 'start',
                   textDecoration: 'none',
@@ -272,13 +212,14 @@ export default async function PreorderV2Page() {
                   position: 'relative',
                   display: 'block',
                 }}>
-                  {/* Floating circle — sits in paddingTop space */}
+                  {/* floating circle */}
                   <div style={{
                     position: 'absolute', top: 0,
                     left: '50%', transform: 'translateX(-50%)',
-                    width: 88, height: 88, borderRadius: '50%', overflow: 'hidden',
-                    border: '2px solid rgba(200,149,26,.38)',
-                    boxShadow: '0 8px 24px rgba(0,0,0,.6)',
+                    width: 88, height: 88,
+                    borderRadius: '50%', overflow: 'hidden',
+                    border: '2px solid rgba(200,149,26,.4)',
+                    boxShadow: '0 8px 22px rgba(0,0,0,.55)',
                     background: CARD_BG[i % CARD_BG.length],
                     zIndex: 2,
                   }}>
@@ -287,7 +228,7 @@ export default async function PreorderV2Page() {
                     )}
                   </div>
 
-                  {/* Card body */}
+                  {/* card body */}
                   <div style={{
                     borderRadius: 20,
                     background: '#221206',
@@ -320,21 +261,17 @@ export default async function PreorderV2Page() {
           )}
         </section>
 
-        {/* ══ FEATURES — text on canvas, no boxes ══ */}
+        {/* ══ FEATURES ══ */}
         <section style={{ padding: '28px 20px 36px', position: 'relative' }}>
-          <div style={{ position: 'absolute', top: 28, right: 20, width: 10, height: 10, borderRadius: '50%', background: GOLD, opacity: .6 }} />
-
+          <div style={{ position: 'absolute', top: 24, right: 18, width: 10, height: 10, borderRadius: '50%', background: GOLD, opacity: .55 }} />
           <div style={{ textAlign: 'center', marginBottom: 28 }}>
             <div style={{ fontSize: '.6rem', fontWeight: 800, color: '#C8951A', letterSpacing: '.16em', marginBottom: 6 }}>WHY BCB</div>
             <div style={{ fontWeight: 900, fontSize: '1.2rem', color: '#FAF0E0' }}>ທຳໄມຕ້ອງ BCB</div>
           </div>
-
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px 28px' }}>
             {FEATURES.map(({ n, title, desc }) => (
               <div key={n}>
-                <div style={{ fontSize: '2.8rem', fontWeight: 900, lineHeight: 1, color: 'rgba(200,149,26,.12)', marginBottom: 6, fontVariantNumeric: 'tabular-nums' }}>
-                  {n}
-                </div>
+                <div style={{ fontSize: '2.8rem', fontWeight: 900, lineHeight: 1, color: 'rgba(200,149,26,.12)', marginBottom: 6, fontVariantNumeric: 'tabular-nums' }}>{n}</div>
                 <div style={{ fontWeight: 800, fontSize: '.84rem', color: '#E8BE70', marginBottom: 5 }}>{title}</div>
                 <div style={{ fontSize: '.71rem', color: 'rgba(250,240,224,.4)', lineHeight: 1.6 }}>{desc}</div>
               </div>
@@ -362,18 +299,17 @@ export default async function PreorderV2Page() {
                 ສັ່ງດ່ວນ →
               </a>
             </div>
-
             <div style={{ flexShrink: 0, position: 'relative' }}>
               <div style={{
                 width: 110, height: 110, borderRadius: '50%', overflow: 'hidden',
                 border: '2.5px solid rgba(200,149,26,.42)',
                 boxShadow: '0 12px 40px rgba(0,0,0,.65), 0 0 0 8px rgba(200,149,26,.05)',
               }}>
-                <img src={heroImgs[0] || logoSrc} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                <img src={heroImg || logoSrc} alt="bun" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
               </div>
-              <div style={{ position: 'absolute', top: -10, right: -5, width: 14, height: 14, borderRadius: '50%', background: GOLD, boxShadow: '0 4px 10px rgba(200,133,26,.4)' }} />
-              <div style={{ position: 'absolute', bottom: -5, left: -3, width: 10, height: 10, borderRadius: '50%', background: GOLD }} />
-              <div style={{ position: 'absolute', top: '50%', right: -14, width: 8, height: 8, borderRadius: '50%', background: GOLD }} />
+              <div style={{ position: 'absolute', top: -10, right: -5, width: 13, height: 13, borderRadius: '50%', background: GOLD, boxShadow: '0 4px 10px rgba(200,133,26,.4)' }} />
+              <div style={{ position: 'absolute', bottom: -5, left: -3,  width: 9,  height: 9,  borderRadius: '50%', background: GOLD }} />
+              <div style={{ position: 'absolute', top: '50%', right: -13, width: 7, height: 7, borderRadius: '50%', background: GOLD }} />
             </div>
           </div>
         </section>
