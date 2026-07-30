@@ -1,8 +1,14 @@
 import { supabase } from '../../lib/supabase'
 
-const PALETTE = [
-  '#7B3F00', '#1B4F2A', '#1A2D5A', '#4a1942',
-  '#2d4a1a', '#5c2d00', '#1a3d4a', '#3d1f4a',
+const CARD_GRADIENTS = [
+  'linear-gradient(150deg, #8B2500 0%, #3D0F00 100%)',
+  'linear-gradient(150deg, #0D4A1F 0%, #042410 100%)',
+  'linear-gradient(150deg, #1A1A6B 0%, #0A0A35 100%)',
+  'linear-gradient(150deg, #5B0B8C 0%, #2A0542 100%)',
+  'linear-gradient(150deg, #7A3200 0%, #380E00 100%)',
+  'linear-gradient(150deg, #004D5C 0%, #001F25 100%)',
+  'linear-gradient(150deg, #6B1A1A 0%, #300808 100%)',
+  'linear-gradient(150deg, #1A6B3A 0%, #0A3520 100%)',
 ]
 
 async function getShopData() {
@@ -45,123 +51,250 @@ export default async function PreorderV2Page() {
     .filter(({ i }) => stock.length === 0 || (stock[i] ?? 1) > 0)
 
   return (
-    <div style={{ minHeight: '100vh', background: '#FAF2E7', fontFamily: 'system-ui, sans-serif' }}>
+    <div style={{
+      minHeight: '100vh',
+      background: '#100A05',
+      fontFamily: 'system-ui, -apple-system, sans-serif',
+      overflowX: 'hidden',
+      color: '#FFFBF5',
+    }}>
 
-      {/* Hero */}
+      {/* ── Hero ── */}
       <div style={{
-        background: '#2E1C12',
-        padding: '48px 24px 52px',
-        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14,
+        minHeight: '56vh',
+        background: 'radial-gradient(ellipse 90% 70% at 50% 45%, #2C1608 0%, #1C0D04 55%, #100A05 100%)',
+        padding: '52px 24px 60px',
+        display: 'flex', flexDirection: 'column', alignItems: 'center',
+        justifyContent: 'center', gap: 18,
         textAlign: 'center',
+        position: 'relative',
       }}>
+
+        {/* dot grid texture */}
         <div style={{
-          width: 88, height: 88, borderRadius: '50%', overflow: 'hidden',
-          border: '3px solid rgba(253,246,238,.2)',
-          boxShadow: '0 8px 32px rgba(0,0,0,.4)',
-        }}>
-          <img src={txt(shopInfo.logo) || '/logo.jpg'} alt="logo" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+          position: 'absolute', inset: 0,
+          backgroundImage: 'radial-gradient(circle, rgba(255,200,80,.045) 1px, transparent 1px)',
+          backgroundSize: '26px 26px',
+          pointerEvents: 'none',
+        }} />
+
+        {/* logo */}
+        <div style={{ position: 'relative', width: 100, height: 100 }}>
+          <div style={{
+            position: 'absolute', inset: -10,
+            borderRadius: '50%',
+            background: 'radial-gradient(circle, rgba(255,180,50,.2) 0%, transparent 70%)',
+          }} />
+          <div style={{
+            width: 100, height: 100, borderRadius: '50%', overflow: 'hidden',
+            border: '2px solid rgba(255,200,80,.45)',
+            boxShadow: '0 0 0 7px rgba(255,170,40,.07), 0 0 50px rgba(255,140,40,.18)',
+          }}>
+            <img
+              src={txt(shopInfo.logo) || '/logo.jpg'}
+              alt="logo"
+              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+            />
+          </div>
         </div>
-        <div>
-          <div style={{ color: '#FAF2E7', fontWeight: 900, fontSize: '1.5rem', letterSpacing: '.01em' }}>
+
+        {/* name + tagline */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'center' }}>
+          <h1 style={{
+            margin: 0,
+            color: '#FFFBF5', fontWeight: 900, fontSize: '2.4rem',
+            letterSpacing: '-.03em', lineHeight: 1.05,
+          }}>
             {txt(shopInfo.name, 'Basic Chinese Bun')}
-          </div>
-          <div style={{ color: 'rgba(253,246,238,.5)', fontSize: '.88rem', marginTop: 6, fontWeight: 600 }}>
-            ສາລາເປົາ · ໝົມປັງໂຕ · ສົດໃໝ່ທຸກວັນ
-          </div>
+          </h1>
+          <p style={{
+            margin: 0,
+            color: 'rgba(255,208,80,.65)', fontSize: '.78rem',
+            fontWeight: 600, letterSpacing: '.08em',
+          }}>
+            ສາລາເປົາ &nbsp;·&nbsp; ໝົມປັງໂຕ &nbsp;·&nbsp; ສົດໃໝ່ທຸກວັນ
+          </p>
+        </div>
+
+        {/* open badge */}
+        <div style={{
+          display: 'inline-flex', alignItems: 'center', gap: 8,
+          background: 'rgba(255,140,40,.13)',
+          border: '1px solid rgba(255,140,40,.28)',
+          borderRadius: 99, padding: '7px 18px',
+        }}>
+          <div style={{
+            width: 7, height: 7, borderRadius: '50%',
+            background: '#4ADE80',
+            boxShadow: '0 0 0 3px rgba(74,222,128,.25)',
+          }} />
+          <span style={{
+            color: '#FFD060', fontSize: '.72rem',
+            fontWeight: 800, letterSpacing: '.08em',
+          }}>
+            ເປີດຮັບຄຳສັ່ງທຸກວັນ
+          </span>
         </div>
       </div>
 
-      {/* Wave */}
-      <svg viewBox="0 0 400 32" style={{ display: 'block', background: '#2E1C12', marginBottom: -1 }}>
-        <path d="M0,0 Q100,32 200,16 Q300,0 400,24 L400,32 L0,32Z" fill="#FAF2E7" />
-      </svg>
+      {/* ── thin gold rule ── */}
+      <div style={{
+        height: 1,
+        background: 'linear-gradient(90deg, transparent 0%, rgba(255,200,80,.12) 40%, rgba(255,200,80,.12) 60%, transparent 100%)',
+      }} />
 
-      {/* Cards */}
-      <div style={{ padding: '32px 20px 20px' }}>
-        <p style={{ fontWeight: 900, fontSize: '1.1rem', color: '#2E1C12', marginBottom: 6 }}>
-          ເລືອກໄດ້ຫຼາຍຮົດ 🥟
-        </p>
-        <p style={{ fontSize: '.82rem', color: '#9E7B6A', marginBottom: 28 }}>
-          ເລື່ອນເບິ່ງເມນູທັງໝົດ
-        </p>
+      {/* ── Menu section ── */}
+      <div style={{ padding: '28px 18px 16px' }}>
+
+        {/* header */}
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          marginBottom: 20,
+        }}>
+          <div>
+            <div style={{
+              fontSize: '.62rem', fontWeight: 800, color: '#FF8C28',
+              letterSpacing: '.16em', marginBottom: 5,
+            }}>
+              ເມນູ · MENU
+            </div>
+            <div style={{
+              fontWeight: 900, fontSize: '1.3rem', color: '#FFFBF5', lineHeight: 1,
+            }}>
+              ເລືອກສິ່ງທີ່ຊອບ 🥟
+            </div>
+          </div>
+          {visibleMenus.length > 0 && (
+            <div style={{
+              background: 'rgba(255,140,40,.1)',
+              border: '1px solid rgba(255,140,40,.2)',
+              borderRadius: 99, padding: '5px 13px',
+              fontSize: '.7rem', fontWeight: 800, color: '#FF8C28',
+            }}>
+              {visibleMenus.length} ລາຍການ
+            </div>
+          )}
+        </div>
 
         {visibleMenus.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '60px 0', color: '#9E7B6A', fontWeight: 700 }}>
+          <div style={{
+            textAlign: 'center', padding: '60px 0',
+            color: 'rgba(255,251,245,.3)', fontWeight: 700,
+          }}>
             ສິນຄ້າໝົດຊົ່ວຄາວ
           </div>
         ) : (
           <div style={{
-            display: 'flex',
-            gap: 16,
-            overflowX: 'auto',
-            paddingBottom: 16,
-            scrollSnapType: 'x mandatory',
-            WebkitOverflowScrolling: 'touch',
+            display: 'grid',
+            gridTemplateColumns: 'repeat(2, 1fr)',
+            gap: 12,
           }}>
             {visibleMenus.map(({ m, i }) => (
-              <div key={i} style={{ flexShrink: 0, scrollSnapAlign: 'start' }}>
+              <a
+                key={i}
+                href="/preorder"
+                style={{ textDecoration: 'none', display: 'block' }}
+              >
                 <div style={{
-                  width: 150, height: 200,
-                  borderRadius: 20,
-                  position: 'relative',
+                  borderRadius: 22,
                   overflow: 'hidden',
-                  boxShadow: '0 20px 50px rgba(46,28,18,.3), 0 6px 16px rgba(46,28,18,.15)',
-                  animation: `bcbFloat 3.2s ease-in-out ${(i * 0.45) % 2}s infinite`,
+                  position: 'relative',
+                  aspectRatio: '3 / 4',
+                  background: CARD_GRADIENTS[i % CARD_GRADIENTS.length],
+                  border: '1px solid rgba(255,200,80,.07)',
+                  boxShadow: '0 8px 36px rgba(0,0,0,.55)',
+                  animation: `bcbFloat 3.6s ease-in-out ${(i * 0.55) % 2.8}s infinite`,
                 }}>
-                  {images[i]
-                    ? <img src={images[i]} alt={m} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
-                    : <div style={{ position: 'absolute', inset: 0, background: PALETTE[i % PALETTE.length] }} />
-                  }
+
+                  {images[i] && (
+                    <img
+                      src={images[i]}
+                      alt={txt(m)}
+                      style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
+                    />
+                  )}
+
+                  {/* dark gradient overlay */}
                   <div style={{
                     position: 'absolute', inset: 0,
-                    background: 'linear-gradient(to top, rgba(0,0,0,.72) 40%, transparent 70%)',
+                    background: 'linear-gradient(to top, rgba(4,2,0,.96) 0%, rgba(4,2,0,.55) 45%, rgba(4,2,0,.08) 100%)',
                   }} />
-                  {!images[i] && (
+
+                  {/* shine */}
+                  <div style={{
+                    position: 'absolute', top: 0, left: 0, width: '50%', height: '36%',
+                    background: 'linear-gradient(135deg, rgba(255,255,255,.07) 0%, transparent 100%)',
+                    pointerEvents: 'none',
+                  }} />
+
+                  {/* text */}
+                  <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: '12px 13px 15px' }}>
                     <div style={{
-                      position: 'absolute', top: 28, left: '50%', transform: 'translateX(-50%)',
-                      fontSize: '3.6rem',
-                    }}>🥟</div>
-                  )}
-                  <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: '14px 14px 16px' }}>
-                    <div style={{ color: '#fff', fontWeight: 900, fontSize: '.88rem', lineHeight: 1.25, marginBottom: 3 }}>
+                      color: '#FFFBF5', fontWeight: 900, fontSize: '.86rem',
+                      lineHeight: 1.3, marginBottom: 9,
+                    }}>
                       {txt(m, '?')}
                     </div>
-                    <div style={{ color: '#FFD87A', fontWeight: 800, fontSize: '.78rem' }}>
-                      {Number(prices[i] ?? 0).toLocaleString()} ກີບ
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <div style={{
+                        background: 'rgba(255,208,96,.14)',
+                        border: '1px solid rgba(255,208,96,.28)',
+                        borderRadius: 99, padding: '3px 9px',
+                        color: '#FFD060', fontWeight: 900, fontSize: '.7rem',
+                      }}>
+                        {Number(prices[i] ?? 0).toLocaleString()} ກີບ
+                      </div>
+                      <div style={{
+                        width: 26, height: 26, borderRadius: '50%',
+                        background: 'rgba(255,140,40,.22)',
+                        border: '1px solid rgba(255,140,40,.35)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        color: '#FF8C28', fontSize: '.85rem', fontWeight: 900,
+                        flexShrink: 0,
+                      }}>
+                        +
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
+              </a>
             ))}
           </div>
         )}
       </div>
 
-      {/* CTA */}
-      <div style={{ padding: '12px 20px 48px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+      {/* ── CTA ── */}
+      <div style={{ padding: '28px 18px 60px', display: 'flex', flexDirection: 'column', gap: 14 }}>
         <a href="/preorder" style={{
-          display: 'block', background: '#00A859', color: '#fff',
-          fontWeight: 900, fontSize: '1rem', textAlign: 'center',
-          padding: '17px 0', borderRadius: 99, textDecoration: 'none',
-          boxShadow: '0 6px 24px rgba(0,168,89,.35)', letterSpacing: '.02em',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
+          background: 'linear-gradient(135deg, #FF8C28 0%, #E06010 100%)',
+          color: '#fff', fontWeight: 900, fontSize: '1.05rem',
+          padding: '18px 0', borderRadius: 99, textDecoration: 'none',
+          boxShadow: '0 12px 40px rgba(255,140,40,.32), 0 3px 10px rgba(255,100,0,.2)',
+          letterSpacing: '.04em',
         }}>
-          ສັ່ງດ່ວນ →
+          <span>ສັ່ງດ່ວນ</span>
+          <span style={{ fontSize: '1.15em' }}>→</span>
         </a>
         <a href="/preorder" style={{
-          display: 'block', color: '#9E7B6A', fontWeight: 700,
-          fontSize: '.82rem', textAlign: 'center', textDecoration: 'none',
+          display: 'block', color: 'rgba(255,251,245,.35)', fontWeight: 700,
+          fontSize: '.78rem', textAlign: 'center', textDecoration: 'none', padding: '2px 0',
         }}>
           ເບິ່ງລາຄາ · ຊ່ອງທາງຊຳລະ · ຕິດຕໍ່ຮ້ານ
         </a>
       </div>
 
-      {/* Footer */}
+      {/* ── Footer ── */}
       <div style={{
-        background: '#2E1C12', color: 'rgba(253,246,238,.4)',
-        textAlign: 'center', padding: '20px', fontSize: '.75rem', fontWeight: 600,
+        borderTop: '1px solid rgba(255,200,80,.07)',
+        textAlign: 'center', padding: '20px',
+        fontSize: '.7rem', fontWeight: 600,
+        color: 'rgba(255,251,245,.18)',
+        letterSpacing: '.04em',
       }}>
-        {txt(shopInfo.name, 'Basic Chinese Bun')} · {txt(shopInfo.address, 'ວຽງຈັນ, ລາວ')}
+        {txt(shopInfo.name, 'Basic Chinese Bun')} &nbsp;·&nbsp; {txt(shopInfo.address, 'ວຽງຈັນ, ລາວ')}
       </div>
+
     </div>
   )
 }
