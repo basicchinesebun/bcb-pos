@@ -113,8 +113,6 @@ export default function PreorderV2Page() {
           0%,100% { transform: translateY(0px) rotateY(-6deg) rotateX(3deg); }
           50%      { transform: translateY(-14px) rotateY(6deg) rotateX(-3deg); }
         }
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { background: #2E1C12; }
       `}</style>
 
       <div style={{ minHeight: '100dvh', background: '#FAF2E7', fontFamily: 'system-ui, sans-serif' }}>
