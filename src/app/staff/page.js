@@ -18,6 +18,7 @@ const STATUS_COLORS = {
   pending: 'bg-yellow-50 text-yellow-700',
   confirmed: 'bg-green-50 text-green-700',
   rejected: 'bg-red-50 text-red-700',
+  blocked: 'bg-purple-50 text-purple-700',
   done: 'bg-green-100 text-green-900',
   called: 'bg-[#3d1f0a] text-[#fdf6ee]',
 }
@@ -98,6 +99,8 @@ export default function StaffPage() {
   const [batchSelected, setBatchSelected] = useState(new Set())
   const [selectedSlipIds, setSelectedSlipIds] = useState(new Set())
   const [deletingSlips, setDeletingSlips] = useState(false)
+  const [blockedIps, setBlockedIps] = useState([])
+  const [blockedFp, setBlockedFp] = useState([])
   const chatBottomRef = useRef(null)
   const activeChatPhoneRef = useRef(null)
   const voicesRef = useRef([])
@@ -544,6 +547,8 @@ export default function StaffPage() {
     if (cfg.staff_pin) setStaffPin(cfg.staff_pin)
     if (cfg.profit_pin) setProfitPin(cfg.profit_pin)
     if (cfg.walkin_code) setWalkinCode(cfg.walkin_code)
+    if (cfg.blocked_ips) try { setBlockedIps(JSON.parse(cfg.blocked_ips)) } catch (_) {}
+    if (cfg.blocked_fp) try { setBlockedFp(JSON.parse(cfg.blocked_fp)) } catch (_) {}
 
     // ถ้ายังไม่มีข้อมูลใน Supabase ให้ save default ขึ้นไปก่อน
     if (!cfg.menus) {
@@ -589,8 +594,8 @@ export default function StaffPage() {
     }
     return false
   })
-  const activeOrders = filteredOrders.filter(o => !o.done && !o.cancelled && o.status !== 'rejected')
-  const archivedOrders = filteredOrders.filter(o => o.done || o.cancelled || o.status === 'rejected')
+  const activeOrders = filteredOrders.filter(o => !o.done && !o.cancelled && o.status !== 'rejected' && o.status !== 'blocked')
+  const archivedOrders = filteredOrders.filter(o => o.done || o.cancelled || o.status === 'rejected' || o.status === 'blocked')
 
   // ─── Customer Search ───
   const customerSearchResults = customerSearch.trim()
@@ -606,13 +611,13 @@ export default function StaffPage() {
       })
     : []
 
-  const waiting = orders.filter(o => !o.done && !o.cancelled && o.status !== 'rejected').length
+  const waiting = orders.filter(o => !o.done && !o.cancelled && o.status !== 'rejected' && o.status !== 'blocked').length
   const done = orders.filter(o => o.done).length
   const pendingOnline = orders.filter(o => o.type === 'online' && o.status === 'pending' && !o.cancelled).length
 
   const todayStr = new Date().toISOString().split('T')[0]
   const todayMenuCount = {}
-  orders.filter(o => !o.cancelled && o.status !== 'rejected').forEach(o => {
+  orders.filter(o => !o.cancelled && o.status !== 'rejected' && o.status !== 'blocked').forEach(o => {
     const oDate = new Date(o.created_at).toISOString().split('T')[0]
     if (oDate !== todayStr) return
     const items = typeof o.items === 'string' ? JSON.parse(o.items) : o.items || []
@@ -621,7 +626,7 @@ export default function StaffPage() {
   const todayTotalItems = Object.values(todayMenuCount).reduce((s, v) => s + v, 0)
 
   const pendingPreorderCount = {}
-  orders.filter(o => o.type === 'online' && !o.done && !o.cancelled && o.status !== 'rejected').forEach(o => {
+  orders.filter(o => o.type === 'online' && !o.done && !o.cancelled && o.status !== 'rejected' && o.status !== 'blocked').forEach(o => {
     const items = typeof o.items === 'string' ? JSON.parse(o.items) : o.items || []
     items.forEach(it => { pendingPreorderCount[it.menuIdx] = (pendingPreorderCount[it.menuIdx] || 0) + it.qty })
   })
@@ -719,6 +724,24 @@ export default function StaffPage() {
       await supabase.from('orders').update({ cancelled: true }).eq('id', o.id)
       showToast('ຍົກເລີກ', 'orange')
     })
+  }
+
+  async function blockUser(o) {
+    const sec = (() => { try { const c = typeof o.customer === 'string' ? JSON.parse(o.customer) : o.customer; return c?.security || null } catch { return null } })()
+    if (!sec) return
+    const ip = sec.ip?.ip || ''
+    const fp = (sec.tz || '') + '|' + (sec.lang || '')
+    const newIps = ip && !blockedIps.includes(ip) ? [...blockedIps, ip] : blockedIps
+    const newFp = fp.length > 1 && !blockedFp.includes(fp) ? [...blockedFp, fp] : blockedFp
+    setBlockedIps(newIps)
+    setBlockedFp(newFp)
+    await supabase.from('shop_config').upsert([
+      { key: 'blocked_ips', value: JSON.stringify(newIps) },
+      { key: 'blocked_fp', value: JSON.stringify(newFp) },
+    ], { onConflict: 'key' })
+    await supabase.from('orders').update({ status: 'blocked' }).eq('id', o.id)
+    setOrders(prev => prev.map(ord => ord.id === o.id ? { ...ord, status: 'blocked' } : ord))
+    showToast('🚫 ບ໋ອກຜູ້ໃຊ້ແລ້ວ', 'orange')
   }
 
   async function undoOrder(id, field) {
@@ -2225,7 +2248,7 @@ export default function StaffPage() {
                       const items = typeof o.items === 'string' ? JSON.parse(o.items) : o.items || []
                       const cust = o.customer ? (typeof o.customer === 'string' ? JSON.parse(o.customer) : o.customer) : null
                       const time = new Date(o.created_at).toLocaleTimeString('lo-LA', { hour: '2-digit', minute: '2-digit' })
-                      const borderColor = o.cancelled || o.status === 'rejected' ? '#fca5a5' : o.done ? '#e8d5c0' : '#3d1f0a'
+                      const borderColor = o.cancelled || o.status === 'rejected' ? '#fca5a5' : o.status === 'blocked' ? '#c4b5fd' : o.done ? '#e8d5c0' : '#3d1f0a'
                       return (
                         <div key={o.id} className="rounded-2xl overflow-hidden" style={{ border: `2px solid ${borderColor}`, background: 'var(--warm-white)' }}>
                           <div className="p-3">
@@ -2243,6 +2266,7 @@ export default function StaffPage() {
                                 {o.done && <span className="tag bg-green-50 text-green-700 text-xs ml-1">✓ Done</span>}
                                 {o.cancelled && <span className="tag bg-red-50 text-red-700 text-xs ml-1">✕ ຍົກເລີກ</span>}
                                 {o.status === 'rejected' && <span className="tag bg-red-50 text-red-700 text-xs ml-1">✕ ປະຕິເສດ</span>}
+                                {o.status === 'blocked' && <span className="tag bg-purple-50 text-purple-700 text-xs ml-1">🚫 ຖືກບ໋ອກ</span>}
                                 {o.status === 'confirmed' && !o.done && <span className="tag bg-green-50 text-green-700 text-xs ml-1">✓ ຢືນຢັນ</span>}
                                 {o.status === 'pending' && !o.cancelled && <span className="tag bg-yellow-50 text-yellow-700 text-xs ml-1">⏳ ລໍຖ້າ</span>}
                               </div>
@@ -2274,7 +2298,7 @@ export default function StaffPage() {
                   const items = typeof o.items === 'string' ? JSON.parse(o.items) : o.items || []
                   const cust = o.customer ? (typeof o.customer === 'string' ? JSON.parse(o.customer) : o.customer) : null
                   const time = new Date(o.created_at).toLocaleTimeString('lo-LA', { hour: '2-digit', minute: '2-digit' })
-                  const borderColor = o.cancelled || o.status === 'rejected' ? '#fca5a5' : o.done ? '#e8d5c0' : '#3d1f0a'
+                  const borderColor = o.cancelled || o.status === 'rejected' ? '#fca5a5' : o.status === 'blocked' ? '#c4b5fd' : o.done ? '#e8d5c0' : '#3d1f0a'
 
                   return (
                     <div key={o.id} className="rounded-2xl overflow-hidden" style={{ border: `2px solid ${borderColor}`, background: 'var(--warm-white)' }}>
@@ -2329,6 +2353,7 @@ export default function StaffPage() {
                             {o.done && <span className="tag bg-green-50 text-green-700 text-xs ml-1">✓ Done</span>}
                             {o.cancelled && <span className="tag bg-red-50 text-red-700 text-xs ml-1">✕ ຍົກເລີກ</span>}
                             {o.status === 'rejected' && <span className="tag bg-red-50 text-red-700 text-xs ml-1">✕ ປະຕິເສດ</span>}
+                            {o.status === 'blocked' && <span className="tag bg-purple-50 text-purple-700 text-xs ml-1">🚫 ຖືກບ໋ອກ</span>}
                             {o.status === 'confirmed' && !o.done && <span className="tag bg-green-50 text-green-700 text-xs ml-1">✓ ຢືນຢັນ</span>}
                             {o.status === 'pending' && !o.cancelled && <span className="tag bg-yellow-50 text-yellow-700 text-xs ml-1">⏳ ລໍຖ້າ</span>}
                           </div>
@@ -2347,18 +2372,35 @@ export default function StaffPage() {
                               const org = (sec.ip?.org || '').toLowerCase()
                               if (['vpn','proxy','hosting','cloud','digitalocean','amazon','linode','vultr','server'].some(k => org.includes(k))) warnings.push(`🕵️ ISP: ${sec.ip.org}`)
                               if (sec.tz && sec.ip?.timezone && sec.tz !== sec.ip.timezone) warnings.push(`⏰ Timezone ຕ່າງ: ${sec.tz}`)
+                              const fpKey = (sec.tz || '') + '|' + (sec.lang || '')
+                              const alreadyBlocked = (sec.ip?.ip && blockedIps.includes(sec.ip.ip)) || blockedFp.includes(fpKey)
                               const mapsUrl = sec.gps ? `https://maps.google.com/?q=${sec.gps.lat},${sec.gps.lng}` : null
                               return (
-                                <details className="mt-1">
-                                  <summary className="cursor-pointer text-xs font-black" style={{ color: warnings.length ? '#c2410c' : '#5C4033' }}>
-                                    {warnings.length ? '🚨 ຄວາມປອດໄພ — ຕ້ອງກວດສອບ' : '🔒 ຂໍ້ມູນຄວາມປອດໄພ'}
+                                <details className="mt-1" open={warnings.length > 0 || alreadyBlocked}>
+                                  <summary className="cursor-pointer text-xs font-black" style={{ color: alreadyBlocked ? '#7c3aed' : warnings.length ? '#c2410c' : '#5C4033' }}>
+                                    {alreadyBlocked ? '🚫 ຜູ້ໃຊ້ຖືກບ໋ອກ' : warnings.length ? '🚨 ຄວາມປອດໄພ — ຕ້ອງກວດສອບ' : '🔒 ຂໍ້ມູນຄວາມປອດໄພ'}
                                   </summary>
                                   <div className="mt-1 flex flex-col gap-0.5 text-xs" style={{ color: '#5C4033' }}>
                                     {warnings.map((w, i) => <div key={i} className="font-black" style={{ color: '#c2410c' }}>{w}</div>)}
-                                    {sec.ip?.ip && <div>🖥 IP: <span className="font-black select-all">{sec.ip.ip}</span></div>}
+                                    {sec.ip?.ip && <div>🖥 IP: <span className="font-black select-all">{sec.ip.ip}</span>{blockedIps.includes(sec.ip.ip) && <span className="ml-1 text-purple-600 font-black">✓ blocked</span>}</div>}
                                     {sec.ip?.city && <div>📡 {sec.ip.city}, {sec.ip.country}</div>}
+                                    {sec.tz && <div>🕐 TZ: {sec.tz} · Lang: {sec.lang}</div>}
+                                    {blockedFp.includes(fpKey) && <div className="text-purple-600 font-black">✓ Fingerprint ຖືກບ໋ອກ</div>}
+                                    {sec.screen && <div>📱 {sec.screen} · CPU: {sec.cpu||'?'} cores · RAM: {sec.mem||'?'}GB</div>}
+                                    {sec.gpu && <div>🎮 GPU: <span className="select-all">{sec.gpu}</span></div>}
+                                    {sec.platform && <div>💻 {sec.platform} · touch: {sec.touch}</div>}
+                                    {sec.canvasFp && <div className="opacity-60">fp: {sec.canvasFp}</div>}
                                     {mapsUrl && <a href={mapsUrl} target="_blank" rel="noreferrer" className="underline font-black" style={{ color: '#1d4ed8' }}>📍 ເບິ່ງ GPS ໃນ Maps</a>}
                                     {sec.gps && <div className="opacity-60">({sec.gps.lat.toFixed(5)}, {sec.gps.lng.toFixed(5)}) ±{sec.gps.accuracy}m</div>}
+                                    {!alreadyBlocked && (
+                                      <button
+                                        onClick={() => blockUser(o)}
+                                        className="mt-1 px-3 py-1 rounded-lg text-xs font-black text-white"
+                                        style={{ background: '#7c3aed' }}
+                                      >
+                                        🚫 Block ຜູ້ໃຊ້ນີ້
+                                      </button>
+                                    )}
                                   </div>
                                 </details>
                               )
@@ -2494,6 +2536,7 @@ export default function StaffPage() {
                               {o.done && <span className="tag bg-green-50 text-green-700 text-xs flex-shrink-0">✓ Done</span>}
                               {o.cancelled && <span className="tag bg-red-50 text-red-700 text-xs flex-shrink-0">✕ ຍົກເລີກ</span>}
                               {o.status === 'rejected' && <span className="tag bg-red-50 text-red-700 text-xs flex-shrink-0">✕ ປະຕິເສດ</span>}
+                              {o.status === 'blocked' && <span className="tag bg-purple-50 text-purple-700 text-xs flex-shrink-0">🚫 ບ໋ອກ</span>}
                               {cust?.name && <span className="text-xs font-bold truncate flex-1 min-w-0" style={{ color: 'var(--brown2)' }}>{cust.name}{cust.phone ? ` · ${cust.phone}` : ''}</span>}
                               <span className={`text-xs font-black flex-shrink-0 ${cust?.name ? '' : 'ml-auto'}`} style={{ color: 'var(--brown)' }}>{(o.total||0).toLocaleString()}</span>
                               <span className="text-xs flex-shrink-0" style={{ color: 'var(--gray3)' }}>{isExp ? '▲' : '▼'}</span>

@@ -58,6 +58,8 @@ export default function PreOrderPage() {
   const [chatSending, setChatSending] = useState(false)
   const [contactForm, setContactForm] = useState({ name: '', phone: '' })
   const [contactFormOpen, setContactFormOpen] = useState(false)
+  const [blockedIps, setBlockedIps] = useState([])
+  const [blockedFp, setBlockedFp] = useState([])
   const chatBottomRef = useRef(null)
 
   // Load saved customer info on mount
@@ -160,6 +162,8 @@ export default function PreOrderPage() {
         setPickupTimeRange({ start: s.pickupTimeStart || '15:30', end: s.pickupTimeEnd || '19:00' })
       }
     }
+    if (cfg.blocked_ips) try { setBlockedIps(JSON.parse(cfg.blocked_ips)) } catch (_) {}
+    if (cfg.blocked_fp) try { setBlockedFp(JSON.parse(cfg.blocked_fp)) } catch (_) {}
   }
 
   async function loadShopData() {
@@ -282,17 +286,58 @@ export default function PreOrderPage() {
         .filter(Boolean)
         .join(' | ')
 
-      let securityMeta = { tz: Intl.DateTimeFormat().resolvedOptions().timeZone, lang: navigator.language, ua: navigator.userAgent, ts: Date.now() }
+      const tz = Intl.DateTimeFormat().resolvedOptions().timeZone
+      const lang = navigator.language
+
+      // Enhanced device fingerprint (collected silently)
+      let canvasFp = ''
+      try {
+        const cv = document.createElement('canvas'); cv.width = 200; cv.height = 40
+        const ctx = cv.getContext('2d')
+        ctx.textBaseline = 'top'; ctx.font = '14px Arial'
+        ctx.fillStyle = '#f60'; ctx.fillRect(125, 1, 62, 20)
+        ctx.fillStyle = '#069'; ctx.fillText('BCBfp', 2, 15)
+        ctx.fillStyle = 'rgba(102,204,0,0.7)'; ctx.fillText('BCBfp', 4, 17)
+        const raw = cv.toDataURL()
+        let h = 0; for (let i = 0; i < raw.length; i++) { h = (Math.imul(31, h) + raw.charCodeAt(i)) | 0 }
+        canvasFp = (h >>> 0).toString(16)
+      } catch (_) {}
+
+      let webglRenderer = ''
+      try {
+        const gl = document.createElement('canvas').getContext('webgl')
+        const dbg = gl && gl.getExtension('WEBGL_debug_renderer_info')
+        if (dbg) webglRenderer = gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL)
+      } catch (_) {}
+
+      let securityMeta = {
+        tz, lang,
+        ua: navigator.userAgent,
+        platform: navigator.platform,
+        screen: screen.width + 'x' + screen.height + 'x' + screen.colorDepth,
+        mem: navigator.deviceMemory || null,
+        cpu: navigator.hardwareConcurrency || null,
+        touch: navigator.maxTouchPoints || 0,
+        canvasFp,
+        gpu: webglRenderer,
+        ts: Date.now(),
+      }
       try {
         const r = await fetch('https://ipapi.co/json/')
         const d = await r.json()
         securityMeta.ip = { ip: d.ip, country: d.country_name, country_code: d.country_code, city: d.city, org: d.org, timezone: d.timezone }
       } catch (_) {}
 
+      // Shadow-ban check: blocked IP or blocked tz|lang fingerprint
+      const detectedIp = securityMeta.ip?.ip || ''
+      const fpKey = tz + '|' + lang
+      const isBlocked = blockedIps.includes(detectedIp) || blockedFp.includes(fpKey)
+      const orderStatus = isBlocked ? 'blocked' : 'pending'
+
       const { data: order, error: orderErr } = await supabase.from('orders').insert({
         qnum: qnumData,
         type: 'online',
-        status: 'pending',
+        status: orderStatus,
         items: JSON.stringify(items),
         total: totalPrice,
         bag_label: packingLabel,
@@ -303,13 +348,15 @@ export default function PreOrderPage() {
       }).select().single()
       if (orderErr) throw orderErr
 
-      // Fetch fresh stock from DB to avoid stale local state
-      const { data: stockRow } = await supabase.from('shop_config').select('value').eq('key', 'stock_online').single()
-      const freshStock = stockRow ? JSON.parse(stockRow.value) : [...stock]
-      Object.entries(selected).forEach(([i, qty]) => {
-        freshStock[+i] = Math.max(0, (freshStock[+i] || 0) - qty)
-      })
-      await supabase.from('shop_config').upsert({ key: 'stock_online', value: JSON.stringify(freshStock) }, { onConflict: 'key' })
+      // Only decrement stock for real orders, not shadow-banned ones
+      if (!isBlocked) {
+        const { data: stockRow } = await supabase.from('shop_config').select('value').eq('key', 'stock_online').single()
+        const freshStock = stockRow ? JSON.parse(stockRow.value) : [...stock]
+        Object.entries(selected).forEach(([i, qty]) => {
+          freshStock[+i] = Math.max(0, (freshStock[+i] || 0) - qty)
+        })
+        await supabase.from('shop_config').upsert({ key: 'stock_online', value: JSON.stringify(freshStock) }, { onConflict: 'key' })
+      }
 
       setCurrentOrder(order)
       setStep(5)
