@@ -20,18 +20,30 @@ function txt(v, f = '') {
   return f
 }
 
-function useReveal(threshold = 0.12) {
+function useReveal(threshold = 0.12, immediate = false) {
   const ref = useRef(null)
   const [visible, setVisible] = useState(false)
   useEffect(() => {
+    // Hero (immediate=true): trigger after 2 paint frames so CSS transition fires
+    if (immediate) {
+      let raf1 = requestAnimationFrame(() => {
+        let raf2 = requestAnimationFrame(() => setVisible(true))
+        return () => cancelAnimationFrame(raf2)
+      })
+      return () => cancelAnimationFrame(raf1)
+    }
     const el = ref.current
     if (!el) return
     const obs = new IntersectionObserver(([e]) => {
-      if (e.isIntersecting) { setVisible(true); obs.disconnect() }
+      if (e.isIntersecting) {
+        // RAF ensures browser painted the hidden state before we reveal
+        requestAnimationFrame(() => requestAnimationFrame(() => setVisible(true)))
+        obs.disconnect()
+      }
     }, { threshold })
     obs.observe(el)
     return () => obs.disconnect()
-  }, [threshold])
+  }, [threshold, immediate])
   return [ref, visible]
 }
 
@@ -105,7 +117,7 @@ export default function PreorderV2Page() {
   const [shopInfo, setShopInfo] = useState({})
   const [stock, setStock]       = useState([])
 
-  const [heroRef,  heroVis]  = useReveal(0.05)
+  const [heroRef,  heroVis]  = useReveal(0.05, true)
   const [menuRef,  menuVis]  = useReveal(0.08)
   const [featRef,  featVis]  = useReveal(0.08)
   const [ctaRef,   ctaVis]   = useReveal(0.12)
