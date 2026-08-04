@@ -50,7 +50,6 @@ export default function PreOrderPage() {
   const [shopInfo, setShopInfo] = useState({ name: 'Basic Chinese Bun' })
   const [branches, setBranches] = useState([])
   const [loading, setLoading] = useState(true)
-  const [ipBlocked, setIpBlocked] = useState(false)
   const [chatOpen, setChatOpen] = useState(false)
   const [chatVH, setChatVH] = useState(null)
   const [chatCustomer, setChatCustomer] = useState(null) // { name, phone, qnum }
@@ -62,14 +61,6 @@ export default function PreOrderPage() {
   const [blockedIps, setBlockedIps] = useState([])
   const [blockedFp, setBlockedFp] = useState([])
   const chatBottomRef = useRef(null)
-
-  // Block Qatar IPs before page loads
-  useEffect(() => {
-    fetch('https://ipapi.co/json/')
-      .then(r => r.json())
-      .then(d => { if (d.country_code === 'QA') setIpBlocked(true) })
-      .catch(() => {})
-  }, [])
 
   // Load saved customer info on mount
   useEffect(() => {
