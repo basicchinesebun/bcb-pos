@@ -2372,9 +2372,7 @@ export default function StaffPage() {
                               const org = (sec.ip?.org || '').toLowerCase()
                               if (['vpn','proxy','hosting','cloud','digitalocean','amazon','linode','vultr','server'].some(k => org.includes(k))) warnings.push(`🕵️ ISP: ${sec.ip.org}`)
                               if (sec.tz && sec.ip?.timezone && sec.tz !== sec.ip.timezone) warnings.push(`⏰ Timezone ຕ່າງ: ${sec.tz}`)
-                              const fpKey = (sec.tz || '') + '|' + (sec.lang || '')
-                              const foreignIp = sec.ip?.country_code === 'QA'
-                              const alreadyBlocked = (sec.ip?.ip && blockedIps.includes(sec.ip.ip)) || blockedFp.includes(fpKey) || foreignIp
+                              const alreadyBlocked = sec.ip?.country_code === 'QA'
                               const mapsUrl = sec.gps ? `https://maps.google.com/?q=${sec.gps.lat},${sec.gps.lng}` : null
                               return (
                                 <details className="mt-1" open={warnings.length > 0 || alreadyBlocked}>
@@ -2383,10 +2381,9 @@ export default function StaffPage() {
                                   </summary>
                                   <div className="mt-1 flex flex-col gap-0.5 text-xs" style={{ color: '#5C4033' }}>
                                     {warnings.map((w, i) => <div key={i} className="font-black" style={{ color: '#c2410c' }}>{w}</div>)}
-                                    {sec.ip?.ip && <div>🖥 IP: <span className="font-black select-all">{sec.ip.ip}</span>{blockedIps.includes(sec.ip.ip) && <span className="ml-1 text-purple-600 font-black">✓ blocked</span>}</div>}
-                                    {sec.ip?.city && <div>📡 {sec.ip.city}, {sec.ip.country}</div>}
+                                    {sec.ip?.ip && <div>🖥 IP: <span className="font-black select-all">{sec.ip.ip}</span></div>}
+                                    {sec.ip?.city && <div>📡 {sec.ip.city}, {sec.ip.country}{sec.ip.country_code === 'QA' && <span className="ml-1 text-purple-600 font-black">🚫 Qatar</span>}</div>}
                                     {sec.tz && <div>🕐 TZ: {sec.tz} · Lang: {sec.lang}</div>}
-                                    {blockedFp.includes(fpKey) && <div className="text-purple-600 font-black">✓ Fingerprint ຖືກບ໋ອກ</div>}
                                     {sec.screen && <div>📱 {sec.screen} · CPU: {sec.cpu||'?'} cores · RAM: {sec.mem||'?'}GB</div>}
                                     {sec.gpu && <div>🎮 GPU: <span className="select-all">{sec.gpu}</span></div>}
                                     {sec.platform && <div>💻 {sec.platform} · touch: {sec.touch}</div>}
