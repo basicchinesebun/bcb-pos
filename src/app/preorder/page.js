@@ -5,6 +5,49 @@ import { supabase } from '../../lib/supabase'
 import ContactSection from '../../components/ContactSection'
 import ClosedOverlay from '../../components/ClosedOverlay'
 
+// Animated queue number count-up
+function AnimatedQnum({ qnum }) {
+  const [n, setN] = useState(0)
+  useEffect(() => {
+    const target = +qnum || 0
+    if (!target) return
+    const dur = 900
+    const t0 = performance.now()
+    function tick(now) {
+      const p = Math.min(1, (now - t0) / dur)
+      const e = 1 - Math.pow(1 - p, 3)
+      setN(Math.round(e * target))
+      if (p < 1) requestAnimationFrame(tick)
+    }
+    requestAnimationFrame(tick)
+  }, [qnum])
+  return String(n).padStart(4, '0')
+}
+
+// Confetti pieces — deterministic positions so no hydration mismatch
+const CONFETTI_PIECES = Array.from({ length: 36 }, (_, i) => ({
+  left: (i * 2.78) % 100,
+  delay: (i * 0.052) % 1.8,
+  color: ['#C8951A','#3d1f0a','#f59e0b','#16a34a','#fdf6ee','#d97706','#dc2626','#7c3aed'][i % 8],
+  size: 6 + (i % 4) * 2,
+  round: i % 3 === 0,
+}))
+
+function Confetti() {
+  return (
+    <div style={{ position:'fixed', inset:0, pointerEvents:'none', zIndex:999, overflow:'hidden' }}>
+      {CONFETTI_PIECES.map((p, i) => (
+        <div key={i} style={{
+          position:'absolute', top:-24, left:p.left+'%',
+          width:p.size, height:p.size, background:p.color,
+          borderRadius: p.round ? '50%' : 2,
+          animation:`po-confettiFall 1.9s ${p.delay}s ease-in forwards`,
+        }} />
+      ))}
+    </div>
+  )
+}
+
 const EMOJIS = ['🥟','🍫','🍵','🧁','🍞','🥐','🍮']
 
 const QUICK_BAGS = [
@@ -60,6 +103,7 @@ export default function PreOrderPage() {
   const [contactFormOpen, setContactFormOpen] = useState(false)
   const [blockedIps, setBlockedIps] = useState([])
   const [blockedFp, setBlockedFp] = useState([])
+  const [poppedCard, setPoppedCard] = useState(null)
   const chatBottomRef = useRef(null)
 
   // Load saved customer info on mount
@@ -423,6 +467,27 @@ export default function PreOrderPage() {
       className={`flex flex-col${step !== 4 ? ' overflow-hidden h-dvh' : ' min-h-dvh'}`}
       style={{ background: 'var(--cream)' }}
     >
+      <style>{`
+        @keyframes po-slideIn  { from{opacity:0;transform:translateX(22px)} to{opacity:1;transform:none} }
+        @keyframes po-slideBack{ from{opacity:0;transform:translateX(-22px)} to{opacity:1;transform:none} }
+        @keyframes po-cardPop  { 0%,100%{transform:scale(1)} 40%{transform:scale(1.1)} }
+        @keyframes po-queueIn  { 0%{transform:translateY(32px) scale(.75);opacity:0} 65%{transform:translateY(-5px) scale(1.05);opacity:1} 100%{transform:none;opacity:1} }
+        @keyframes po-statusIn { 0%{transform:scale(.85) translateY(20px);opacity:0} 70%{transform:scale(1.03);opacity:1} 100%{transform:none;opacity:1} }
+        @keyframes po-confettiFall { 0%{transform:translateY(-10px) rotate(0deg);opacity:1} 100%{transform:translateY(100vh) rotate(720deg);opacity:0} }
+        @keyframes po-badgePop { 0%{transform:scale(.7);opacity:0} 60%{transform:scale(1.15);opacity:1} 100%{transform:scale(1);opacity:1} }
+        @keyframes po-btnShine {
+          0%   { background-position:200% center; }
+          100% { background-position:-200% center; }
+        }
+        .po-slide   { animation:po-slideIn .26s ease; }
+        .po-card-pop{ animation:po-cardPop .32s ease; }
+        .po-btn-shine {
+          background: linear-gradient(90deg,#3d1f0a 30%,#6b3520 50%,#3d1f0a 70%);
+          background-size:200% auto;
+          animation:po-btnShine 2.2s linear infinite;
+        }
+      `}</style>
+
       {/* ── Notice Modal ── */}
       {showNotice && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
@@ -496,7 +561,7 @@ export default function PreOrderPage() {
       {/* ─── STEP 0: Customer Info ─── */}
       {step === 0 && (
         <>
-          <div className="flex-1 overflow-y-auto p-4" style={{ position: 'relative' }}>
+          <div className="flex-1 overflow-y-auto p-4 po-slide" style={{ position: 'relative' }}>
             <img src="/bun-pattern.png" aria-hidden="true" alt=""
               style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', opacity: 0.11, pointerEvents: 'none', zIndex: 0 }} />
             <div className="max-w-lg mx-auto flex flex-col gap-4" style={{ position: 'relative', zIndex: 1 }}>
@@ -554,7 +619,7 @@ export default function PreOrderPage() {
       {/* ─── STEP 1: Menu ─── */}
       {step === 1 && (
         <>
-          <div className="flex-1 overflow-y-auto p-2 sm:p-3">
+          <div className="flex-1 overflow-y-auto p-2 sm:p-3 po-slide">
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
               {menus.map((_, i) => i).sort((a, b) => ((stock[a]||0) === 0 ? 1 : 0) - ((stock[b]||0) === 0 ? 1 : 0)).map((i, pos) => {
                 const m = menus[i]
@@ -572,8 +637,14 @@ export default function PreOrderPage() {
                 if (isLastLoneMobile || isLastLoneMd) loneClass += ' lg:col-start-auto'
                 return (
                   <div key={i}
-                    onClick={() => { if (!isOut && !selected[i]) setSelected(p => ({ ...p, [i]: 1 })) }}
-                    className={`rounded-xl overflow-hidden cursor-pointer border-2 transition-all relative ${isOut ? 'opacity-50 cursor-not-allowed border-[#e8d5c0]' : isSel ? 'border-[#3d1f0a] shadow-[0_0_0_2px_#3d1f0a]' : 'border-[#e8d5c0]'}${loneClass}`}
+                    onClick={() => {
+                      if (!isOut && !selected[i]) {
+                        setSelected(p => ({ ...p, [i]: 1 }))
+                        setPoppedCard(i)
+                        setTimeout(() => setPoppedCard(c => c === i ? null : c), 380)
+                      }
+                    }}
+                    className={`rounded-xl overflow-hidden cursor-pointer border-2 transition-all relative ${isOut ? 'opacity-50 cursor-not-allowed border-[#e8d5c0]' : isSel ? 'border-[#3d1f0a] shadow-[0_0_0_2px_#3d1f0a]' : 'border-[#e8d5c0]'}${loneClass}${poppedCard === i ? ' po-card-pop' : ''}`}
                     style={{ background: 'var(--warm-white)' }}>
                     <div className="aspect-square relative overflow-hidden" style={{ background: 'var(--cream2)' }}>
                       {img ? <img src={img} alt={m.lo} className="w-full h-full object-cover" loading="lazy" /> :
@@ -636,7 +707,7 @@ export default function PreOrderPage() {
             <div className="text-xs mt-1 tracking-widest uppercase" style={{ color: 'rgba(253,246,238,0.55)' }}>Paper Bag Selection</div>
           </div>
 
-          <div className="flex-1 overflow-y-auto px-4 pt-4 pb-4" style={{ minHeight: 0 }}>
+          <div className="flex-1 overflow-y-auto px-4 pt-4 pb-4 po-slide" style={{ minHeight: 0 }}>
 
             {/* Quick Select */}
             <div className="text-xs font-black tracking-widest uppercase mb-3" style={{ color: 'var(--gray3)' }}>
@@ -801,7 +872,7 @@ export default function PreOrderPage() {
       {/* ─── STEP 3: Time ─── */}
       {step === 3 && (
         <>
-          <div className="flex-1 overflow-y-auto p-4">
+          <div className="flex-1 overflow-y-auto p-4 po-slide">
             <div className="max-w-lg mx-auto flex flex-col gap-4">
               {/* Customer summary (readonly) */}
               <div className="flex items-center gap-3 px-4 py-3 rounded-2xl"
@@ -866,7 +937,7 @@ export default function PreOrderPage() {
           </div>
 
           {/* Natural-flow content — browser window scrollbar handles this */}
-          <div className="p-4 flex flex-col gap-4">
+          <div className="p-4 flex flex-col gap-4 po-slide">
 
             {/* 1. Items — inner scroll, shows 3 rows before scrolling */}
             <div className="rounded-2xl overflow-hidden border-2 border-[#e8d5c0]" style={{ background: 'var(--warm-white)' }}>
@@ -941,8 +1012,10 @@ export default function PreOrderPage() {
 
           {/* Submit bar — sticky at bottom of viewport while page scrolls */}
           <div className="sticky bottom-0 p-4 border-t-2 border-[#e8d5c0] flex flex-col gap-2" style={{ background: 'var(--warm-white)' }}>
-            <button className="btn-primary" onClick={submitOrder} disabled={submitting || !slip}>
-              {submitting ? 'ກຳລັງສົ່ງ...' : 'ສົ່ງອໍເດີ · Submit'}
+            <button
+              className={`btn-primary${!submitting && slip ? ' po-btn-shine' : ''}`}
+              onClick={submitOrder} disabled={submitting || !slip}>
+              {submitting ? '⏳ ກຳລັງສົ່ງ...' : '🥟 ສົ່ງອໍເດີ · Submit'}
             </button>
             <button className="btn-outline" onClick={() => setStep(3)}>← ກັບຄືນ</button>
           </div>
@@ -952,17 +1025,21 @@ export default function PreOrderPage() {
       {/* ─── STEP 5: Status ─── */}
       {step === 5 && currentOrder && (
         <>
+          <Confetti />
           <div className="flex-1 overflow-y-auto p-6">
-            <div className="w-full max-w-sm mx-auto rounded-2xl overflow-hidden border-2 border-[#3d1f0a] shadow-xl">
+            <div className="w-full max-w-sm mx-auto rounded-2xl overflow-hidden border-2 border-[#3d1f0a] shadow-xl"
+              style={{ animation: 'po-statusIn .55s ease both' }}>
               <div className="text-center py-5" style={{ background: 'var(--brown)' }}>
                 <div className="font-serif text-xl font-black" style={{ color: 'var(--cream)' }}>{shopInfo.name}</div>
               </div>
               <div className="text-center py-6 px-4" style={{ background: 'var(--warm-white)' }}>
                 <div className="text-xs font-black tracking-widest uppercase mb-1" style={{ color: 'var(--gray3)' }}>ເລກຄິວ · QUEUE</div>
-                <div className="font-serif font-black leading-none mb-3" style={{ fontSize: 72, color: 'var(--brown)' }}>
-                  {String(currentOrder.qnum).padStart(4, '0')}
+                <div className="font-serif font-black leading-none mb-3"
+                  style={{ fontSize: 72, color: 'var(--brown)', animation: 'po-queueIn .7s .15s ease both', display:'block' }}>
+                  <AnimatedQnum qnum={currentOrder.qnum} />
                 </div>
-                <span className={`tag text-sm font-black px-4 py-2 rounded-full ${statusInfo.cls}`}>
+                <span className={`tag text-sm font-black px-4 py-2 rounded-full ${statusInfo.cls}`}
+                  style={{ display:'inline-block', animation:'po-badgePop .45s .6s ease both' }}>
                   {statusInfo.label}
                 </span>
               </div>
@@ -1033,7 +1110,7 @@ export default function PreOrderPage() {
       {/* ─── STEP 6: History ─── */}
       {step === 6 && (
         <>
-          <div className="flex-1 overflow-y-auto p-4">
+          <div className="flex-1 overflow-y-auto p-4 po-slide">
             <div className="max-w-lg mx-auto">
               <div className="mb-4">
                 <label className="block text-xs font-black tracking-widest uppercase mb-2" style={{ color: 'var(--brown2)' }}>ຄົ້ນຫາຈາກເບີໂທ</label>
