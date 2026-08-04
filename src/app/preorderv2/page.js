@@ -55,9 +55,9 @@ function Cloud({ style }) {
 }
 
 /* ── gold sphere ── */
-function Dot({ size = 12, style }) {
+function Dot({ size = 12, style, className }) {
   return (
-    <div style={{
+    <div className={className} style={{
       width: size, height: size, borderRadius: '50%',
       background: GOLD_BALL,
       boxShadow: size >= 14 ? `0 4px 14px rgba(200,133,26,.45)` : undefined,
@@ -122,6 +122,67 @@ export default async function PreorderV2Page() {
       minHeight:'100vh', overflowX:'hidden',
     }}>
 
+      <style>{`
+        @keyframes fadeUp {
+          from { opacity:0; transform:translateY(28px); }
+          to   { opacity:1; transform:translateY(0); }
+        }
+        @keyframes float {
+          0%,100% { transform:translateY(0px); }
+          50%     { transform:translateY(-12px); }
+        }
+        @keyframes floatSm {
+          0%,100% { transform:translateY(0px) rotate(-2deg); }
+          50%     { transform:translateY(-7px) rotate(2deg); }
+        }
+        @keyframes pulse {
+          0%,100% { transform:scale(1); opacity:1; }
+          50%     { transform:scale(1.22); opacity:.7; }
+        }
+        @keyframes scaleIn {
+          from { opacity:0; transform:scale(.86) translateY(16px); }
+          to   { opacity:1; transform:scale(1) translateY(0); }
+        }
+        @keyframes shimmer {
+          0%   { background-position:-200% center; }
+          100% { background-position:200% center; }
+        }
+        @keyframes spinSlow {
+          from { transform:rotate(0deg); }
+          to   { transform:rotate(360deg); }
+        }
+        .bcb-nav-logo { animation:scaleIn .5s ease both; }
+        .bcb-nav-btn  { animation:fadeUp .5s .15s ease both; }
+        .bcb-h1-1     { animation:fadeUp .65s .05s ease both; }
+        .bcb-h1-2     { animation:fadeUp .65s .18s ease both; }
+        .bcb-h1-3     { animation:fadeUp .65s .3s  ease both; }
+        .bcb-hero-p   { animation:fadeUp .65s .4s  ease both; }
+        .bcb-hero-btn { animation:fadeUp .65s .52s ease both; }
+        .bcb-bun-main { animation:float 3.8s ease-in-out infinite; }
+        .bcb-bun-sm   { animation:floatSm 4.4s .6s ease-in-out infinite; }
+        .bcb-dot-1    { animation:pulse 2.4s ease-in-out infinite; }
+        .bcb-dot-2    { animation:pulse 2.4s .4s ease-in-out infinite; }
+        .bcb-dot-3    { animation:pulse 2.4s .8s ease-in-out infinite; }
+        .bcb-dot-4    { animation:pulse 2.4s .3s ease-in-out infinite; }
+        .bcb-dot-5    { animation:pulse 2.4s .9s ease-in-out infinite; }
+        .bcb-card-0   { animation:scaleIn .55s .1s ease both; }
+        .bcb-card-1   { animation:scaleIn .55s .22s ease both; }
+        .bcb-card-2   { animation:scaleIn .55s .34s ease both; }
+        .bcb-card-3   { animation:scaleIn .55s .46s ease both; }
+        .bcb-feat-0   { animation:fadeUp .6s .1s ease both; }
+        .bcb-feat-1   { animation:fadeUp .6s .22s ease both; }
+        .bcb-feat-2   { animation:fadeUp .6s .34s ease both; }
+        .bcb-feat-3   { animation:fadeUp .6s .46s ease both; }
+        .bcb-cta      { animation:scaleIn .7s .15s ease both; }
+        .bcb-cta-bun  { animation:float 3.4s .4s ease-in-out infinite; }
+        .bcb-divider  {
+          background:linear-gradient(90deg,transparent 0%,rgba(200,149,26,.6) 30%,rgba(245,220,138,.9) 50%,rgba(200,149,26,.6) 70%,transparent 100%);
+          background-size:200% auto;
+          animation:shimmer 2.8s linear infinite;
+        }
+        .bcb-footer   { animation:fadeUp .5s .2s ease both; }
+      `}</style>
+
       {/* ════ NAV ════ */}
       <nav style={{
         display:'flex', alignItems:'center', justifyContent:'space-between',
@@ -129,7 +190,7 @@ export default async function PreorderV2Page() {
         borderBottom:'1px solid #e8d5c0',
         background:'#fdf6ee',
       }}>
-        <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+        <div className="bcb-nav-logo" style={{ display:'flex', alignItems:'center', gap:10 }}>
           <div style={{
             width:32, height:32, borderRadius:'50%', overflow:'hidden',
             border:'1.5px solid #e8d5c0', flexShrink:0,
@@ -140,7 +201,7 @@ export default async function PreorderV2Page() {
             BCB
           </span>
         </div>
-        <a href="/preorder" style={{
+        <a href="/preorder" className="bcb-nav-btn" style={{
           background:'#3d1f0a',
           color:'#fdf6ee', fontWeight:900, fontSize:'.76rem',
           padding:'9px 20px', borderRadius:99, textDecoration:'none',
@@ -165,22 +226,22 @@ export default async function PreorderV2Page() {
           <div style={{ flex:1, zIndex:1, minWidth:0 }}>
 
             <h1 style={{ margin:'0 0 12px', lineHeight:1.15 }}>
-              <span style={{ display:'block', fontSize:'2.4rem', fontWeight:900, color:'#3d1f0a', letterSpacing:'-.02em' }}>
+              <span className="bcb-h1-1" style={{ display:'block', fontSize:'2.4rem', fontWeight:900, color:'#3d1f0a', letterSpacing:'-.02em' }}>
                 ສຳຜັດ
               </span>
-              <span style={{ display:'block', fontSize:'2.4rem', fontWeight:900, color:'#3d1f0a', letterSpacing:'-.02em' }}>
+              <span className="bcb-h1-2" style={{ display:'block', fontSize:'2.4rem', fontWeight:900, color:'#3d1f0a', letterSpacing:'-.02em' }}>
                 ສຸນທຣີ
               </span>
-              <span style={{ display:'block', fontSize:'2.4rem', fontWeight:900, color:'#C8951A', letterSpacing:'-.02em' }}>
+              <span className="bcb-h1-3" style={{ display:'block', fontSize:'2.4rem', fontWeight:900, color:'#C8951A', letterSpacing:'-.02em' }}>
                 ຊາລາເປົາ
               </span>
             </h1>
 
-            <p style={{ margin:'0 0 22px', fontSize:'.7rem', color:'rgba(61,31,10,.45)', lineHeight:1.85, maxWidth:190 }}>
+            <p className="bcb-hero-p" style={{ margin:'0 0 22px', fontSize:'.7rem', color:'rgba(61,31,10,.45)', lineHeight:1.85, maxWidth:190 }}>
               ສາລາເປົາທຳມື ສົດໃໝ່ ນຶ່ງທຸກຮອບ ດ້ວຍວັດຖຸດິບຄຸນນະພາບ ສຳລັບທ່ານໂດຍສະເພາະ
             </p>
 
-            <a href="/preorder" style={{
+            <a href="/preorder" className="bcb-hero-btn" style={{
               display:'inline-flex', alignItems:'center', gap:8,
               border:'1.5px solid #3d1f0a',
               color:'#3d1f0a', fontWeight:900, fontSize:'.83rem',
@@ -201,6 +262,7 @@ export default async function PreorderV2Page() {
             {img1 && (
               <img
                 src={img1} alt="bun2"
+                className="bcb-bun-sm"
                 style={{
                   position:'absolute', top:8, left:0,
                   width:78, height:78,
@@ -212,22 +274,22 @@ export default async function PreorderV2Page() {
             )}
 
             {/* main large bun with pedestal — bottom right */}
-            <div style={{ position:'absolute', bottom:0, right:0, zIndex:2 }}>
+            <div className="bcb-bun-main" style={{ position:'absolute', bottom:0, right:0, zIndex:2 }}>
               <BunOnPedestal src={img0 || logoSrc} size={148} pedestalW={90} />
             </div>
 
             {/* gold balls */}
-            <Dot size={18} style={{ position:'absolute', top:0,   right:20 }} />
-            <Dot size={11} style={{ position:'absolute', top:60,  right:-4 }} />
-            <Dot size={14} style={{ position:'absolute', top:120, right:-8 }} />
-            <Dot size={8}  style={{ position:'absolute', top:30,  left:60 }} />
-            <Dot size={9}  style={{ position:'absolute', bottom:60, left:-4 }} />
+            <Dot size={18} style={{ position:'absolute', top:0,   right:20 }} className="bcb-dot-1" />
+            <Dot size={11} style={{ position:'absolute', top:60,  right:-4 }} className="bcb-dot-2" />
+            <Dot size={14} style={{ position:'absolute', top:120, right:-8 }} className="bcb-dot-3" />
+            <Dot size={8}  style={{ position:'absolute', top:30,  left:60 }}  className="bcb-dot-4" />
+            <Dot size={9}  style={{ position:'absolute', bottom:60, left:-4 }} className="bcb-dot-5" />
           </div>
         </div>
       </section>
 
       {/* thin gold divider */}
-      <div style={{ height:1, margin:'0 22px', background:'linear-gradient(90deg,transparent,rgba(200,149,26,.25) 25%,rgba(200,149,26,.25) 75%,transparent)' }} />
+      <div className="bcb-divider" style={{ height:1, margin:'0 22px' }} />
 
       {/* ════ MENU CARDS ════ */}
       <section style={{ background:'#fffbf6', paddingBottom:8 }}>
@@ -243,8 +305,8 @@ export default async function PreorderV2Page() {
         }}>
           {visible.length === 0 ? (
             <p style={{ padding:'20px', color:'rgba(61,31,10,.3)', fontSize:'.8rem' }}>ສິນຄ້າໝົດຊົ່ວຄາວ</p>
-          ) : visible.map(({ m, i }) => (
-            <a key={i} href="/preorder" style={{
+          ) : visible.map(({ m, i }, vi) => (
+            <a key={i} href="/preorder" className={`bcb-card-${vi}`} style={{
               flexShrink:0, scrollSnapAlign:'start',
               textDecoration:'none',
               width:166, paddingTop:52,
@@ -324,7 +386,7 @@ export default async function PreorderV2Page() {
       </section>
 
       {/* thin gold divider */}
-      <div style={{ height:1, margin:'0 22px', background:'linear-gradient(90deg,transparent,rgba(200,149,26,.25) 25%,rgba(200,149,26,.25) 75%,transparent)' }} />
+      <div className="bcb-divider" style={{ height:1, margin:'0 22px' }} />
 
       {/* ════ FEATURES — ghost numbers ════ */}
       <section style={{ padding:'52px 22px 60px', position:'relative', overflow:'hidden', background:'#fdf6ee' }}>
@@ -342,8 +404,8 @@ export default async function PreorderV2Page() {
         <Dot size={8}  style={{ position:'absolute', top:'50%', right:8,  opacity:.5 }} />
 
         <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'52px 20px', position:'relative', zIndex:1 }}>
-          {FEATURES.map(({ n, title, desc }) => (
-            <div key={n}>
+          {FEATURES.map(({ n, title, desc }, fi) => (
+            <div key={n} className={`bcb-feat-${fi}`}>
               {/* ghost number */}
               <div style={{
                 fontSize:'8rem', fontWeight:900, lineHeight:0.82,
@@ -367,7 +429,7 @@ export default async function PreorderV2Page() {
       </section>
 
       {/* ════ CTA CARD — dark statement card ════ */}
-      <div style={{ padding:'0 16px 60px', background:'#fdf6ee' }}>
+      <div className="bcb-cta" style={{ padding:'0 16px 60px', background:'#fdf6ee' }}>
         <div style={{
           borderRadius:24,
           background:'#3d1f0a',
@@ -402,7 +464,7 @@ export default async function PreorderV2Page() {
             <div style={{ flexShrink:0, position:'relative', paddingTop:8 }}>
               <Cloud style={{ position:'absolute', top:-16, right:-8, width:44, opacity:.22 }} />
 
-              <BunOnPedestal src={img0 || logoSrc} size={124} pedestalW={78} />
+              <div className="bcb-cta-bun"><BunOnPedestal src={img0 || logoSrc} size={124} pedestalW={78} /></div>
 
               {/* gold balls */}
               <Dot size={15} style={{ position:'absolute', top:-10, right:6 }} />
@@ -415,7 +477,7 @@ export default async function PreorderV2Page() {
       </div>
 
       {/* ════ FOOTER ════ */}
-      <div style={{
+      <div className="bcb-footer" style={{
         borderTop:'1px solid #e8d5c0',
         textAlign:'center', padding:'18px 20px',
         background:'#fdf6ee',
