@@ -50,6 +50,7 @@ export default function PreOrderPage() {
   const [shopInfo, setShopInfo] = useState({ name: 'Basic Chinese Bun' })
   const [branches, setBranches] = useState([])
   const [loading, setLoading] = useState(true)
+  const [ipBlocked, setIpBlocked] = useState(false)
   const [chatOpen, setChatOpen] = useState(false)
   const [chatVH, setChatVH] = useState(null)
   const [chatCustomer, setChatCustomer] = useState(null) // { name, phone, qnum }
@@ -61,6 +62,14 @@ export default function PreOrderPage() {
   const [blockedIps, setBlockedIps] = useState([])
   const [blockedFp, setBlockedFp] = useState([])
   const chatBottomRef = useRef(null)
+
+  // Block Qatar IPs before page loads
+  useEffect(() => {
+    fetch('https://ipapi.co/json/')
+      .then(r => r.json())
+      .then(d => { if (d.country_code === 'QA') setIpBlocked(true) })
+      .catch(() => {})
+  }, [])
 
   // Load saved customer info on mount
   useEffect(() => {
@@ -396,6 +405,16 @@ export default function PreOrderPage() {
   }
 
   const statusInfo = STATUS_MAP[currentOrder?.status] || STATUS_MAP.pending
+
+  if (ipBlocked) return (
+    <div className="min-h-dvh flex flex-col items-center justify-center" style={{ background: '#f9fafb' }}>
+      <div className="text-center px-6">
+        <div className="text-8xl font-black mb-4" style={{ color: '#d1d5db' }}>404</div>
+        <div className="text-xl font-bold mb-2" style={{ color: '#6b7280' }}>Page Not Found</div>
+        <div className="text-sm" style={{ color: '#9ca3af' }}>The page you are looking for does not exist.</div>
+      </div>
+    </div>
+  )
 
   if (loading) return (
     <div className="min-h-dvh flex flex-col items-center justify-center" style={{ background: '#3d1f0a' }}>
