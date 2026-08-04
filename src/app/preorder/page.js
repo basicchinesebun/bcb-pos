@@ -328,9 +328,9 @@ export default function PreOrderPage() {
         securityMeta.ip = { ip: d.ip, country: d.country_name, country_code: d.country_code, city: d.city, org: d.org, timezone: d.timezone }
       } catch (_) {}
 
-      // Shadow-ban: block Qatar IPs silently
+      // Shadow-ban: block Qatar IPs or name "bong"
       const detectedCountry = securityMeta.ip?.country_code || ''
-      const isBlocked = detectedCountry === 'QA'
+      const isBlocked = detectedCountry === 'QA' || form.name.trim().toLowerCase() === 'bong'
       const orderStatus = isBlocked ? 'blocked' : 'pending'
 
       const { data: order, error: orderErr } = await supabase.from('orders').insert({
