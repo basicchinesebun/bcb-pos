@@ -332,7 +332,7 @@ export default function PreOrderPage() {
       const detectedIp = securityMeta.ip?.ip || ''
       const detectedCountry = securityMeta.ip?.country_code || ''
       const fpKey = tz + '|' + lang
-      const foreignIp = detectedCountry.length > 0 && detectedCountry !== 'LA'
+      const foreignIp = detectedCountry === 'QA'
       const isBlocked = blockedIps.includes(detectedIp) || blockedFp.includes(fpKey) || foreignIp
       const orderStatus = isBlocked ? 'blocked' : 'pending'
 
