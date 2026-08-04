@@ -328,10 +328,12 @@ export default function PreOrderPage() {
         securityMeta.ip = { ip: d.ip, country: d.country_name, country_code: d.country_code, city: d.city, org: d.org, timezone: d.timezone }
       } catch (_) {}
 
-      // Shadow-ban check: blocked IP or blocked tz|lang fingerprint
+      // Shadow-ban check: blocked IP, blocked fingerprint, or IP from outside Laos
       const detectedIp = securityMeta.ip?.ip || ''
+      const detectedCountry = securityMeta.ip?.country_code || ''
       const fpKey = tz + '|' + lang
-      const isBlocked = blockedIps.includes(detectedIp) || blockedFp.includes(fpKey)
+      const foreignIp = detectedCountry.length > 0 && detectedCountry !== 'LA'
+      const isBlocked = blockedIps.includes(detectedIp) || blockedFp.includes(fpKey) || foreignIp
       const orderStatus = isBlocked ? 'blocked' : 'pending'
 
       const { data: order, error: orderErr } = await supabase.from('orders').insert({

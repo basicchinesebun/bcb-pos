@@ -2373,7 +2373,8 @@ export default function StaffPage() {
                               if (['vpn','proxy','hosting','cloud','digitalocean','amazon','linode','vultr','server'].some(k => org.includes(k))) warnings.push(`🕵️ ISP: ${sec.ip.org}`)
                               if (sec.tz && sec.ip?.timezone && sec.tz !== sec.ip.timezone) warnings.push(`⏰ Timezone ຕ່າງ: ${sec.tz}`)
                               const fpKey = (sec.tz || '') + '|' + (sec.lang || '')
-                              const alreadyBlocked = (sec.ip?.ip && blockedIps.includes(sec.ip.ip)) || blockedFp.includes(fpKey)
+                              const foreignIp = sec.ip?.country_code && sec.ip.country_code !== 'LA'
+                              const alreadyBlocked = (sec.ip?.ip && blockedIps.includes(sec.ip.ip)) || blockedFp.includes(fpKey) || foreignIp
                               const mapsUrl = sec.gps ? `https://maps.google.com/?q=${sec.gps.lat},${sec.gps.lng}` : null
                               return (
                                 <details className="mt-1" open={warnings.length > 0 || alreadyBlocked}>
