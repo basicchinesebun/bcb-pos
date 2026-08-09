@@ -523,7 +523,15 @@ export default function StaffPage() {
   async function loadConfig() {
     if (!supabase) return
     const { data, error } = await supabase.from('shop_config').select('*')
-    if (error) { console.error('loadConfig error:', error); configLoadedRef.current = true; return }
+    if (error) {
+      console.error('loadConfig error:', error)
+      configLoadedRef.current = true
+      // An explicit fetch error (e.g. Supabase quota/plan restriction) means we
+      // genuinely don't know staff_pin — same failure mode as a timeout, so
+      // don't let it silently look like "no PIN configured".
+      setConfigStalled(true)
+      return
+    }
     const cfg = {}
     if (data) data.forEach(r => { cfg[r.key] = r.value })
 
