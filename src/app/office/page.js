@@ -733,12 +733,26 @@ export default function OfficePage() {
     }
   }, [])
 
-  const loadOrders = useCallback(async () => {
+  const loadOrders = useCallback(async (scope = 'full') => {
     if (!supabase) return
-    const { data } = await supabase.from('orders')
+    let query = supabase.from('orders')
       .select('id,qnum,type,status,total,done,cancelled,created_at,done_at,slip_url,customer')
       .order('created_at', { ascending:false })
-    if (data) setOrders(data)
+    if (scope === 'recent') {
+      // Realtime fires this on every single order change with no throttling,
+      // and the 60s poll runs on top of that — re-pulling the whole table's
+      // history each time is pure waste once orders are old & done/cancelled.
+      const cutoff = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString()
+      query = query.or(`done.eq.false,created_at.gte.${cutoff}`)
+    }
+    const { data } = await query
+    if (!data) return
+    if (scope === 'full') { setOrders(data); return }
+    setOrders(prev => {
+      const merged = data.slice()
+      prev.forEach(o => { if (!data.some(s => s.id === o.id)) merged.push(o) })
+      return merged
+    })
   }, [])
 
   const loadMessages = useCallback(async () => {
@@ -747,18 +761,18 @@ export default function OfficePage() {
     setMsgCount(count||0)
   }, [])
 
-  const refresh = useCallback(async () => {
-    await Promise.all([loadConfig(), loadOrders(), loadMessages()])
+  const refresh = useCallback(async (scope = 'full') => {
+    await Promise.all([loadConfig(), loadOrders(scope), loadMessages()])
     setLastUpdate(new Date()); setLoading(false)
   }, [loadConfig, loadOrders, loadMessages])
 
   useEffect(() => {
     refresh()
-    const t = setInterval(refresh, 60000)
+    const t = setInterval(() => refresh('recent'), 60000)
     if (!supabase) return () => clearInterval(t)
     const ch = supabase.channel('office-live')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, () => {
-        loadOrders()
+        loadOrders('recent')
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'shop_config' }, () => {
         loadConfig()

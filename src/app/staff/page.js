@@ -170,7 +170,7 @@ export default function StaffPage() {
       })
 
     // Polling fallback — catches any events that realtime misses (table not in publication etc.)
-    const poll = setInterval(loadOrders, 60000)
+    const poll = setInterval(() => loadOrders('recent'), 60000)
 
     // Voices
     const loadVoices = () => { voicesRef.current = window.speechSynthesis.getVoices() }
@@ -485,9 +485,19 @@ export default function StaffPage() {
     setLoading(false)
   }
 
-  async function loadOrders() {
+  async function loadOrders(scope = 'full') {
     if (!supabase) return
-    const { data } = await supabase.from('orders').select('*').order('created_at', { ascending: false })
+    let query = supabase.from('orders').select('*').order('created_at', { ascending: false })
+    if (scope === 'recent') {
+      // The 60s poll is only a fallback for missed realtime events — old
+      // done/cancelled orders never change again, so re-pulling the entire
+      // table every minute forever just burns egress for no benefit. Limit
+      // the recurring poll to still-active orders plus the last 3 days;
+      // the initial full load (scope='full') still populates sales history.
+      const cutoff = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString()
+      query = query.or(`done.eq.false,created_at.gte.${cutoff}`)
+    }
+    const { data } = await query
     if (!data) return
     setOrders(prev => {
       const localMap = new Map(prev.map(o => [o.id, o]))
