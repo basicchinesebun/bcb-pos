@@ -71,6 +71,8 @@ export default function StaffPage() {
   const [isOnline, setIsOnline] = useState(true)
   const [liveStatus, setLiveStatus] = useState('connecting') // 'live' | 'connecting' | 'error'
   const [loading, setLoading] = useState(true)
+  const [configStalled, setConfigStalled] = useState(false)
+  const configLoadedRef = useRef(false)
   const [chatConvos, setChatConvos] = useState([])
   const [activeChatPhone, setActiveChatPhone] = useState(null)
   const [chatMessages, setChatMessages] = useState([])
@@ -130,7 +132,14 @@ export default function StaffPage() {
   useEffect(() => {
     if (!supabase) { setLoading(false); return }
     loadAll()
-    const timer = setTimeout(() => setLoading(false), 6000)
+    // Failsafe so a slow/hung request can't spin forever — but if shop_config
+    // (which carries staff_pin) hasn't resolved yet, we don't actually know
+    // whether the PIN gate should apply, so don't silently fall through into
+    // the dashboard. Surface a stalled state instead of bypassing the lock.
+    const timer = setTimeout(() => {
+      if (!configLoadedRef.current) setConfigStalled(true)
+      setLoading(false)
+    }, 6000)
 
     // Real-time orders — direct state mutations (instant UI) + status tracking
     const ch = supabase.channel('staff-orders')
@@ -514,7 +523,7 @@ export default function StaffPage() {
   async function loadConfig() {
     if (!supabase) return
     const { data, error } = await supabase.from('shop_config').select('*')
-    if (error) { console.error('loadConfig error:', error); return }
+    if (error) { console.error('loadConfig error:', error); configLoadedRef.current = true; return }
     const cfg = {}
     if (data) data.forEach(r => { cfg[r.key] = r.value })
 
@@ -561,6 +570,7 @@ export default function StaffPage() {
         { key: 'next_queue', value: '0' },
       ])
     }
+    configLoadedRef.current = true
   }
 
   async function saveConfig(key, value) {
@@ -1545,6 +1555,17 @@ export default function StaffPage() {
           <div className="text-sm font-bold mt-2" style={{ color: 'rgba(253,246,238,0.5)' }}>ກຳລັງໂຫຼດ...</div>
         </div>
       </div>
+    </div>
+  )
+
+  if (configStalled && !staffUnlocked) return (
+    <div className="min-h-dvh flex flex-col items-center justify-center gap-4" style={{ background: '#3d1f0a' }}>
+      <div className="text-sm font-bold text-center px-6" style={{ color: 'rgba(253,246,238,0.8)' }}>
+        ການເຊື່ອມຕໍ່ຊ້າ ບໍ່ສາມາດກວດສອບລະຫັດ Staff ໄດ້<br/>ກະລຸນາລອງໃໝ່
+      </div>
+      <button onClick={() => window.location.reload()} className="btn-primary px-6 py-2 rounded-full text-sm font-bold">
+        ລອງໃໝ່
+      </button>
     </div>
   )
 
