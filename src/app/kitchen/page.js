@@ -21,7 +21,7 @@ export default function KitchenPage() {
       .channel('kitchen-realtime')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, () => loadOrders())
       .subscribe(status => setLiveStatus(status === 'SUBSCRIBED' ? 'live' : 'connecting'))
-    const fallback = setInterval(loadOrders, 15000)
+    const fallback = setInterval(loadOrders, 60000)
     return () => { supabase.removeChannel(channel); clearInterval(fallback) }
   }, [])
 

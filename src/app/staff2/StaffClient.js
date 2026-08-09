@@ -158,7 +158,7 @@ export default function StaffPage() {
       })
 
     // Polling fallback — catches any events that realtime misses (table not in publication etc.)
-    const poll = setInterval(loadOrders, 15000)
+    const poll = setInterval(loadOrders, 60000)
 
     // Voices
     const loadVoices = () => { voicesRef.current = window.speechSynthesis.getVoices() }
