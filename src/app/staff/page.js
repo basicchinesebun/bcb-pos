@@ -159,6 +159,7 @@ export default function StaffPage() {
         if (key === 'stock_shop') { try { setStockShop(JSON.parse(val)) } catch { loadConfig() } }
         else if (key === 'stock_online') { try { setStockOnline(JSON.parse(val)) } catch { loadConfig() } }
         else if (key === 'stock_total') { try { setStockTotal(JSON.parse(val)) } catch { loadConfig() } }
+        else if (key === 'settings') { try { setSettings(prev => ({ ...prev, ...JSON.parse(val) })) } catch { loadConfig() } }
         else loadConfig()
       })
       .subscribe(status => {
