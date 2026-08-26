@@ -51,6 +51,7 @@ export default function StaffPage() {
   const [previewLoading, setPreviewLoading] = useState(false)
   const previewTimerRef = useRef(null)
   const [settings, setSettings] = useState({ soundOn: true, walkinOn: true, onlineOn: true, aiOn: true, autoprintOn: false, pickupTimeStart: '15:30', pickupTimeEnd: '19:00' })
+  const settingsSaveChainRef = useRef(Promise.resolve())
   const [walkinCode, setWalkinCode] = useState('')
   const [branches, setBranches] = useState([
     { id: 'simeuang',  name: 'ສາຂາສີເມື່ອງ',  nameEn: 'Si Meuang Branch',  visible: true, schedule: 'ຈ · ພ · ສ (Mon / Wed / Fri)', mapUrl: '', facebookUrl: '', tiktokUrl: '', phone1: '', phone2: '', whatsapp: '' },
@@ -1316,8 +1317,9 @@ export default function StaffPage() {
   async function toggleSetting(key) {
     setSettings(prev => {
       const newSettings = { ...prev, [key]: !prev[key] }
-      // บันทึกขึ้น Supabase ทันที
-      saveConfig('settings', newSettings)
+      // บันทึกขึ้น Supabase ทันที — chained so rapid clicks can't have their
+      // writes land out of order and have realtime echo the wrong one back
+      settingsSaveChainRef.current = settingsSaveChainRef.current.then(() => saveConfig('settings', newSettings))
       showToast(newSettings[key] ? 'ເປີດ ✅' : 'ປິດ', 'green')
       return newSettings
     })
