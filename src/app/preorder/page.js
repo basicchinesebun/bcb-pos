@@ -245,6 +245,14 @@ export default function PreOrderPage() {
   function handleSlip(e) {
     const file = e.target.files[0]
     if (!file) return
+    if (!file.size) {
+      // Some phones (esp. Android photo pickers on cloud-backed / just-captured
+      // images) hand over a File stub before the actual bytes are ready, which
+      // uploads as an empty file with no error — leaving staff an unviewable slip.
+      alert('ໂຫລດຮູບບໍ່ສຳເລັດ (ໄຟລ໌ວ່າງເປົ່າ) ກະລຸນາລອງເລືອກຮູບສະລິບໃໝ່ອີກຄັ້ງ')
+      e.target.value = ''
+      return
+    }
     setSlip(file)
     const reader = new FileReader()
     reader.onload = ev => setSlipPreview(ev.target.result)
@@ -253,6 +261,7 @@ export default function PreOrderPage() {
 
   async function submitOrder() {
     if (!slip) { alert('ກະລຸນາອັບໂຫລດສະລິບ'); return }
+    if (!slip.size) { alert('ຮູບສະລິບວ່າງເປົ່າ ກະລຸນາອັບໂຫລດຮູບໃໝ່ອີກຄັ້ງ'); return }
     if (!form.name || !form.phone || !form.time) {
       alert('ກະລຸນາໃສ່ຂໍ້ມູນໃຫ້ຄົບ')
       return
