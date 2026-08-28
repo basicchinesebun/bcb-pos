@@ -242,6 +242,30 @@ export default function PreOrderPage() {
       .join(', ')
   }
 
+  // Phone slip photos come in at full camera resolution (often several MB, some
+  // even 16-bit PNGs some banking-app screenshots produce) — staff end up
+  // downloading and decoding that full size just to see a small thumbnail,
+  // which is what makes slip/menu image loading feel so slow. Re-encode to a
+  // normal 8-bit JPEG capped at 1280px wide before upload; text stays legible
+  // for verification but the file drops to a fraction of the size.
+  function compressSlipImage(file, maxW = 1280, quality = 0.85) {
+    return new Promise(resolve => {
+      const img = new Image()
+      const url = URL.createObjectURL(file)
+      img.onload = () => {
+        const scale = Math.min(1, maxW / img.width)
+        const canvas = document.createElement('canvas')
+        canvas.width = img.width * scale
+        canvas.height = img.height * scale
+        canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height)
+        URL.revokeObjectURL(url)
+        canvas.toBlob(blob => resolve(blob || file), 'image/jpeg', quality)
+      }
+      img.onerror = () => { URL.revokeObjectURL(url); resolve(file) }
+      img.src = url
+    })
+  }
+
   function handleSlip(e) {
     const file = e.target.files[0]
     if (!file) return
@@ -268,12 +292,12 @@ export default function PreOrderPage() {
     }
     setSubmitting(true)
     try {
-      const ext = slip.name.split('.').pop() || 'jpg'
+      const compressedSlip = await compressSlipImage(slip)
+      const ext = compressedSlip.type === 'image/jpeg' ? 'jpg' : (slip.name.split('.').pop() || 'jpg')
       const fileName = `slips/${Date.now()}.${ext}`
-      const contentType = slip.type || 'image/jpeg'
       const { error: uploadErr } = await supabase.storage
         .from('bcb - upload')
-        .upload(fileName, slip, { contentType })
+        .upload(fileName, compressedSlip, { contentType: compressedSlip.type || 'image/jpeg' })
       if (uploadErr) throw uploadErr
 
       const { data: urlData } = supabase.storage.from('bcb - upload').getPublicUrl(fileName)

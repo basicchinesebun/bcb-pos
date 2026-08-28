@@ -2119,7 +2119,7 @@ export default function StaffPage() {
                               })}
                               className="relative cursor-pointer rounded-xl overflow-hidden select-none"
                               style={{ border: isSelected ? '2.5px solid #dc2626' : '2px solid var(--cream3)' }}>
-                              <img src={o.slip_url} alt={`slip ${o.qnum}`} className="w-full aspect-square object-cover" />
+                              <img src={o.slip_url} alt={`slip ${o.qnum}`} className="w-full aspect-square object-cover" loading="lazy" />
                               {isSelected && (
                                 <div className="absolute inset-0 flex items-center justify-center" style={{ background: 'rgba(220,38,38,0.25)' }}>
                                   <span className="w-6 h-6 rounded-full bg-red-600 flex items-center justify-center text-white font-black text-sm">✓</span>
@@ -2396,7 +2396,7 @@ export default function StaffPage() {
                               <div key={ii} style={{ width: 104 }} className="rounded-2xl overflow-hidden border-2 border-[#e8d5c0] flex-shrink-0">
                                 <div className="relative overflow-hidden" style={{ width: 104, height: 104, background: 'var(--cream2)' }}>
                                   {img
-                                    ? <img src={img} className="w-full h-full object-cover" alt={it.name} />
+                                    ? <img src={img} className="w-full h-full object-cover" alt={it.name} loading="lazy" />
                                     : <div className="absolute inset-0 flex items-center justify-center text-4xl" style={{ background: 'var(--cream2)' }}>{EMOJIS[it.menuIdx] || '🍱'}</div>
                                   }
                                   <div className="absolute top-1 right-1 w-11 h-11 rounded-full flex items-center justify-center font-black shadow-md" style={{ background: 'var(--brown)', color: 'var(--cream)', fontSize: 20 }}>{it.qty}</div>
@@ -2414,7 +2414,7 @@ export default function StaffPage() {
                         {o.slip_url && (
                           <div className="mb-2 flex items-center gap-2">
                             <div className="cursor-pointer" onClick={() => setSlipModal({ url: o.slip_url, qnum: o.qnum })}>
-                              <img src={o.slip_url} className="w-20 rounded-lg border-2 border-[#e8d5c0]" alt="slip" />
+                              <img src={o.slip_url} className="w-20 rounded-lg border-2 border-[#e8d5c0]" alt="slip" loading="lazy" />
                             </div>
                             {slipVerify[o.id]?.loading && (
                               <span className="text-xs font-bold" style={{ color: 'var(--gray3)' }}>🤖 ກຳລັງກວດ...</span>
@@ -2522,7 +2522,7 @@ export default function StaffPage() {
                                 </div>
                                 {o.slip_url && (
                                   <div className="mb-2 cursor-pointer" onClick={() => setSlipModal({ url: o.slip_url, qnum: o.qnum })}>
-                                    <img src={o.slip_url} className="w-16 rounded-lg border border-[#e8d5c0]" alt="slip" />
+                                    <img src={o.slip_url} className="w-16 rounded-lg border border-[#e8d5c0]" alt="slip" loading="lazy" />
                                   </div>
                                 )}
                                 <div className="flex gap-2 mt-1">
@@ -3064,7 +3064,7 @@ export default function StaffPage() {
                       const isSelected = selectedSlipIds.has(o.id)
                       return (
                         <div key={o.id} onClick={() => setSelectedSlipIds(prev => { const n = new Set(prev); if (n.has(o.id)) n.delete(o.id); else n.add(o.id); return n })} className="relative cursor-pointer rounded-xl overflow-hidden select-none" style={{ border: isSelected ? '2.5px solid #dc2626' : '2px solid var(--cream3)' }}>
-                          <img src={o.slip_url} alt={`slip ${o.qnum}`} className="w-full aspect-square object-cover" />
+                          <img src={o.slip_url} alt={`slip ${o.qnum}`} className="w-full aspect-square object-cover" loading="lazy" />
                           {isSelected && <div className="absolute inset-0 flex items-center justify-center" style={{ background: 'rgba(220,38,38,0.25)' }}><span className="w-6 h-6 rounded-full bg-red-600 flex items-center justify-center text-white font-black text-sm">✓</span></div>}
                           <div className="absolute bottom-0 left-0 right-0 px-1 py-0.5 text-white font-black truncate" style={{ background: 'rgba(61,31,10,0.75)', fontSize: 9 }}>#{o.qnum}</div>
                         </div>
@@ -3154,7 +3154,7 @@ export default function StaffPage() {
                         className={`rounded-2xl overflow-hidden cursor-pointer border-2 transition-all relative ${isOut ? 'opacity-50 cursor-not-allowed border-[#e8d5c0]' : qty > 0 ? 'border-[#3d1f0a]' : 'border-[#e8d5c0]'}`}
                         style={{ background: 'var(--warm-white)' }}>
                         <div className="aspect-square relative overflow-hidden" style={{ background: 'var(--cream2)' }}>
-                          {img ? <img src={img} alt={m.lo} className="w-full h-full object-cover" />
+                          {img ? <img src={img} alt={m.lo} className="w-full h-full object-cover" loading="lazy" />
                             : <div className="absolute inset-0 flex items-center justify-center text-4xl">{EMOJIS[i] || '🍱'}</div>}
                           {isOut && <div className="absolute inset-0 flex items-center justify-center" style={{ background: 'rgba(61,31,10,0.55)' }}><span className="text-white font-black text-sm px-2 py-1 rounded-lg" style={{ background: 'rgba(185,28,28,0.9)' }}>ໝົດ</span></div>}
                           {qty > 0 && <div className="absolute top-2 right-2 w-6 h-6 rounded-full flex items-center justify-center text-xs font-black" style={{ background: 'var(--brown)', color: 'var(--cream)' }}>{qty}</div>}
@@ -3258,7 +3258,7 @@ export default function StaffPage() {
                               <button key={i} disabled={isDisabled} onClick={() => qoAddItemToBag(n, i)}
                                 className={`flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-black transition-transform ${isDisabled ? 'opacity-40 cursor-not-allowed' : 'active:scale-95'}`}
                                 style={{ background: 'var(--cream)', border: `2px solid ${qtyInBag > 0 ? 'var(--brown)' : '#e8d5c0'}`, color: 'var(--brown)' }}>
-                                {img ? <img src={img} className="w-8 h-8 rounded-lg object-cover flex-shrink-0" alt="" /> : <span className="text-xl">{EMOJIS[i] || '🍱'}</span>}
+                                {img ? <img src={img} className="w-8 h-8 rounded-lg object-cover flex-shrink-0" alt="" loading="lazy" /> : <span className="text-xl">{EMOJIS[i] || '🍱'}</span>}
                                 <span>{m.lo}</span>
                                 {qtyInBag > 0 && <span className="w-5 h-5 rounded-full flex items-center justify-center text-xs font-black flex-shrink-0" style={{ background: 'var(--brown)', color: 'var(--cream)' }}>{qtyInBag}</span>}
                               </button>
@@ -3270,7 +3270,7 @@ export default function StaffPage() {
                               <button key={i} onClick={() => qoAddItemToBag(n, i)}
                                 className="flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-black active:scale-95 transition-transform"
                                 style={{ background: 'var(--cream)', border: `2px solid ${qtyInBag > 0 ? 'var(--brown)' : '#e8d5c0'}`, color: 'var(--brown)' }}>
-                                {img ? <img src={img} className="w-8 h-8 rounded-lg object-cover flex-shrink-0" alt="" /> : <span className="text-xl">{EMOJIS[i] || '🍱'}</span>}
+                                {img ? <img src={img} className="w-8 h-8 rounded-lg object-cover flex-shrink-0" alt="" loading="lazy" /> : <span className="text-xl">{EMOJIS[i] || '🍱'}</span>}
                                 <span>{m.lo}</span>
                                 {qtyInBag > 0 && <span className="w-5 h-5 rounded-full flex items-center justify-center text-xs font-black flex-shrink-0" style={{ background: 'var(--brown)', color: 'var(--cream)' }}>{qtyInBag}</span>}
                               </button>
@@ -3464,7 +3464,7 @@ export default function StaffPage() {
                 return (
                   <div key={i} className={`rounded-2xl overflow-hidden border-2 transition-all ${qty > 0 ? 'border-[#3d1f0a]' : 'border-[#e8d5c0]'}`} style={{ background: 'var(--warm-white)' }}>
                     <div className="aspect-square relative overflow-hidden" style={{ background: 'var(--cream2)' }}>
-                      {img ? <img src={img} alt={m.lo} className="w-full h-full object-cover" />
+                      {img ? <img src={img} alt={m.lo} className="w-full h-full object-cover" loading="lazy" />
                         : <div className="absolute inset-0 flex items-center justify-center text-4xl">{EMOJIS[i] || '🍱'}</div>}
                       {qty > 0 && <div className="absolute top-2 right-2 w-6 h-6 rounded-full flex items-center justify-center text-xs font-black" style={{ background: 'var(--brown)', color: 'var(--cream)' }}>{qty}</div>}
                     </div>
