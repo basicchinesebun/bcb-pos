@@ -612,15 +612,23 @@ export default function StaffPage() {
     if (filter !== 'all' && o.type !== filter) return false
     if (!search.trim()) return true
     const q = search.trim().toLowerCase().replace(/\s+/g, ' ')
+    const qDigits = q.replace(/\s+/g, '')
+    const isNumeric = /^\d+$/.test(qDigits)
     const qnum = String(o.qnum || '')
     const qnumPad = qnum.padStart(4, '0')
-    if (qnum === q || qnumPad === q || qnum.includes(q)) return true
+    // A short numeric query (typing a queue number) used to be matched as a
+    // substring anywhere in qnum AND against phone digits — e.g. "56" matched
+    // queue #1562 and also any customer whose phone happened to contain "56"
+    // anywhere, which is nearly every phone number. Prefix-match the queue
+    // number and only try it as a phone fragment once it's long enough to
+    // mean a phone number, not a queue number.
+    if (isNumeric && (qnum === qDigits || qnumPad === qDigits || qnum.startsWith(qDigits))) return true
     const items = typeof o.items === 'string' ? JSON.parse(o.items) : o.items || []
     if (items.some(it => (it.name || '').toLowerCase().includes(q))) return true
     if (o.customer) {
       const c = typeof o.customer === 'string' ? JSON.parse(o.customer) : o.customer
       if ((c.name || '').toLowerCase().replace(/\s+/g, ' ').includes(q)) return true
-      if ((c.phone || '').replace(/\s+/g, '').includes(q.replace(/\s+/g, ''))) return true
+      if ((!isNumeric || qDigits.length >= 5) && (c.phone || '').replace(/\s+/g, '').includes(qDigits)) return true
     }
     return false
   })
@@ -631,12 +639,14 @@ export default function StaffPage() {
   const customerSearchResults = customerSearch.trim()
     ? orders.filter(o => {
         const q = customerSearch.trim().toLowerCase().replace(/\s+/g, ' ')
+        const qDigits = q.replace(/\s+/g, '')
+        const isNumeric = /^\d+$/.test(qDigits)
         const c = (() => { try { return JSON.parse(o.customer || '{}') } catch { return {} } })()
         const qnum = String(o.qnum || '')
         const qnumPad = qnum.padStart(4, '0')
-        if (qnum === q || qnumPad === q || qnum.includes(q)) return true
+        if (isNumeric && (qnum === qDigits || qnumPad === qDigits || qnum.startsWith(qDigits))) return true
         if ((c.name || '').toLowerCase().replace(/\s+/g, ' ').includes(q)) return true
-        if ((c.phone || '').replace(/\s+/g, '').includes(q.replace(/\s+/g, ''))) return true
+        if ((!isNumeric || qDigits.length >= 5) && (c.phone || '').replace(/\s+/g, '').includes(qDigits)) return true
         return false
       })
     : []
