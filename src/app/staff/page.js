@@ -1938,28 +1938,27 @@ export default function StaffPage() {
               <details className="card">
                 <summary className="font-black text-xs tracking-widest uppercase cursor-pointer" style={{ color: 'var(--brown3)' }}>📦 ສະຕ໋ອກ</summary>
                 <div className="mt-3">
-                  <div className="flex gap-3 text-xs font-black mb-2 pl-16" style={{ color: 'var(--gray3)' }}>
-                    <span className="flex-1 text-center">ລວມ</span>
-                    <span className="flex-1 text-center">ຮ້ານ</span>
-                    <span className="flex-1 text-center">Online</span>
-                  </div>
                   {menus.map((m, i) => {
                     const sh = stockShop[i]||0, on = stockOnline[i]||0
                     return (
-                      <div key={i} className="flex gap-2 items-center py-2 border-b border-[#f5ebe0]">
-                        <span className="text-xs font-bold flex-1 min-w-0 truncate" style={{ color: 'var(--brown)' }}>
+                      <div key={i} className="flex flex-col gap-1.5 py-2.5 border-b border-[#f5ebe0]">
+                        <span className="text-xs font-bold" style={{ color: 'var(--brown)' }}>
                           {m.lo}
                           {sh===0 && <span className="ml-1 text-xs bg-red-50 text-red-600 rounded px-1">ໝົດ</span>}
                           {sh>0&&sh<=5 && <span className="ml-1 text-xs bg-orange-50 text-orange-600 rounded px-1">ໃກ້</span>}
                         </span>
-                        <div className="flex gap-1">
+                        <div className="flex gap-2">
                           {['total','shop','online'].map((type, ti) => {
                             const val = [stockTotal[i]||0, sh, on][ti]
+                            const label = ['ລວມ','ຮ້ານ','Online'][ti]
                             return (
-                              <input key={type} type="text" inputMode="numeric" value={val}
-                                onChange={e => updateStock(type, i, e.target.value)}
-                                className="w-12 h-8 border border-[#e8d5c0] rounded text-center text-xs font-black"
-                                style={{ background: 'var(--cream)', color: 'var(--brown)' }} />
+                              <label key={type} className="flex-1 flex flex-col items-center gap-0.5">
+                                <span className="text-[10px] font-black" style={{ color: 'var(--gray3)' }}>{label}</span>
+                                <input type="text" inputMode="numeric" value={val}
+                                  onChange={e => updateStock(type, i, e.target.value)}
+                                  className="w-full h-9 border border-[#e8d5c0] rounded text-center text-sm font-black"
+                                  style={{ background: 'var(--cream)', color: 'var(--brown)' }} />
+                              </label>
                             )
                           })}
                         </div>
