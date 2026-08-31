@@ -28,19 +28,29 @@ export default function ClosedOverlay({ shopInfo = {}, branches = [], subtitle =
       setLoading(true)
       try {
         const qnum = parseInt(q)
-        let req = supabase
-          .from('orders')
-          .select('id, qnum, status, total, customer, items, done, cancelled, created_at')
-          .order('created_at', { ascending: false })
-          .limit(10)
-
+        const cols = 'id, qnum, status, total, customer, items, done, cancelled, created_at'
         if (!isNaN(qnum) && String(qnum) === q) {
-          req = req.eq('qnum', qnum)
+          const { data } = await supabase.from('orders').select(cols)
+            .eq('qnum', qnum).order('created_at', { ascending: false }).limit(10)
+          setResults(data || [])
         } else {
-          req = req.ilike('customer', `%${q}%`)
+          // `customer` is a jsonb column, and Postgres has no ILIKE operator for
+          // jsonb — the old `.ilike('customer', ...)` query errored on every
+          // name/phone search (silently, since the error wasn't checked), so
+          // typing a name here always came back "not found". Pull a bounded
+          // recent window and match name/phone client-side instead.
+          const qDigits = q.replace(/\s+/g, '')
+          const ql = q.toLowerCase()
+          const { data } = await supabase.from('orders').select(cols)
+            .order('created_at', { ascending: false }).limit(300)
+          const matches = (data || []).filter(o => {
+            const c = (() => { try { return typeof o.customer === 'string' ? JSON.parse(o.customer) : (o.customer || {}) } catch { return {} } })()
+            if ((c.name || '').toLowerCase().includes(ql)) return true
+            if (qDigits && (c.phone || '').replace(/\s+/g, '').includes(qDigits)) return true
+            return false
+          }).slice(0, 10)
+          setResults(matches)
         }
-        const { data } = await req
-        setResults(data || [])
       } finally {
         setLoading(false)
       }
