@@ -15,5 +15,5 @@ export function proxy(request) {
 }
 
 export const config = {
-  matcher: ['/staff2', '/staffv2', '/preorder', '/preorder/:path*'],
+  matcher: ['/staff', '/staff2', '/staffv2', '/preorder', '/preorder/:path*'],
 }

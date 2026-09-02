@@ -74,6 +74,8 @@ export default function StaffPage() {
   const [chatConvos, setChatConvos] = useState([])
   const [activeChatPhone, setActiveChatPhone] = useState(null)
   const [chatMessages, setChatMessages] = useState([])
+  const [chatMsgsLoading, setChatMsgsLoading] = useState(false)
+  const [chatMsgsError, setChatMsgsError] = useState(false)
   const [chatInput, setChatInput] = useState('')
   const [chatSending, setChatSending] = useState(false)
   const [unreadChat, setUnreadChat] = useState(0)
@@ -440,12 +442,37 @@ export default function StaffPage() {
     setUnreadChat(convos.reduce((s, c) => s + c.unread, 0))
   }
 
+  async function fetchChatMessages(phone, attempt = 0) {
+    const { data, error } = await supabase.from('messages').select('*').eq('phone', phone)
+      .order('created_at', { ascending: true })
+    if (error) {
+      // A flaky/slow connection made this fetch fail silently before — the chat
+      // just stayed blank with no indication anything went wrong, and the only
+      // fix looked like "reload the whole page a bunch of times". Retry a
+      // couple of times with backoff before surfacing a real error state.
+      if (attempt < 2) {
+        await new Promise(r => setTimeout(r, 500 * (attempt + 1)))
+        return fetchChatMessages(phone, attempt + 1)
+      }
+      throw error
+    }
+    return data || []
+  }
+
   async function openConvo(phone) {
     setActiveChatPhone(phone)
+    setChatMessages([])
+    setChatMsgsError(false)
     if (!supabase) return
-    const { data } = await supabase.from('messages').select('*').eq('phone', phone)
-      .order('created_at', { ascending: true })
-    if (data) setChatMessages(data)
+    setChatMsgsLoading(true)
+    try {
+      setChatMessages(await fetchChatMessages(phone))
+    } catch (e) {
+      console.error('openConvo messages fetch failed:', e)
+      setChatMsgsError(true)
+    } finally {
+      setChatMsgsLoading(false)
+    }
     await supabase.from('messages').update({ read_by_staff: true })
       .eq('phone', phone).eq('sender', 'customer').eq('read_by_staff', false)
     setChatConvos(prev => prev.map(c => c.phone === phone ? { ...c, unread: 0 } : c))
@@ -2704,7 +2731,16 @@ export default function StaffPage() {
                 </button>
               </div>
               <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3">
-                {chatMessages.map(msg => {
+                {chatMsgsLoading && chatMessages.length === 0 && (
+                  <div className="flex-1 flex items-center justify-center text-xs font-bold" style={{ color: 'var(--gray3)' }}>ກຳລັງໂຫລດ...</div>
+                )}
+                {chatMsgsError && (
+                  <div className="flex-1 flex flex-col items-center justify-center gap-2 text-xs font-bold" style={{ color: 'var(--gray3)' }}>
+                    <span>ໂຫລດຂໍ້ຄວາມບໍ່ສຳເລັດ</span>
+                    <button onClick={() => openConvo(activeChatPhone)} className="btn-primary px-4 py-1.5 text-xs">ລອງໃໝ່</button>
+                  </div>
+                )}
+                {!chatMsgsError && chatMessages.map(msg => {
                   const isStaffSide = msg.sender === 'staff' || msg.sender === 'ai'
                   const isAi = msg.sender === 'ai'
                   return (
