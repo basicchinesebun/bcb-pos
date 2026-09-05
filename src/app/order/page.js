@@ -831,8 +831,13 @@ export default function OrderPage() {
                   <span>{new Date().toLocaleTimeString('lo-LA', { hour: '2-digit', minute: '2-digit' })}</span>
                 </div>
               </div>
-              <div className="text-center py-3 text-xs font-bold" style={{ background: 'var(--cream2)', color: 'var(--brown2)' }}>
-                ກະລຸນາລໍຖ້າການຮຽກຄິວ
+              <div className="text-center py-4 px-4" style={{ background: '#3d1f0a' }}>
+                <div className="font-black text-base leading-snug" style={{ color: 'var(--cream)' }}>
+                  💰 ກະລຸນາໄປຊຳລະເງິນທີ່ເຄົາເຕີ້<br/>ເພື່ອຮັບໃບບິນ
+                </div>
+                <div className="text-xs font-bold mt-1" style={{ color: 'rgba(253,246,238,0.55)' }}>
+                  ຫຼັງຈາກຊຳລະແລ້ວ ກະລຸນາລໍຖ້າການຮຽກຄິວ
+                </div>
               </div>
             </div>
             <ContactSection />

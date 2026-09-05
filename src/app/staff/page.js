@@ -61,7 +61,7 @@ export default function StaffPage() {
   const [receiptPreviewUrl, setReceiptPreviewUrl] = useState('')
   const [previewLoading, setPreviewLoading] = useState(false)
   const previewTimerRef = useRef(null)
-  const [settings, setSettings] = useState({ soundOn: true, walkinOn: true, onlineOn: true, aiOn: true, autoprintOn: false, pickupTimeStart: '15:30', pickupTimeEnd: '19:00' })
+  const [settings, setSettings] = useState({ soundOn: true, walkinOn: true, onlineOn: true, aiOn: true, autoprintOn: false, autoKickDrawer: true, pickupTimeStart: '15:30', pickupTimeEnd: '19:00' })
   const settingsSaveChainRef = useRef(Promise.resolve())
   const [walkinCode, setWalkinCode] = useState('')
   const [branches, setBranches] = useState([
@@ -668,6 +668,17 @@ export default function StaffPage() {
     : qoSelected
   const qoTotalItems = Object.values(qoEffSel).reduce((s, q) => s + q, 0)
   const qoTotalPrice = Object.entries(qoEffSel).reduce((s, [i, q]) => s + (prices[+i] || 0) * q, 0)
+
+  // Mirror the in-progress Quick Order to a customer-facing display (/display)
+  // so the customer can watch their order build up and see the total to pay.
+  useEffect(() => {
+    if (!supabase) return
+    const t = setTimeout(() => {
+      const items = Object.entries(qoEffSel).map(([i, qty]) => ({ name: menus[+i]?.lo || '', qty, sub: (prices[+i] || 0) * qty }))
+      saveConfig('display_order', { items, total: qoTotalPrice, updatedAt: Date.now() })
+    }, 400)
+    return () => clearTimeout(t)
+  }, [qoTotalItems, qoTotalPrice])
 
   // ─── Orders ───
   const filteredOrders = orders.filter(o => {
@@ -1371,6 +1382,26 @@ export default function StaffPage() {
     if (usbDeviceRef.current && usbEndpointRef.current) usbPrint(o)
     else if (btCharRef.current) btPrint(o)
     else printOrder(o)
+    if (settings.autoKickDrawer !== false) kickDrawer()
+  }
+
+  // Standard ESC/POS cash-drawer kick pulse (ESC p 0 25 250) — most drawers
+  // wired through the receipt printer's RJ11/RJ12 port respond to this.
+  async function kickDrawer() {
+    const cmd = new Uint8Array([0x1B, 0x70, 0x00, 0x19, 0xFA])
+    try {
+      if (usbDeviceRef.current && usbEndpointRef.current) {
+        await usbDeviceRef.current.transferOut(usbEndpointRef.current.endpointNumber, cmd)
+      } else if (btCharRef.current) {
+        await btCharRef.current.writeValue(cmd)
+      } else {
+        showToast('⚠️ ຕ້ອງເຊື່ອມຕໍ່ເຄື່ອງພິມ USB/Bluetooth ກ່ອນຈຶ່ງເປີດລິ້ນຊັກໄດ້', 'orange')
+        return
+      }
+      showToast('🔓 ເປີດລິ້ນຊັກແລ້ວ', 'green')
+    } catch (_) {
+      showToast('❌ ເປີດລິ້ນຊັກບໍ່ສຳເລັດ', 'red')
+    }
   }
 
   async function logReceiptPrint(o, method) {
@@ -1842,6 +1873,7 @@ export default function StaffPage() {
               <button onClick={connectPrinter} className={`text-xs font-black px-3 py-2 rounded-lg border ${btConnected ? 'border-green-400 text-green-300' : 'border-[rgba(253,246,238,0.35)] text-[#fdf6ee]'}`}>
                 {btConnected ? '🖨 BT ✓' : 'BT'}
               </button>
+              <button onClick={kickDrawer} title="ເປີດລິ້ນຊັກ" className="text-xs font-black px-3 py-2 rounded-lg border border-[rgba(253,246,238,0.35)] text-[#fdf6ee]">🔓</button>
               <button onClick={() => alert('ຕ້ອງຊອກຫາ ↺ Reset ໃນລາຍການ')} className="text-xs font-black px-3 py-2 rounded-lg border border-red-400 text-red-300">↺</button>
             </div>
           </div>
@@ -1910,6 +1942,7 @@ export default function StaffPage() {
                     ['onlineOn', '🌐 ເປີດ Online'],
                     ['aiOn', '🤖 AI ຕອບແຊັດ'],
                     ['autoprintOn', '🖨 ພິມອັດຕະໂນມັດ'],
+                    ['autoKickDrawer', '🔓 ເປີດລິ້ນຊັກອັດຕະໂນມັດຕອນພິມ'],
                   ].map(([k, l]) => (
                     <div key={k} className="flex justify-between items-center py-2 border-b border-[#e8d5c0]">
                       <span className="text-sm font-bold" style={{ color: 'var(--brown)' }}>{l}</span>
