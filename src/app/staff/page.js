@@ -72,7 +72,6 @@ export default function StaffPage() {
   const [confirmModal, setConfirmModal] = useState(null) // { message, onConfirm }
   const [cancelModal, setCancelModal] = useState(null) // order being cancelled
   const [cancelReason, setCancelReason] = useState('')
-  const [cancelRefund, setCancelRefund] = useState('')
   const [slipVerify, setSlipVerify] = useState({}) // orderId -> { loading, result, error }
 
   const [archiveOpen, setArchiveOpen] = useState(false)
@@ -820,7 +819,6 @@ export default function StaffPage() {
 
   function cancelOrder(o) {
     setCancelReason('')
-    setCancelRefund(String(o.total || 0))
     setCancelModal(o)
   }
 
@@ -828,10 +826,9 @@ export default function StaffPage() {
     const o = cancelModal
     if (!o) return
     const reason = cancelReason.trim()
-    const refund = Math.max(0, +cancelRefund || 0)
     setCancelModal(null)
     setOrders(prev => prev.map(ord => ord.id === o.id
-      ? { ...ord, cancelled: true, cancel_reason: reason, refund_amount: refund }
+      ? { ...ord, cancelled: true, cancel_reason: reason }
       : ord))
     const items = typeof o.items === 'string' ? JSON.parse(o.items) : o.items || []
     const stockKey = o.type === 'online' ? 'stock_online' : 'stock_shop'
@@ -841,8 +838,8 @@ export default function StaffPage() {
     const freshStock = row ? JSON.parse(row.value) : [...fallback]
     items.forEach(it => { freshStock[it.menuIdx] = (freshStock[it.menuIdx] || 0) + it.qty })
     await saveConfig(stockKey, freshStock)
-    await supabase.from('orders').update({ cancelled: true, cancel_reason: reason, refund_amount: refund }).eq('id', o.id)
-    logActivity('cancel_order', `#${String(o.qnum).padStart(4, '0')} — ${reason || 'ບໍ່ໄດ້ໃສ່ເຫດຜົນ'} (ຄືນເງິນ ${refund.toLocaleString()})`)
+    await supabase.from('orders').update({ cancelled: true, cancel_reason: reason }).eq('id', o.id)
+    logActivity('cancel_order', `#${String(o.qnum).padStart(4, '0')} — ${reason || 'ບໍ່ໄດ້ໃສ່ເຫດຜົນ'}`)
     showToast('ຍົກເລີກ', 'orange')
   }
 
@@ -2637,10 +2634,9 @@ export default function StaffPage() {
                           </div>
                         </div>
 
-                        {o.cancelled && (o.cancel_reason || o.refund_amount != null) && (
+                        {o.cancelled && o.cancel_reason && (
                           <div className="rounded-xl p-2 mb-2 text-xs font-bold" style={{ background: '#fef2f2', color: '#b91c1c' }}>
-                            {o.cancel_reason && <div>📝 {o.cancel_reason}</div>}
-                            {o.refund_amount != null && <div>💸 ຄືນເງິນ {Number(o.refund_amount).toLocaleString()} ກີບ</div>}
+                            📝 {o.cancel_reason}
                           </div>
                         )}
 
@@ -3655,7 +3651,7 @@ export default function StaffPage() {
         </div>
       )}
 
-      {/* Cancel Order Modal — collects reason + refund amount */}
+      {/* Cancel Order Modal — collects reason */}
       {cancelModal && (
         <div
           className="fixed inset-0 z-[60] flex items-center justify-center p-5"
@@ -3679,14 +3675,6 @@ export default function StaffPage() {
                   value={cancelReason} onChange={e => setCancelReason(e.target.value)}
                   placeholder="ເຊັ່น: ລູກຄ້າສັ່ງຜິດ, ຂອງໝົດ, ຍົກເລີກເອງ..."
                   className="input-field w-full text-sm" rows={2}
-                />
-              </div>
-              <div>
-                <div className="text-xs font-black mb-1" style={{ color: 'var(--gray3)' }}>ຈຳນວນເງິນທີ່ຄືນ (ກີບ)</div>
-                <input
-                  type="text" inputMode="numeric" value={cancelRefund}
-                  onChange={e => setCancelRefund(e.target.value.replace(/[^\d]/g, ''))}
-                  className="input-field w-full text-sm"
                 />
               </div>
             </div>
