@@ -30,7 +30,11 @@ export default function StaffPage() {
   const [staffUnlocked, setStaffUnlocked] = useState(false)
   const [profitUnlocked, setProfitUnlocked] = useState(false)
   const [activeStaffName, setActiveStaffName] = useState('')
-  const [whoInput, setWhoInput] = useState('')
+  const [isOwnerSession, setIsOwnerSession] = useState(false)
+  const [staffRoster, setStaffRoster] = useState([]) // [{name, pin}] — set by the owner in Settings
+  const [rosterNewName, setRosterNewName] = useState('')
+  const [rosterNewPin, setRosterNewPin] = useState('')
+  const [rosterError, setRosterError] = useState('')
   const [activityLog, setActivityLog] = useState([])
   const [activityLoading, setActivityLoading] = useState(false)
   const [printLog, setPrintLog] = useState([])
@@ -139,13 +143,6 @@ export default function StaffPage() {
         receiptFontRef.current = 'NotoLaoR'
       } catch { /* fall back to system Noto Sans Lao */ }
     })()
-  }, [])
-
-  useEffect(() => {
-    try {
-      const saved = sessionStorage.getItem('bcb_active_staff_name')
-      if (saved) setActiveStaffName(saved)
-    } catch (_) {}
   }, [])
 
   useEffect(() => {
@@ -639,6 +636,7 @@ export default function StaffPage() {
     if (cfg.branches) setBranches(JSON.parse(cfg.branches))
     if (cfg.staff_pin) setStaffPin(cfg.staff_pin)
     if (cfg.profit_pin) setProfitPin(cfg.profit_pin)
+    if (cfg.staff_roster) try { setStaffRoster(JSON.parse(cfg.staff_roster)) } catch (_) {}
     if (cfg.walkin_code) setWalkinCode(cfg.walkin_code)
     if (cfg.blocked_ips) try { setBlockedIps(JSON.parse(cfg.blocked_ips)) } catch (_) {}
     if (cfg.blocked_fp) try { setBlockedFp(JSON.parse(cfg.blocked_fp)) } catch (_) {}
@@ -1413,6 +1411,29 @@ export default function StaffPage() {
   }
 
   // ─── PIN ───
+  async function addRosterEntry() {
+    const name = rosterNewName.trim()
+    const pin = rosterNewPin.trim()
+    setRosterError('')
+    if (!name || !pin) { setRosterError('ໃສ່ຊື່ ແລະ ລະຫັດ'); return }
+    if (!/^\d{4,8}$/.test(pin)) { setRosterError('ລະຫັດຕ້ອງເປັນໂຕເລກ 4-8 ໂຕ'); return }
+    if (pin === staffPin) { setRosterError('ລະຫັດຊ້ຳກັບລະຫັດຫົວໜ້າ'); return }
+    if (staffRoster.some(s => s.pin === pin)) { setRosterError('ລະຫັດນີ້ຖືກໃຊ້ແລ້ວ'); return }
+    const next = [...staffRoster, { name, pin }]
+    setStaffRoster(next)
+    await saveConfig('staff_roster', next)
+    setRosterNewName(''); setRosterNewPin('')
+    logActivity('add_staff', name)
+  }
+
+  async function removeRosterEntry(idx) {
+    const removed = staffRoster[idx]
+    const next = staffRoster.filter((_, i) => i !== idx)
+    setStaffRoster(next)
+    await saveConfig('staff_roster', next)
+    logActivity('remove_staff', removed?.name || '')
+  }
+
   function openPinSetting(type) {
     const currentPin = type === 'staff' ? staffPin : profitPin
     setPinMode(`set-${type}`)
@@ -1747,39 +1768,21 @@ export default function StaffPage() {
       fullScreen
       title="🔒 Staff" subtitle="ໃສ່ລະຫັດ Staff"
       onSubmit={pin => {
-        if (pin === staffPin) { setStaffUnlocked(true); setPinInput(''); setPinError('') }
-        else { setPinError('ລະຫັດຜິດ'); setPinInput('') }
+        if (pin === staffPin) {
+          setStaffUnlocked(true); setIsOwnerSession(true); setActiveStaffName('ຫົວໜ້າ')
+          setPinInput(''); setPinError('')
+          return
+        }
+        const match = staffRoster.find(s => s.pin === pin)
+        if (match) {
+          setStaffUnlocked(true); setIsOwnerSession(false); setActiveStaffName(match.name)
+          setPinInput(''); setPinError('')
+        } else {
+          setPinError('ລະຫັດຜິດ'); setPinInput('')
+        }
       }}
       pinInput={pinInput} setPinInput={setPinInput} error={pinError} setError={setPinError}
     />
-  )
-
-  if (staffPin && staffUnlocked && !activeStaffName) return (
-    <div className="min-h-dvh flex flex-col items-center justify-center gap-4 px-6" style={{ background: '#3d1f0a' }}>
-      <div className="font-serif text-xl font-black text-center" style={{ color: 'var(--cream)' }}>👋 ໃຜກຳລັງໃຊ້ຢູ່?</div>
-      <div className="text-xs font-bold text-center" style={{ color: 'rgba(253,246,238,0.7)' }}>
-        ພິມຊື່ຂອງທ່ານ — ໃຊ້ບັນທຶກວ່າໃຜເຮັດຫຍັງ ໃນ "ປະຫວັດການເຮັດວຽກ"
-      </div>
-      <input
-        type="text" value={whoInput} onChange={e => setWhoInput(e.target.value)}
-        placeholder="ຊື່ພະນັກງານ" autoFocus
-        className="input-field w-full max-w-xs text-center"
-        onKeyDown={e => {
-          if (e.key === 'Enter' && whoInput.trim()) {
-            setActiveStaffName(whoInput.trim())
-            try { sessionStorage.setItem('bcb_active_staff_name', whoInput.trim()) } catch (_) {}
-          }
-        }}
-      />
-      <button
-        onClick={() => {
-          if (!whoInput.trim()) return
-          setActiveStaffName(whoInput.trim())
-          try { sessionStorage.setItem('bcb_active_staff_name', whoInput.trim()) } catch (_) {}
-        }}
-        className="btn-primary px-8 py-3 rounded-full text-sm font-bold w-full max-w-xs"
-      >ເຂົ້າໃຊ້ງານ</button>
-    </div>
   )
 
   if (!supabase) return (
@@ -2054,6 +2057,36 @@ export default function StaffPage() {
                 </div>
               </details>
 
+              {/* Staff Roster — owner only */}
+              {isOwnerSession && (
+                <details className="card">
+                  <summary className="font-black text-xs tracking-widest uppercase cursor-pointer" style={{ color: 'var(--brown3)' }}>👥 ພະນັກງານ · Staff</summary>
+                  <div className="mt-3 flex flex-col gap-2">
+                    <div className="text-xs font-bold" style={{ color: 'var(--gray3)' }}>
+                      ແຕ່ລະຄົນມີລະຫັດຂອງຕົນເອງ ໃຊ້ເຂົ້າໜ້າ Staff ໄດ້ໂດຍກົງ ບໍ່ຕ້ອງໃຊ້ລະຫັດຫົວໜ້າຮ່ວມກັນ
+                    </div>
+                    {staffRoster.map((s, i) => (
+                      <div key={i} className="flex items-center justify-between py-1.5 border-b border-[#f5ebe0]">
+                        <span className="text-sm font-bold" style={{ color: 'var(--brown)' }}>{s.name} <span className="text-xs font-black" style={{ color: 'var(--gray3)' }}>· {s.pin}</span></span>
+                        <button onClick={() => removeRosterEntry(i)} className="text-xs px-2.5 py-1.5 rounded-lg font-black" style={{ background: '#fef2f2', color: '#dc2626', border: '1.5px solid #fca5a5' }}>ລຶບ</button>
+                      </div>
+                    ))}
+                    {staffRoster.length === 0 && (
+                      <div className="text-xs font-bold text-center py-2" style={{ color: 'var(--gray3)' }}>ຍັງບໍ່ມີພະນັກງານ</div>
+                    )}
+                    <div className="flex gap-2 mt-1">
+                      <input type="text" value={rosterNewName} onChange={e => setRosterNewName(e.target.value)}
+                        placeholder="ຊື່" className="input-field flex-1 text-sm" />
+                      <input type="text" inputMode="numeric" value={rosterNewPin}
+                        onChange={e => setRosterNewPin(e.target.value.replace(/\D/g, ''))}
+                        placeholder="ລະຫັດ" className="input-field w-24 text-sm" />
+                    </div>
+                    {rosterError && <div className="text-xs font-bold" style={{ color: '#dc2626' }}>{rosterError}</div>}
+                    <button onClick={addRosterEntry} className="btn-primary text-sm py-2.5">+ ເພີ່ມພະນັກງານ</button>
+                  </div>
+                </details>
+              )}
+
               {/* Activity Log */}
               <details className="card" onToggle={e => { if (e.target.open) loadActivityLog() }}>
                 <summary className="font-black text-xs tracking-widest uppercase cursor-pointer" style={{ color: 'var(--brown3)' }}>📋 ປະຫວັດການເຮັດວຽກ</summary>
@@ -2062,12 +2095,10 @@ export default function StaffPage() {
                     <span className="text-xs font-bold" style={{ color: 'var(--gray3)' }}>
                       ກຳລັງໃຊ້ງານ: <span style={{ color: 'var(--brown)' }}>{activeStaffName || '—'}</span>
                     </span>
-                    {activeStaffName && (
-                      <button
-                        onClick={() => { setActiveStaffName(''); try { sessionStorage.removeItem('bcb_active_staff_name') } catch (_) {} }}
-                        className="text-xs px-2.5 py-1 rounded-lg font-black" style={{ background: 'var(--cream2)', color: 'var(--brown2)', border: '1.5px solid var(--cream3)' }}
-                      >ປ່ຽນຄົນ</button>
-                    )}
+                    <button
+                      onClick={() => { setStaffUnlocked(false); setIsOwnerSession(false); setActiveStaffName('') }}
+                      className="text-xs px-2.5 py-1 rounded-lg font-black" style={{ background: 'var(--cream2)', color: 'var(--brown2)', border: '1.5px solid var(--cream3)' }}
+                    >ອອກ · ປ່ຽນຄົນ</button>
                   </div>
                   {activityLoading && <div className="text-xs font-bold text-center py-3" style={{ color: 'var(--gray3)' }}>ກຳລັງໂຫລດ...</div>}
                   {!activityLoading && activityLog.length === 0 && (
