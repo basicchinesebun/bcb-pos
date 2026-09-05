@@ -29,6 +29,12 @@ export default function StaffPage() {
   const [profitPin, setProfitPin] = useState('')
   const [staffUnlocked, setStaffUnlocked] = useState(false)
   const [profitUnlocked, setProfitUnlocked] = useState(false)
+  const [activeStaffName, setActiveStaffName] = useState('')
+  const [whoInput, setWhoInput] = useState('')
+  const [activityLog, setActivityLog] = useState([])
+  const [activityLoading, setActivityLoading] = useState(false)
+  const [printLog, setPrintLog] = useState([])
+  const [printLogLoading, setPrintLogLoading] = useState(false)
   const [pinMode, setPinMode] = useState(null) // 'staff'|'profit'|'set-staff'|'set-profit'
   const [pinInput, setPinInput] = useState('')
   const [pinStep, setPinStep] = useState(1) // 1=enter old, 2=enter new, 3=confirm new
@@ -64,11 +70,15 @@ export default function StaffPage() {
   const [toast, setToast] = useState([])
   const [slipModal, setSlipModal] = useState(null)
   const [confirmModal, setConfirmModal] = useState(null) // { message, onConfirm }
+  const [cancelModal, setCancelModal] = useState(null) // order being cancelled
+  const [cancelReason, setCancelReason] = useState('')
+  const [cancelRefund, setCancelRefund] = useState('')
   const [slipVerify, setSlipVerify] = useState({}) // orderId -> { loading, result, error }
 
   const [archiveOpen, setArchiveOpen] = useState(false)
   const [expandedArchive, setExpandedArchive] = useState(new Set())
-  const [salesDate, setSalesDate] = useState(new Date().toISOString().split('T')[0])
+  const [salesDateFrom, setSalesDateFrom] = useState(new Date().toISOString().split('T')[0])
+  const [salesDateTo, setSalesDateTo] = useState(new Date().toISOString().split('T')[0])
   const [isOnline, setIsOnline] = useState(true)
   const [liveStatus, setLiveStatus] = useState('connecting') // 'live' | 'connecting' | 'error'
   const [loading, setLoading] = useState(true)
@@ -130,6 +140,13 @@ export default function StaffPage() {
         receiptFontRef.current = 'NotoLaoR'
       } catch { /* fall back to system Noto Sans Lao */ }
     })()
+  }, [])
+
+  useEffect(() => {
+    try {
+      const saved = sessionStorage.getItem('bcb_active_staff_name')
+      if (saved) setActiveStaffName(saved)
+    } catch (_) {}
   }, [])
 
   useEffect(() => {
@@ -269,6 +286,26 @@ export default function StaffPage() {
     setConfirmModal({ message, onConfirm })
   }
 
+  async function logActivity(action, detail) {
+    if (!supabase) return
+    try {
+      await supabase.from('audit_log').insert({
+        staff_name: activeStaffName || 'ບໍ່ລະບຸ',
+        action,
+        detail: detail || null,
+      })
+    } catch (_) {}
+  }
+
+  async function loadActivityLog() {
+    if (!supabase) return
+    setActivityLoading(true)
+    const { data } = await supabase.from('audit_log').select('*')
+      .order('created_at', { ascending: false }).limit(100)
+    setActivityLog(data || [])
+    setActivityLoading(false)
+  }
+
   function resetQo() {
     setQoBagMode('items'); setQoSelected({}); setQoBagPacks([{}]); setQoStep(1); setQoQnum(null); setQoName('')
   }
@@ -302,6 +339,7 @@ export default function StaffPage() {
       await supabase.from('orders').update({ items: JSON.stringify(newItems), total: newTotal }).eq('id', editOrder.id)
       await saveConfig(stockKey, stockArr)
       setOrders(prev => prev.map(o => o.id === editOrder.id ? { ...o, items: JSON.stringify(newItems), total: newTotal } : o))
+      logActivity('edit_order', `#${String(editOrder.qnum).padStart(4, '0')} → ${newTotal.toLocaleString()}`)
       setEditOrder(null)
       showToast(`✏️ #${String(editOrder.qnum).padStart(4, '0')} ແກ້ໄຂແລ້ວ`, 'green')
     } catch (e) { alert('❌ ' + (e.message || 'error')) }
@@ -709,6 +747,7 @@ export default function StaffPage() {
     await supabase.from('orders').update({ done: true, done_at: doneAt }).eq('id', o.id)
     announce(o.qnum)
     showToast(`✅ ຄິວ ${String(o.qnum).padStart(4,'0')} Done`, 'green')
+    logActivity('done_order', `#${String(o.qnum).padStart(4, '0')}`)
     if (settings.autoprintOn) {
       setTimeout(() => smartPrint(o), 300)
     }
@@ -721,6 +760,7 @@ export default function StaffPage() {
     await supabase.from('orders').update({ status: 'confirmed', done: true, done_at: doneAt }).eq('id', o.id)
     announce(o.qnum)
     showToast(`✅ ຢືນຢັນ #${String(o.qnum).padStart(4,'0')}`, 'green')
+    logActivity('confirm_order', `#${String(o.qnum).padStart(4, '0')}`)
     if (settings.autoprintOn) setTimeout(() => smartPrint(o), 300)
   }
 
@@ -773,24 +813,37 @@ export default function StaffPage() {
       items.forEach(it => { freshStock[it.menuIdx] = (freshStock[it.menuIdx] || 0) + it.qty })
       await saveConfig('stock_online', freshStock)
       await supabase.from('orders').update({ status: 'rejected' }).eq('id', o.id)
+      logActivity('reject_order', `#${String(o.qnum).padStart(4, '0')}`)
       showToast('✕ ປະຕິເສດ', 'orange')
     })
   }
 
   function cancelOrder(o) {
-    showConfirm('ຢືນຢັນການຍົກເລີກອໍເດີນີ້ບໍ?', async () => {
-      setOrders(prev => prev.map(ord => ord.id === o.id ? { ...ord, cancelled: true } : ord))
-      const items = typeof o.items === 'string' ? JSON.parse(o.items) : o.items || []
-      const stockKey = o.type === 'online' ? 'stock_online' : 'stock_shop'
-      // Fetch fresh stock from DB to avoid stale closure
-      const { data: row } = await supabase.from('shop_config').select('value').eq('key', stockKey).single()
-      const fallback = o.type === 'online' ? stockOnline : stockShop
-      const freshStock = row ? JSON.parse(row.value) : [...fallback]
-      items.forEach(it => { freshStock[it.menuIdx] = (freshStock[it.menuIdx] || 0) + it.qty })
-      await saveConfig(stockKey, freshStock)
-      await supabase.from('orders').update({ cancelled: true }).eq('id', o.id)
-      showToast('ຍົກເລີກ', 'orange')
-    })
+    setCancelReason('')
+    setCancelRefund(String(o.total || 0))
+    setCancelModal(o)
+  }
+
+  async function confirmCancelOrder() {
+    const o = cancelModal
+    if (!o) return
+    const reason = cancelReason.trim()
+    const refund = Math.max(0, +cancelRefund || 0)
+    setCancelModal(null)
+    setOrders(prev => prev.map(ord => ord.id === o.id
+      ? { ...ord, cancelled: true, cancel_reason: reason, refund_amount: refund }
+      : ord))
+    const items = typeof o.items === 'string' ? JSON.parse(o.items) : o.items || []
+    const stockKey = o.type === 'online' ? 'stock_online' : 'stock_shop'
+    // Fetch fresh stock from DB to avoid stale closure
+    const { data: row } = await supabase.from('shop_config').select('value').eq('key', stockKey).single()
+    const fallback = o.type === 'online' ? stockOnline : stockShop
+    const freshStock = row ? JSON.parse(row.value) : [...fallback]
+    items.forEach(it => { freshStock[it.menuIdx] = (freshStock[it.menuIdx] || 0) + it.qty })
+    await saveConfig(stockKey, freshStock)
+    await supabase.from('orders').update({ cancelled: true, cancel_reason: reason, refund_amount: refund }).eq('id', o.id)
+    logActivity('cancel_order', `#${String(o.qnum).padStart(4, '0')} — ${reason || 'ບໍ່ໄດ້ໃສ່ເຫດຜົນ'} (ຄືນເງິນ ${refund.toLocaleString()})`)
+    showToast('ຍົກເລີກ', 'orange')
   }
 
   async function blockUser(o) {
@@ -1318,9 +1371,30 @@ export default function StaffPage() {
   }
 
   function smartPrint(o) {
+    const method = usbDeviceRef.current && usbEndpointRef.current ? 'usb' : btCharRef.current ? 'bluetooth' : 'browser'
+    logReceiptPrint(o, method)
     if (usbDeviceRef.current && usbEndpointRef.current) usbPrint(o)
     else if (btCharRef.current) btPrint(o)
     else printOrder(o)
+  }
+
+  async function logReceiptPrint(o, method) {
+    if (!supabase) return
+    try {
+      await supabase.from('receipt_log').insert({
+        order_id: o.id, qnum: o.qnum, printed_by: activeStaffName || 'ບໍ່ລະບຸ', method,
+      })
+      setPrintLog(prev => [{ id: `local-${Date.now()}`, order_id: o.id, qnum: o.qnum, printed_by: activeStaffName || 'ບໍ່ລະບຸ', method, created_at: new Date().toISOString() }, ...prev])
+    } catch (_) {}
+  }
+
+  async function loadPrintLog() {
+    if (!supabase) return
+    setPrintLogLoading(true)
+    const { data } = await supabase.from('receipt_log').select('*')
+      .order('created_at', { ascending: false }).limit(100)
+    setPrintLog(data || [])
+    setPrintLogLoading(false)
   }
 
   // ─── Stock ───
@@ -1337,6 +1411,7 @@ export default function StaffPage() {
       saveConfig('stock_shop', stockShop),
       saveConfig('stock_online', stockOnline),
     ])
+    logActivity('save_stock', '')
     showToast('ບັນທຶກສະຕ໋ອກ ✅', 'green')
   }
 
@@ -1407,6 +1482,7 @@ export default function StaffPage() {
       // writes land out of order and have realtime echo the wrong one back
       settingsSaveChainRef.current = settingsSaveChainRef.current.then(() => saveConfig('settings', newSettings))
       showToast(newSettings[key] ? 'ເປີດ ✅' : 'ປິດ', 'green')
+      logActivity('toggle_setting', `${key} → ${newSettings[key] ? 'ON' : 'OFF'}`)
       return newSettings
     })
   }
@@ -1576,7 +1652,7 @@ export default function StaffPage() {
   const salesOrders = orders.filter(o => {
     if (!o.done) return false
     const d = new Date(o.done_at || o.created_at).toISOString().split('T')[0]
-    return d === salesDate
+    return d >= salesDateFrom && d <= salesDateTo
   })
   const salesTotal = salesOrders.reduce((s, o) => s + (o.total || 0), 0)
   const walkinTotal = salesOrders.filter(o => o.type === 'walkin').reduce((s, o) => s + (o.total || 0), 0)
@@ -1594,11 +1670,53 @@ export default function StaffPage() {
   const salesProfit = salesTotal - totalCost
   const hasCosts = costs.some(c => c > 0)
 
-  // Get all sales dates
-  const salesDates = [...new Set(orders.filter(o => o.done).map(o =>
-    new Date(o.done_at || o.created_at).toISOString().split('T')[0]
-  ))].sort().reverse()
-  if (!salesDates.includes(salesDate)) salesDates.unshift(salesDate)
+  function setSalesRangePreset(preset) {
+    const today = new Date()
+    const toStr = d => d.toISOString().split('T')[0]
+    if (preset === 'today') { setSalesDateFrom(toStr(today)); setSalesDateTo(toStr(today)) }
+    else if (preset === 'yesterday') {
+      const y = new Date(today); y.setDate(y.getDate() - 1)
+      setSalesDateFrom(toStr(y)); setSalesDateTo(toStr(y))
+    } else if (preset === '7d') {
+      const from = new Date(today); from.setDate(from.getDate() - 6)
+      setSalesDateFrom(toStr(from)); setSalesDateTo(toStr(today))
+    } else if (preset === 'month') {
+      const from = new Date(today.getFullYear(), today.getMonth(), 1)
+      setSalesDateFrom(toStr(from)); setSalesDateTo(toStr(today))
+    }
+  }
+
+  function exportSalesCSV() {
+    const esc = v => `"${String(v ?? '').replace(/"/g, '""')}"`
+    const rows = [['ຄິວ', 'ວັນທີ', 'ເວລາ', 'ປະເພດ', 'ລາຍການ', 'ຍອດລວມ']]
+    salesOrders.forEach(o => {
+      const items = typeof o.items === 'string' ? JSON.parse(o.items) : o.items || []
+      const dt = new Date(o.done_at || o.created_at)
+      rows.push([
+        String(o.qnum).padStart(4, '0'),
+        dt.toISOString().split('T')[0],
+        dt.toLocaleTimeString('lo-LA', { hour: '2-digit', minute: '2-digit' }),
+        o.type === 'online' ? 'Online' : 'Walk-in',
+        items.map(it => `${it.name} x${it.qty}`).join('; '),
+        o.total || 0,
+      ])
+    })
+    rows.push([])
+    rows.push(['ຊ່ວງວັນທີ', `${salesDateFrom} - ${salesDateTo}`])
+    rows.push(['ຍອດລວມ', salesTotal])
+    rows.push(['Walk-in', walkinTotal])
+    rows.push(['Online', onlineTotal])
+    if (hasCosts) { rows.push(['ຕົ້ນທຶນ', totalCost]); rows.push(['ກຳໄລ', salesProfit]) }
+    const csv = '﻿' + rows.map(r => r.map(esc).join(',')).join('\r\n')
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `sales_${salesDateFrom}_${salesDateTo}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+    logActivity('export_sales_csv', `${salesDateFrom} - ${salesDateTo}`)
+  }
 
   if (loading) return (
     <div className="min-h-dvh flex flex-col items-center justify-center" style={{ background: '#3d1f0a' }}>
@@ -1637,6 +1755,34 @@ export default function StaffPage() {
       }}
       pinInput={pinInput} setPinInput={setPinInput} error={pinError} setError={setPinError}
     />
+  )
+
+  if (staffPin && staffUnlocked && !activeStaffName) return (
+    <div className="min-h-dvh flex flex-col items-center justify-center gap-4 px-6" style={{ background: '#3d1f0a' }}>
+      <div className="font-serif text-xl font-black text-center" style={{ color: 'var(--cream)' }}>👋 ໃຜກຳລັງໃຊ້ຢູ່?</div>
+      <div className="text-xs font-bold text-center" style={{ color: 'rgba(253,246,238,0.7)' }}>
+        ພິມຊື່ຂອງທ່ານ — ໃຊ້ບັນທຶກວ່າໃຜເຮັດຫຍັງ ໃນ "ປະຫວັດການເຮັດວຽກ"
+      </div>
+      <input
+        type="text" value={whoInput} onChange={e => setWhoInput(e.target.value)}
+        placeholder="ຊື່ພະນັກງານ" autoFocus
+        className="input-field w-full max-w-xs text-center"
+        onKeyDown={e => {
+          if (e.key === 'Enter' && whoInput.trim()) {
+            setActiveStaffName(whoInput.trim())
+            try { sessionStorage.setItem('bcb_active_staff_name', whoInput.trim()) } catch (_) {}
+          }
+        }}
+      />
+      <button
+        onClick={() => {
+          if (!whoInput.trim()) return
+          setActiveStaffName(whoInput.trim())
+          try { sessionStorage.setItem('bcb_active_staff_name', whoInput.trim()) } catch (_) {}
+        }}
+        className="btn-primary px-8 py-3 rounded-full text-sm font-bold w-full max-w-xs"
+      >ເຂົ້າໃຊ້ງານ</button>
+    </div>
   )
 
   if (!supabase) return (
@@ -1908,6 +2054,60 @@ export default function StaffPage() {
                       </div>
                     </div>
                   ))}
+                </div>
+              </details>
+
+              {/* Activity Log */}
+              <details className="card" onToggle={e => { if (e.target.open) loadActivityLog() }}>
+                <summary className="font-black text-xs tracking-widest uppercase cursor-pointer" style={{ color: 'var(--brown3)' }}>📋 ປະຫວັດການເຮັດວຽກ</summary>
+                <div className="mt-3 flex flex-col gap-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold" style={{ color: 'var(--gray3)' }}>
+                      ກຳລັງໃຊ້ງານ: <span style={{ color: 'var(--brown)' }}>{activeStaffName || '—'}</span>
+                    </span>
+                    {activeStaffName && (
+                      <button
+                        onClick={() => { setActiveStaffName(''); try { sessionStorage.removeItem('bcb_active_staff_name') } catch (_) {} }}
+                        className="text-xs px-2.5 py-1 rounded-lg font-black" style={{ background: 'var(--cream2)', color: 'var(--brown2)', border: '1.5px solid var(--cream3)' }}
+                      >ປ່ຽນຄົນ</button>
+                    )}
+                  </div>
+                  {activityLoading && <div className="text-xs font-bold text-center py-3" style={{ color: 'var(--gray3)' }}>ກຳລັງໂຫລດ...</div>}
+                  {!activityLoading && activityLog.length === 0 && (
+                    <div className="text-xs font-bold text-center py-3" style={{ color: 'var(--gray3)' }}>ຍັງບໍ່ມີປະຫວັດ</div>
+                  )}
+                  {!activityLoading && activityLog.map(a => (
+                    <div key={a.id} className="py-2 border-b border-[#f5ebe0] text-xs">
+                      <div className="font-black" style={{ color: 'var(--brown)' }}>{a.staff_name || 'ບໍ່ລະບຸ'} · <span style={{ color: 'var(--gray3)', fontWeight: 700 }}>{a.action}</span></div>
+                      {a.detail && <div style={{ color: 'var(--gray3)' }}>{a.detail}</div>}
+                      <div style={{ color: 'var(--gray3)' }}>{new Date(a.created_at).toLocaleString('lo-LA')}</div>
+                    </div>
+                  ))}
+                </div>
+              </details>
+
+              {/* Receipt Print History */}
+              <details className="card" onToggle={e => { if (e.target.open) loadPrintLog() }}>
+                <summary className="font-black text-xs tracking-widest uppercase cursor-pointer" style={{ color: 'var(--brown3)' }}>🖨 ປະຫວັດການພິມ</summary>
+                <div className="mt-3 flex flex-col gap-2">
+                  {printLogLoading && <div className="text-xs font-bold text-center py-3" style={{ color: 'var(--gray3)' }}>ກຳລັງໂຫລດ...</div>}
+                  {!printLogLoading && printLog.length === 0 && (
+                    <div className="text-xs font-bold text-center py-3" style={{ color: 'var(--gray3)' }}>ຍັງບໍ່ມີປະຫວັດ</div>
+                  )}
+                  {!printLogLoading && printLog.map(p => {
+                    const ord = orders.find(o => o.id === p.order_id)
+                    return (
+                      <div key={p.id} className="flex items-center justify-between py-2 border-b border-[#f5ebe0] text-xs">
+                        <div>
+                          <div className="font-black" style={{ color: 'var(--brown)' }}>#{String(p.qnum).padStart(4, '0')} · {p.method}</div>
+                          <div style={{ color: 'var(--gray3)' }}>{p.printed_by || 'ບໍ່ລະບຸ'} · {new Date(p.created_at).toLocaleString('lo-LA')}</div>
+                        </div>
+                        {ord && (
+                          <button onClick={() => smartPrint(ord)} className="text-xs px-2.5 py-1.5 rounded-lg font-black flex-shrink-0" style={{ background: 'var(--cream2)', color: 'var(--brown2)', border: '1.5px solid var(--cream3)' }}>🖨 ພິມຄືນ</button>
+                        )}
+                      </div>
+                    )
+                  })}
                 </div>
               </details>
 
@@ -2437,6 +2637,13 @@ export default function StaffPage() {
                           </div>
                         </div>
 
+                        {o.cancelled && (o.cancel_reason || o.refund_amount != null) && (
+                          <div className="rounded-xl p-2 mb-2 text-xs font-bold" style={{ background: '#fef2f2', color: '#b91c1c' }}>
+                            {o.cancel_reason && <div>📝 {o.cancel_reason}</div>}
+                            {o.refund_amount != null && <div>💸 ຄືນເງິນ {Number(o.refund_amount).toLocaleString()} ກີບ</div>}
+                          </div>
+                        )}
+
                         {/* Customer info */}
                         {cust && (
                           <div className="rounded-xl p-2 mb-2 text-sm font-bold leading-6" style={{ background: 'var(--cream2)', color: 'var(--brown2)' }}>
@@ -2660,9 +2867,18 @@ export default function StaffPage() {
             <div className="font-serif text-lg font-black" style={{ color: 'var(--cream)' }}>ຍອດຂາຍ · Sales</div>
           </div>
           <div className="max-w-lg mx-auto p-4">
-            <select value={salesDate} onChange={e => setSalesDate(e.target.value)} className="input-field mb-4">
-              {salesDates.map(d => <option key={d} value={d}>{d}</option>)}
-            </select>
+            <div className="flex gap-2 mb-2">
+              <input type="date" value={salesDateFrom} onChange={e => setSalesDateFrom(e.target.value)} className="input-field flex-1" />
+              <input type="date" value={salesDateTo} onChange={e => setSalesDateTo(e.target.value)} className="input-field flex-1" />
+            </div>
+            <div className="flex gap-1.5 mb-2 overflow-x-auto">
+              {[['today', 'ມື້ນີ້'], ['yesterday', 'ມື້ວານ'], ['7d', '7 ວັນ'], ['month', 'ເດືອນນີ້']].map(([k, l]) => (
+                <button key={k} onClick={() => setSalesRangePreset(k)}
+                  className="text-xs px-3 py-1.5 rounded-lg font-black flex-shrink-0"
+                  style={{ background: 'var(--cream2)', color: 'var(--brown2)', border: '1.5px solid var(--cream3)' }}>{l}</button>
+              ))}
+            </div>
+            <button onClick={exportSalesCSV} className="btn-outline w-full mb-4 text-sm py-2.5">📤 Export CSV ({salesOrders.length} ອໍເດີ)</button>
 
             <div className="rounded-2xl p-4 mb-3" style={{ background: 'var(--brown)' }}>
               <div className="flex justify-between items-center">
@@ -3433,6 +3649,61 @@ export default function StaffPage() {
                 style={{ background: '#dc2626' }}
               >
                 ຢືນຢັນ
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Cancel Order Modal — collects reason + refund amount */}
+      {cancelModal && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center p-5"
+          style={{ background: 'rgba(61,31,10,0.65)' }}
+          onClick={() => setCancelModal(null)}
+        >
+          <div
+            className="w-full max-w-xs rounded-3xl overflow-hidden shadow-2xl"
+            style={{ background: 'var(--warm-white)' }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="px-6 py-5 text-center" style={{ background: 'var(--brown)' }}>
+              <div className="font-serif text-xl font-black" style={{ color: 'var(--cream)' }}>
+                ຍົກເລີກອໍເດີ #{String(cancelModal.qnum).padStart(4, '0')}
+              </div>
+            </div>
+            <div className="px-6 py-5 flex flex-col gap-3">
+              <div>
+                <div className="text-xs font-black mb-1" style={{ color: 'var(--gray3)' }}>ເຫດຜົນ</div>
+                <textarea
+                  value={cancelReason} onChange={e => setCancelReason(e.target.value)}
+                  placeholder="ເຊັ່น: ລູກຄ້າສັ່ງຜິດ, ຂອງໝົດ, ຍົກເລີກເອງ..."
+                  className="input-field w-full text-sm" rows={2}
+                />
+              </div>
+              <div>
+                <div className="text-xs font-black mb-1" style={{ color: 'var(--gray3)' }}>ຈຳນວນເງິນທີ່ຄືນ (ກີບ)</div>
+                <input
+                  type="text" inputMode="numeric" value={cancelRefund}
+                  onChange={e => setCancelRefund(e.target.value.replace(/[^\d]/g, ''))}
+                  className="input-field w-full text-sm"
+                />
+              </div>
+            </div>
+            <div className="px-6 pb-6 flex gap-3">
+              <button
+                onClick={() => setCancelModal(null)}
+                className="flex-1 py-3 rounded-2xl font-black text-sm border-2"
+                style={{ borderColor: 'var(--cream3)', color: 'var(--gray3)', background: 'var(--cream2)' }}
+              >
+                ປິດ
+              </button>
+              <button
+                onClick={confirmCancelOrder}
+                className="flex-1 py-3 rounded-2xl font-black text-sm text-white"
+                style={{ background: '#dc2626' }}
+              >
+                ຢືນຢັນຍົກເລີກ
               </button>
             </div>
           </div>
