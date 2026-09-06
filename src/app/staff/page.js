@@ -746,7 +746,10 @@ export default function StaffPage() {
   const pendingPreorderTotal = Object.values(pendingPreorderCount).reduce((s, v) => s + v, 0)
   const LOW_STOCK = 5
   const lowStockMenus = menus.map((m, i) => ({ name: m.lo, shop: stockShop[i] || 0, online: stockOnline[i] || 0 }))
-    .filter(m => m.shop <= LOW_STOCK || m.online <= LOW_STOCK)
+    // Items sitting at 0 stock are simply "not offered", not "about to run
+    // out" — lumping them in here buried the genuinely-low items in a huge,
+    // mostly-irrelevant banner. Only warn about stock that's actually low.
+    .filter(m => (m.shop > 0 && m.shop <= LOW_STOCK) || (m.online > 0 && m.online <= LOW_STOCK))
 
   async function doneOrder(o) {
     const doneAt = new Date().toISOString()
