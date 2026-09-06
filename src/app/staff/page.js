@@ -1888,7 +1888,7 @@ export default function StaffPage() {
           </div>
 
           {/* Sidebar + Orders layout */}
-          <div className={`flex-1 overflow-hidden flex flex-col md:grid max-w-6xl mx-auto w-full transition-all duration-300 ${sidebarOpen ? 'md:grid-cols-[300px_1fr]' : 'md:grid-cols-[0px_1fr]'}`}>
+          <div className={`flex-1 overflow-hidden flex flex-col md:grid max-w-[1800px] mx-auto w-full transition-all duration-300 ${sidebarOpen ? 'md:grid-cols-[320px_1fr]' : 'md:grid-cols-[0px_1fr]'}`}>
             {/* Sidebar */}
             <div className={`flex flex-col gap-3 overflow-y-auto overflow-x-hidden transition-all duration-300 ${sidebarOpen ? 'p-3 opacity-100 max-h-[50vh] md:max-h-none' : 'max-h-0 p-0 opacity-0 md:w-0 pointer-events-none'}`}>
               {/* QR Code shortcut */}
@@ -2632,7 +2632,7 @@ export default function StaffPage() {
 
               {!customerSearch.trim() && activeOrders.length === 0 && <div className="text-center py-12 text-lg font-bold" style={{ color: 'var(--cream3)' }}>ຍັງບໍ່ມີອໍເດີ</div>}
 
-              {!customerSearch.trim() && <div className="flex flex-col gap-3">
+              {!customerSearch.trim() && <div className="flex flex-col gap-3 xl:grid xl:grid-cols-2 xl:items-start xl:gap-3">
                 {activeOrders.map(o => {
                   const items = typeof o.items === 'string' ? JSON.parse(o.items) : o.items || []
                   const cust = o.customer ? (typeof o.customer === 'string' ? JSON.parse(o.customer) : o.customer) : null
@@ -2926,7 +2926,7 @@ export default function StaffPage() {
           <div className="sticky top-0 z-10 px-4 py-3" style={{ background: 'var(--brown)' }}>
             <div className="font-serif text-lg font-black" style={{ color: 'var(--cream)' }}>ຍອດຂາຍ · Sales</div>
           </div>
-          <div className="max-w-lg mx-auto p-4">
+          <div className="max-w-3xl mx-auto p-4">
             <div className="flex gap-2 mb-2">
               <input type="date" value={salesDateFrom} onChange={e => setSalesDateFrom(e.target.value)} className="input-field flex-1" />
               <input type="date" value={salesDateTo} onChange={e => setSalesDateTo(e.target.value)} className="input-field flex-1" />
@@ -3256,7 +3256,7 @@ export default function StaffPage() {
                 />
               </div>
               <div className="flex-1 overflow-y-auto p-4">
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-6 gap-3">
                   {menus.map((m, i) => {
                     const qty = qoSelected[i] || 0
                     const s = stockShop[i] || 0
@@ -3291,23 +3291,25 @@ export default function StaffPage() {
               </div>
               {qoTotalItems > 0 && (
                 <div className="p-4 border-t-2 border-[#e8d5c0] flex-shrink-0" style={{ background: 'var(--warm-white)' }}>
-                  <div className="flex justify-between mb-3 px-1">
-                    <span className="text-sm font-black" style={{ color: 'var(--brown)' }}>🛍 {qoTotalItems} ກ້ອນ</span>
-                    <span className="text-sm font-black" style={{ color: 'var(--brown)' }}>{qoTotalPrice.toLocaleString()} ກີບ</span>
+                  <div className="max-w-2xl mx-auto w-full">
+                    <div className="flex justify-between mb-3 px-1">
+                      <span className="text-sm font-black" style={{ color: 'var(--brown)' }}>🛍 {qoTotalItems} ກ້ອນ</span>
+                      <span className="text-sm font-black" style={{ color: 'var(--brown)' }}>{qoTotalPrice.toLocaleString()} ກີບ</span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 mb-2">
+                      <button onClick={() => submitQuickOrder('cash')} disabled={qoSubmitting}
+                        className="py-4 rounded-2xl font-black text-base text-white active:scale-95 transition-all"
+                        style={{ background: '#15803d' }}>
+                        {qoSubmitting ? '...' : '💵 ສດ'}
+                      </button>
+                      <button onClick={() => submitQuickOrder('qr')} disabled={qoSubmitting}
+                        className="py-4 rounded-2xl font-black text-base text-white active:scale-95 transition-all"
+                        style={{ background: '#1d4ed8' }}>
+                        {qoSubmitting ? '...' : '📱 ໂອນ'}
+                      </button>
+                    </div>
+                    <button className="btn-outline py-2 text-xs w-full" onClick={() => setQoStep(2)}>ຈັດຖົງ / Pack bags →</button>
                   </div>
-                  <div className="grid grid-cols-2 gap-2 mb-2">
-                    <button onClick={() => submitQuickOrder('cash')} disabled={qoSubmitting}
-                      className="py-4 rounded-2xl font-black text-base text-white active:scale-95 transition-all"
-                      style={{ background: '#15803d' }}>
-                      {qoSubmitting ? '...' : '💵 ສດ'}
-                    </button>
-                    <button onClick={() => submitQuickOrder('qr')} disabled={qoSubmitting}
-                      className="py-4 rounded-2xl font-black text-base text-white active:scale-95 transition-all"
-                      style={{ background: '#1d4ed8' }}>
-                      {qoSubmitting ? '...' : '📱 ໂອນ'}
-                    </button>
-                  </div>
-                  <button className="btn-outline py-2 text-xs w-full" onClick={() => setQoStep(2)}>ຈັດຖົງ / Pack bags →</button>
                 </div>
               )}
             </>
@@ -3404,21 +3406,23 @@ export default function StaffPage() {
 
               {!qoBagPacks.every(b => !Object.keys(b).length) && (
                 <div className="p-4 border-t-2 border-[#e8d5c0] flex-shrink-0" style={{ background: 'var(--warm-white)' }}>
-                  <div className="flex justify-between mb-3 px-1">
-                    <span className="font-black" style={{ color: 'var(--brown)' }}>ລວມ {qoTotalItems} ກ້ອນ</span>
-                    <span className="font-black" style={{ color: 'var(--brown)' }}>{qoTotalPrice.toLocaleString()} ກີບ</span>
+                  <div className="max-w-2xl mx-auto w-full">
+                    <div className="flex justify-between mb-3 px-1">
+                      <span className="font-black" style={{ color: 'var(--brown)' }}>ລວມ {qoTotalItems} ກ້ອນ</span>
+                      <span className="font-black" style={{ color: 'var(--brown)' }}>{qoTotalPrice.toLocaleString()} ກີບ</span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <button onClick={() => submitQuickOrder('cash')} disabled={qoSubmitting}
+                        className="py-4 rounded-2xl font-black text-base text-white" style={{ background: '#15803d' }}>
+                        {qoSubmitting ? '...' : '💵 ສດ · ຮັບຄິວ'}
+                      </button>
+                      <button onClick={() => submitQuickOrder('qr')} disabled={qoSubmitting}
+                        className="py-4 rounded-2xl font-black text-base text-white" style={{ background: '#1d4ed8' }}>
+                        {qoSubmitting ? '...' : '📱 ໂອນ · ຮັບຄິວ'}
+                      </button>
+                    </div>
+                    <button className="btn-outline mt-2 py-3 text-sm w-full" onClick={() => setQoStep(1)}>← ກັບຄືນ</button>
                   </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <button onClick={() => submitQuickOrder('cash')} disabled={qoSubmitting}
-                      className="py-4 rounded-2xl font-black text-base text-white" style={{ background: '#15803d' }}>
-                      {qoSubmitting ? '...' : '💵 ສດ · ຮັບຄິວ'}
-                    </button>
-                    <button onClick={() => submitQuickOrder('qr')} disabled={qoSubmitting}
-                      className="py-4 rounded-2xl font-black text-base text-white" style={{ background: '#1d4ed8' }}>
-                      {qoSubmitting ? '...' : '📱 ໂອນ · ຮັບຄິວ'}
-                    </button>
-                  </div>
-                  <button className="btn-outline mt-2 py-3 text-sm w-full" onClick={() => setQoStep(1)}>← ກັບຄືນ</button>
                 </div>
               )}
             </>
