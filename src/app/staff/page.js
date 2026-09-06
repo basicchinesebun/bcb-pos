@@ -1280,7 +1280,8 @@ export default function StaffPage() {
       usbEndpointRef.current = endpoint
       setUsbConnected(true)
       showToast(`🖨 USB ${device.productName || 'Printer'} ✅`, 'green')
-      device.addEventListener('disconnect', () => {
+      navigator.usb.addEventListener('disconnect', (ev) => {
+        if (ev.device !== device) return
         usbDeviceRef.current = null
         usbEndpointRef.current = null
         setUsbConnected(false)
