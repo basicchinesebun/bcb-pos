@@ -1204,6 +1204,57 @@ export default function StaffPage() {
   const [usbConnected, setUsbConnected] = useState(false)
   const hasUsb = typeof navigator !== 'undefined' && 'usb' in navigator
 
+  // ─── Serial Printer (Web Serial / ESC/POS) ───
+  // For printers paired as "classic" Bluetooth (SPP → a virtual COM port in
+  // Windows) rather than Bluetooth Low Energy — Web Bluetooth's GATT API
+  // cannot talk to those at all, but Web Serial can via the COM port Windows
+  // already created when the printer was paired at the OS level.
+  const serialPortRef = useRef(null)
+  const [serialConnected, setSerialConnected] = useState(false)
+  const hasSerial = typeof navigator !== 'undefined' && 'serial' in navigator
+
+  async function connectSerialPrinter() {
+    if (!hasSerial) { showToast('❌ ໃຊ້ Chrome/Edge ສຳລັບ Serial', 'red'); return }
+    try {
+      showToast('ກຳລັງເຊື່ອມ Serial...', 'blue')
+      const port = await navigator.serial.requestPort()
+      await port.open({ baudRate: 9600 })
+      serialPortRef.current = port
+      setSerialConnected(true)
+      showToast('🖨 Serial ✅', 'green')
+      port.addEventListener('disconnect', () => {
+        serialPortRef.current = null
+        setSerialConnected(false)
+        showToast('Serial ຕັດການເຊື່ອມ', 'orange')
+      })
+    } catch (e) {
+      if (e.name !== 'NotFoundError') showToast('❌ Serial: ' + (e.message || e.name), 'red')
+    }
+  }
+
+  async function serialPrint(o) {
+    if (!serialPortRef.current) { printOrder(o); return }
+    let data
+    const pw = shopInfo.printerWidth || 384
+    try {
+      const hires = await renderReceiptCanvas(o, pw * 2)
+      data = canvasToEscPos(downsampleCanvas(hires, pw))
+    } catch { data = buildEscPos(o) }
+    const chunkSize = 200
+    const writer = serialPortRef.current.writable.getWriter()
+    try {
+      for (let i = 0; i < data.length; i += chunkSize) {
+        await writer.write(data.slice(i, i + chunkSize))
+        await new Promise(r => setTimeout(r, 20))
+      }
+      showToast('ພິມແລ້ວ ✅', 'green')
+    } catch {
+      showToast('❌ Serial ພິມຜິດ', 'red')
+    } finally {
+      writer.releaseLock()
+    }
+  }
+
   async function connectUsbPrinter() {
     if (!hasUsb) { showToast('❌ ໃຊ້ Chrome ສຳລັບ USB', 'red'); return }
     try {
@@ -1384,10 +1435,11 @@ export default function StaffPage() {
   }
 
   function smartPrint(o) {
-    const method = usbDeviceRef.current && usbEndpointRef.current ? 'usb' : btCharRef.current ? 'bluetooth' : 'browser'
+    const method = usbDeviceRef.current && usbEndpointRef.current ? 'usb' : btCharRef.current ? 'bluetooth' : serialPortRef.current ? 'serial' : 'browser'
     logReceiptPrint(o, method)
     if (usbDeviceRef.current && usbEndpointRef.current) usbPrint(o)
     else if (btCharRef.current) btPrint(o)
+    else if (serialPortRef.current) serialPrint(o)
     else printOrder(o)
     if (settings.autoKickDrawer !== false) kickDrawer()
   }
@@ -1401,8 +1453,11 @@ export default function StaffPage() {
         await usbDeviceRef.current.transferOut(usbEndpointRef.current.endpointNumber, cmd)
       } else if (btCharRef.current) {
         await btCharRef.current.writeValue(cmd)
+      } else if (serialPortRef.current) {
+        const writer = serialPortRef.current.writable.getWriter()
+        try { await writer.write(cmd) } finally { writer.releaseLock() }
       } else {
-        showToast('⚠️ ຕ້ອງເຊື່ອມຕໍ່ເຄື່ອງພິມ USB/Bluetooth ກ່ອນຈຶ່ງເປີດລິ້ນຊັກໄດ້', 'orange')
+        showToast('⚠️ ຕ້ອງເຊື່ອມຕໍ່ເຄື່ອງພິມ USB/Bluetooth/Serial ກ່ອນຈຶ່ງເປີດລິ້ນຊັກໄດ້', 'orange')
         return
       }
       showToast('🔓 ເປີດລິ້ນຊັກແລ້ວ', 'green')
@@ -1880,6 +1935,11 @@ export default function StaffPage() {
               <button onClick={connectPrinter} className={`text-xs font-black px-3 py-2 rounded-lg border ${btConnected ? 'border-green-400 text-green-300' : 'border-[rgba(253,246,238,0.35)] text-[#fdf6ee]'}`}>
                 {btConnected ? '🖨 BT ✓' : 'BT'}
               </button>
+              {hasSerial && (
+                <button onClick={connectSerialPrinter} title="ສຳລັບເຄື່ອງພິມທີ່ pair ແບບ Bluetooth ທຳມະດາ (COM port)" className={`text-xs font-black px-3 py-2 rounded-lg border ${serialConnected ? 'border-green-400 text-green-300' : 'border-[rgba(253,246,238,0.35)] text-[#fdf6ee]'}`}>
+                  {serialConnected ? '🖨 COM ✓' : 'COM'}
+                </button>
+              )}
               <button onClick={kickDrawer} title="ເປີດລິ້ນຊັກ" className="text-xs font-black px-3 py-2 rounded-lg border border-[rgba(253,246,238,0.35)] text-[#fdf6ee]">🔓</button>
               <button onClick={() => alert('ຕ້ອງຊອກຫາ ↺ Reset ໃນລາຍການ')} className="text-xs font-black px-3 py-2 rounded-lg border border-red-400 text-red-300">↺</button>
             </div>
