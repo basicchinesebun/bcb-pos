@@ -765,12 +765,16 @@ export default function StaffPage() {
   }
 
   async function confirmOrder(o) {
-    const doneAt = new Date().toISOString()
-    // Optimistic update — confirm + done in one step, moves to archive immediately
-    setOrders(prev => prev.map(ord => ord.id === o.id ? { ...ord, status: 'confirmed', done: true, done_at: doneAt } : ord))
-    await supabase.from('orders').update({ status: 'confirmed', done: true, done_at: doneAt }).eq('id', o.id)
-    announce(o.qnum)
-    showToast(`✅ ຢືນຢັນ #${String(o.qnum).padStart(4,'0')}`, 'green')
+    // Confirming used to also mark the order "done" in the same step, which
+    // archived it immediately — that's what made a mis-ordered online
+    // preorder impossible to fix afterward (the ✏️ edit button, print, and
+    // announce-queue actions all require !o.done). Confirm now only accepts
+    // the order and sends it to the kitchen queue, same as a walk-in order;
+    // staff mark it done (and the queue gets announced) once it's actually
+    // ready, exactly like every other order type already works.
+    setOrders(prev => prev.map(ord => ord.id === o.id ? { ...ord, status: 'confirmed' } : ord))
+    await supabase.from('orders').update({ status: 'confirmed' }).eq('id', o.id)
+    showToast(`🍳 ສົ່ງຄົວ #${String(o.qnum).padStart(4,'0')}`, 'green')
     logActivity('confirm_order', `#${String(o.qnum).padStart(4, '0')}`)
     if (settings.autoprintOn) setTimeout(() => smartPrint(o), 300)
   }
