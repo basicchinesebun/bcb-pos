@@ -69,6 +69,11 @@ body {
   }
 }
 
+@page {
+  size: 80mm auto;
+  margin: 0;
+}
+
 @media print {
   body > *:not(#print-receipt) { display: none !important; }
   #print-receipt {
