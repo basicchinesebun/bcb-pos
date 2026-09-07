@@ -117,6 +117,8 @@ export default function StaffPage() {
   const [headerCollapsed, setHeaderCollapsed] = useState(false)
   const [customerSearchCollapsed, setCustomerSearchCollapsed] = useState(true)
   const [displayOrderId, setDisplayOrderId] = useState(null)
+  const [cashModalOpen, setCashModalOpen] = useState(false)
+  const [cashReceived, setCashReceived] = useState('')
   const [mainSearchCollapsed, setMainSearchCollapsed] = useState(true)
   const [batchOpen, setBatchOpen] = useState(false)
   const [batchSelected, setBatchSelected] = useState(new Set())
@@ -3442,7 +3444,7 @@ export default function StaffPage() {
                       <span className="text-sm font-black" style={{ color: 'var(--brown)' }}>{qoTotalPrice.toLocaleString()} ກີບ</span>
                     </div>
                     <div className="grid grid-cols-2 gap-2 mb-2">
-                      <button onClick={() => submitQuickOrder('cash')} disabled={qoSubmitting}
+                      <button onClick={() => setCashModalOpen(true)} disabled={qoSubmitting}
                         className="py-4 rounded-2xl font-black text-base text-white active:scale-95 transition-all"
                         style={{ background: '#15803d' }}>
                         {qoSubmitting ? '...' : '💵 ສດ'}
@@ -3557,7 +3559,7 @@ export default function StaffPage() {
                       <span className="font-black" style={{ color: 'var(--brown)' }}>{qoTotalPrice.toLocaleString()} ກີບ</span>
                     </div>
                     <div className="grid grid-cols-2 gap-3">
-                      <button onClick={() => submitQuickOrder('cash')} disabled={qoSubmitting}
+                      <button onClick={() => setCashModalOpen(true)} disabled={qoSubmitting}
                         className="py-4 rounded-2xl font-black text-base text-white" style={{ background: '#15803d' }}>
                         {qoSubmitting ? '...' : '💵 ສດ · ຮັບຄິວ'}
                       </button>
@@ -3865,6 +3867,77 @@ export default function StaffPage() {
       )}
 
       {/* Cancel Order Modal — collects reason */}
+      {cashModalOpen && (() => {
+        const received = Number(cashReceived) || 0
+        const change = received - qoTotalPrice
+        const enough = received >= qoTotalPrice && received > 0
+        const close = () => { setCashModalOpen(false); setCashReceived('') }
+        return (
+          <div
+            className="fixed inset-0 z-[60] flex items-center justify-center p-5"
+            style={{ background: 'rgba(61,31,10,0.65)' }}
+            onClick={close}
+          >
+            <div
+              className="w-full max-w-xs rounded-3xl overflow-hidden shadow-2xl"
+              style={{ background: 'var(--warm-white)' }}
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="px-6 py-5 text-center" style={{ background: 'var(--brown)' }}>
+                <div className="font-serif text-xl font-black" style={{ color: 'var(--cream)' }}>ຮັບເງິນສົດ</div>
+                <div className="text-xs font-bold mt-1" style={{ color: 'rgba(253,246,238,0.6)' }}>
+                  ຍອດຕ້ອງຈ່າຍ: {qoTotalPrice.toLocaleString()} ກີບ
+                </div>
+              </div>
+              <div className="px-6 py-5 flex flex-col gap-3">
+                <div>
+                  <div className="text-xs font-black mb-1" style={{ color: 'var(--gray3)' }}>ລູກຄ້າສົ່ງເງິນມາເທົ່າໃດ</div>
+                  <input
+                    type="number" inputMode="numeric" value={cashReceived}
+                    onChange={e => setCashReceived(e.target.value)}
+                    placeholder="0" autoFocus
+                    className="input-field w-full text-2xl font-black text-center"
+                  />
+                </div>
+                <div className="grid grid-cols-4 gap-2">
+                  {[20000, 50000, 100000, 200000].map(n => (
+                    <button key={n} onClick={() => setCashReceived(String(n))}
+                      className="py-2 rounded-xl text-xs font-black" style={{ background: 'var(--cream2)', color: 'var(--brown2)' }}>
+                      {(n / 1000)}k
+                    </button>
+                  ))}
+                </div>
+                <button onClick={() => setCashReceived(String(qoTotalPrice))}
+                  className="py-2 rounded-xl text-xs font-black" style={{ background: 'var(--cream2)', color: 'var(--brown2)' }}>
+                  ພໍດີ · Exact
+                </button>
+                <div className="rounded-2xl p-4 text-center" style={{ background: enough ? '#dcfce7' : 'var(--cream2)' }}>
+                  <div className="text-xs font-black tracking-widest uppercase" style={{ color: enough ? '#15803d' : 'var(--gray3)' }}>
+                    {received === 0 ? 'ເງິນທອນ' : enough ? 'ເງິນທອນ · ຄືນ' : 'ຍັງຂາດອີກ'}
+                  </div>
+                  <div className="font-serif font-black text-3xl mt-1" style={{ color: enough ? '#15803d' : '#dc2626' }}>
+                    {(enough ? change : Math.max(0, qoTotalPrice - received)).toLocaleString()} ກີບ
+                  </div>
+                </div>
+              </div>
+              <div className="px-6 pb-6 flex gap-3">
+                <button onClick={close} className="flex-1 py-3 rounded-2xl font-black text-sm border-2" style={{ borderColor: 'var(--cream3)', color: 'var(--gray3)', background: 'var(--cream2)' }}>
+                  ປິດ
+                </button>
+                <button
+                  onClick={() => { setCashModalOpen(false); setCashReceived(''); submitQuickOrder('cash') }}
+                  disabled={!enough || qoSubmitting}
+                  className="flex-1 py-3 rounded-2xl font-black text-sm text-white disabled:opacity-40"
+                  style={{ background: '#15803d' }}
+                >
+                  ✓ ຢືນຢັນ
+                </button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
+
       {cancelModal && (
         <div
           className="fixed inset-0 z-[60] flex items-center justify-center p-5"
