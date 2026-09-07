@@ -44,7 +44,7 @@ export default function DisplayPage() {
   const hasOrder = order.items && order.items.length > 0
 
   return (
-    <div className="min-h-dvh flex flex-col select-none px-6 py-4 md:px-10 md:py-5" style={{ background: 'var(--brown)' }}>
+    <div className="h-dvh overflow-hidden flex flex-col select-none px-6 py-4 md:px-10 md:py-5" style={{ background: 'var(--brown)' }}>
       <div className="font-serif font-black text-center mb-2 flex-shrink-0" style={{ fontSize: 'clamp(20px,3vw,34px)', color: 'var(--cream)' }}>
         {shopInfo.name}
       </div>
