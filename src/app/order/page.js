@@ -830,13 +830,19 @@ export default function OrderPage() {
                   <span>ລວມ: {totalPrice.toLocaleString()} ກີບ</span>
                   <span>{new Date().toLocaleTimeString('lo-LA', { hour: '2-digit', minute: '2-digit' })}</span>
                 </div>
+                {qrImage && (
+                  <div className="flex flex-col items-center gap-2 mt-4 pt-4" style={{ borderTop: '1px dashed var(--cream3)' }}>
+                    <div className="text-xs font-black tracking-widest uppercase" style={{ color: 'var(--gray3)' }}>ສະແກນຊຳລະ · Scan to Pay</div>
+                    <img src={qrImage} alt="QR ຊຳລະເງິນ" className="rounded-xl" style={{ width: '100%', maxWidth: 220, background: '#fff', padding: 10 }} />
+                  </div>
+                )}
               </div>
               <div className="text-center py-4 px-4" style={{ background: '#3d1f0a' }}>
                 <div className="font-black text-base leading-snug" style={{ color: 'var(--cream)' }}>
-                  💰 ກະລຸນາໄປຊຳລະເງິນທີ່ເຄົາເຕີ້<br/>ເພື່ອຮັບໃບບິນ
+                  💰 ສະແກນ QR ຈ່າຍເລີຍ ຫຼື ໄປຊຳລະທີ່ເຄົາເຕີ້
                 </div>
                 <div className="text-xs font-bold mt-1" style={{ color: 'rgba(253,246,238,0.55)' }}>
-                  ຫຼັງຈາກຊຳລະແລ້ວ ກະລຸນາລໍຖ້າການຮຽກຄິວ
+                  ຫຼັງຈາກຊຳລະແລ້ວ ແຈ້ງເລກຄິວທີ່ເຄົາເຕີ້ ເພື່ອຮັບໃບບິນ
                 </div>
               </div>
             </div>
