@@ -87,7 +87,7 @@ export default function DisplayPage() {
           )}
         </div>
       ) : (
-        <div className="flex-1 w-full max-w-3xl mx-auto grid gap-8 items-center" style={{ gridTemplateColumns: qrImage ? '1.3fr 1fr' : '1fr' }}>
+        <div className="flex-1 w-full max-w-5xl mx-auto grid gap-8 items-center" style={{ gridTemplateColumns: qrImage ? '1fr 1.15fr' : '1fr' }}>
           <div className="rounded-3xl overflow-hidden" style={{ background: 'var(--warm-white)' }}>
             <div className="px-6 py-4 text-xs font-black tracking-widest uppercase" style={{ background: 'var(--cream2)', color: 'var(--gray3)' }}>
               ລາຍການ · Your Order
@@ -107,8 +107,8 @@ export default function DisplayPage() {
           </div>
           {qrImage && (
             <div className="flex flex-col items-center justify-center gap-3 rounded-3xl p-6" style={{ background: 'var(--warm-white)' }}>
-              <div className="text-xs font-black tracking-widest uppercase" style={{ color: 'var(--gray3)' }}>ສະແກນຊຳລະ</div>
-              <img src={qrImage} alt="QR" className="rounded-xl" style={{ width: '100%', maxWidth: 260 }} />
+              <div className="text-sm font-black tracking-widest uppercase" style={{ color: 'var(--gray3)' }}>ສະແກນຊຳລະ</div>
+              <img src={qrImage} alt="QR" className="rounded-xl" style={{ width: '100%', maxWidth: 460 }} />
             </div>
           )}
         </div>
