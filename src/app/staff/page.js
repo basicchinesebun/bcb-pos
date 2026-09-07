@@ -1469,18 +1469,30 @@ export default function StaffPage() {
     if (settings.autoKickDrawer !== false) kickDrawer()
   }
 
-  // Standard ESC/POS cash-drawer kick pulse (ESC p 0 25 250) — most drawers
+  // Standard ESC/POS cash-drawer kick pulse (ESC p m t1 t2) — most drawers
   // wired through the receipt printer's RJ11/RJ12 port respond to this.
+  // Drawers get wired to one of two possible pins depending on the model
+  // (m=0 or m=1), so fire both pulses back to back — whichever one the
+  // drawer isn't wired to is simply ignored.
   async function kickDrawer() {
-    const cmd = new Uint8Array([0x1B, 0x70, 0x00, 0x19, 0xFA])
+    const cmdPin0 = new Uint8Array([0x1B, 0x70, 0x00, 0x19, 0xFA])
+    const cmdPin1 = new Uint8Array([0x1B, 0x70, 0x01, 0x19, 0xFA])
     try {
       if (usbDeviceRef.current && usbEndpointRef.current) {
-        await usbDeviceRef.current.transferOut(usbEndpointRef.current.endpointNumber, cmd)
+        await usbDeviceRef.current.transferOut(usbEndpointRef.current.endpointNumber, cmdPin0)
+        await new Promise(r => setTimeout(r, 100))
+        await usbDeviceRef.current.transferOut(usbEndpointRef.current.endpointNumber, cmdPin1)
       } else if (btCharRef.current) {
-        await btCharRef.current.writeValue(cmd)
+        await btCharRef.current.writeValue(cmdPin0)
+        await new Promise(r => setTimeout(r, 100))
+        await btCharRef.current.writeValue(cmdPin1)
       } else if (serialPortRef.current) {
         const writer = serialPortRef.current.writable.getWriter()
-        try { await writer.write(cmd) } finally { writer.releaseLock() }
+        try {
+          await writer.write(cmdPin0)
+          await new Promise(r => setTimeout(r, 100))
+          await writer.write(cmdPin1)
+        } finally { writer.releaseLock() }
       } else {
         showToast('⚠️ ຕ້ອງເຊື່ອມຕໍ່ເຄື່ອງພິມ USB/Bluetooth/Serial ກ່ອນຈຶ່ງເປີດລິ້ນຊັກໄດ້', 'orange')
         return
