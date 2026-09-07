@@ -225,7 +225,10 @@ export default function OrderPage() {
       Object.entries(effectiveSelected).forEach(([i, qty]) => {
         newStock[+i] = Math.max(0, (newStock[+i] || 0) - qty)
       })
-      await supabase.from('shop_config').upsert({ key: 'stock_shop', value: JSON.stringify(newStock) })
+      // onConflict:'key' is required — shop_config's primary key is id, so
+      // without it this is an INSERT that violates UNIQUE(key) and the stock
+      // deduction is silently dropped.
+      await supabase.from('shop_config').upsert({ key: 'stock_shop', value: JSON.stringify(newStock) }, { onConflict: 'key' })
 
       setQnum(nextQ)
       setStep(4)

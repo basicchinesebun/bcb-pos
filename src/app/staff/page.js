@@ -117,6 +117,25 @@ export default function StaffPage() {
   const [headerCollapsed, setHeaderCollapsed] = useState(false)
   const [customerSearchCollapsed, setCustomerSearchCollapsed] = useState(true)
   const [displayOrderId, setDisplayOrderId] = useState(null)
+  const [qtyModal, setQtyModal] = useState(null)
+  const [qtyInput, setQtyInput] = useState('')
+  const longPressRef = useRef(null)
+  const longPressFiredRef = useRef(false)
+
+  // Ordering 80 of something meant 80 taps on "+". Holding a menu card opens
+  // a keypad to type the quantity straight in instead.
+  function startQtyLongPress(i, isOut) {
+    if (isOut) return
+    longPressFiredRef.current = false
+    clearTimeout(longPressRef.current)
+    longPressRef.current = setTimeout(() => {
+      longPressFiredRef.current = true
+      setQtyModal({ idx: i })
+      setQtyInput('')
+    }, 450)
+  }
+  function cancelQtyLongPress() { clearTimeout(longPressRef.current) }
+
   const [cashModalOpen, setCashModalOpen] = useState(false)
   const [cashReceived, setCashReceived] = useState('')
   const [mainSearchCollapsed, setMainSearchCollapsed] = useState(true)
@@ -404,9 +423,18 @@ export default function StaffPage() {
         ...(qoName.trim() ? { customer: JSON.stringify({ name: qoName.trim() }) } : {}),
       })
       if (error) throw error
-      const newStock = [...stockShop]
-      Object.entries(effSel).forEach(([i, qty]) => { newStock[+i] = Math.max(0, (newStock[+i] || 0) - qty) })
-      await supabase.from('shop_config').upsert({ key: 'stock_shop', value: JSON.stringify(newStock) })
+      // Re-read stock straight from the DB rather than trusting local state,
+      // which can be stale if another till sold something since this page
+      // loaded. onConflict:'key' is required — shop_config's primary key is
+      // id, not key, so without it this becomes an INSERT that trips the
+      // UNIQUE(key) constraint and the deduction is silently lost.
+      const { data: stockRow } = await supabase.from('shop_config').select('value').eq('key', 'stock_shop').single()
+      const freshStock = stockRow?.value ? JSON.parse(stockRow.value) : [...stockShop]
+      Object.entries(effSel).forEach(([i, qty]) => { freshStock[+i] = Math.max(0, (freshStock[+i] || 0) - qty) })
+      const { error: stockErr } = await supabase.from('shop_config')
+        .upsert({ key: 'stock_shop', value: JSON.stringify(freshStock) }, { onConflict: 'key' })
+      if (stockErr) showToast('⚠️ ຫັກສະຕັອກບໍ່ສຳເລັດ', 'orange')
+      else setStockShop(freshStock)
       setQoQnum(qnumData); setQoStep(3)
       showToast(`✅ ຄິວ ${String(qnumData).padStart(4, '0')} · ${paymentMethod === 'cash' ? '💵 ສດ' : '📱 ໂອນ'}`, 'green')
       // Sale is done — hand the customer screen back to the menu board.
@@ -1194,7 +1222,7 @@ export default function StaffPage() {
         if (!confirm('⚠️ ຈະຂຽນທັບຂໍ້ມູນທັງໝົດ ຕ້ອງການດຳເນີນການຕໍ່ໄຫມ?')) return
         // Import shop_config
         if (data.shop_config?.length) {
-          await supabase.from('shop_config').upsert(data.shop_config)
+          await supabase.from('shop_config').upsert(data.shop_config, { onConflict: 'key' })
         }
         // Import orders
         if (data.orders?.length) {
@@ -3491,7 +3519,16 @@ export default function StaffPage() {
                     const isOut = s === 0
                     const img = images[i]
                     return (
-                      <div key={i} onClick={() => { if (!isOut && qty === 0) setQoSelected(prev => ({ ...prev, [i]: 1 })) }}
+                      <div key={i}
+                        onPointerDown={() => startQtyLongPress(i, isOut)}
+                        onPointerUp={cancelQtyLongPress}
+                        onPointerLeave={cancelQtyLongPress}
+                        onPointerCancel={cancelQtyLongPress}
+                        onContextMenu={e => e.preventDefault()}
+                        onClick={() => {
+                          if (longPressFiredRef.current) { longPressFiredRef.current = false; return }
+                          if (!isOut && qty === 0) setQoSelected(prev => ({ ...prev, [i]: 1 }))
+                        }}
                         className={`rounded-2xl overflow-hidden cursor-pointer border-2 transition-all relative ${isOut ? 'opacity-50 cursor-not-allowed border-[#e8d5c0]' : qty > 0 ? 'border-[#3d1f0a]' : 'border-[#e8d5c0]'}`}
                         style={{ background: 'var(--warm-white)' }}>
                         <div className="aspect-square relative overflow-hidden" style={{ background: 'var(--cream2)' }}>
@@ -3971,6 +4008,69 @@ export default function StaffPage() {
           </div>
         </div>
       )}
+
+      {/* Type a quantity straight in — opened by holding a Quick Order card */}
+      {qtyModal && (() => {
+        const i = qtyModal.idx
+        const max = stockShop[i] || 0
+        const typed = Number(qtyInput) || 0
+        const tooMany = typed > max
+        const close = () => { setQtyModal(null); setQtyInput('') }
+        const apply = () => {
+          setQoSelected(prev => {
+            const n = { ...prev }
+            if (typed <= 0) delete n[i]
+            else n[i] = Math.min(typed, max)
+            return n
+          })
+          close()
+        }
+        return (
+          <div className="fixed inset-0 z-[70] flex items-center justify-center p-5"
+            style={{ background: 'rgba(61,31,10,0.65)' }} onClick={close}>
+            <div className="w-full max-w-xs rounded-3xl overflow-hidden shadow-2xl"
+              style={{ background: 'var(--warm-white)' }} onClick={e => e.stopPropagation()}>
+              <div className="px-6 py-4 text-center" style={{ background: 'var(--brown)' }}>
+                <div className="font-serif text-lg font-black" style={{ color: 'var(--cream)' }}>{menus[i]?.lo}</div>
+                <div className="text-xs font-bold mt-1" style={{ color: 'rgba(253,246,238,0.6)' }}>
+                  ມີໃນສະຕັອກ {max} ກ້ອນ
+                </div>
+              </div>
+              <div className="px-5 py-4 flex flex-col gap-2.5">
+                <input readOnly value={qtyInput} placeholder="0"
+                  className="input-field w-full text-3xl font-black text-center" />
+                {tooMany && (
+                  <div className="text-center text-xs font-black" style={{ color: '#dc2626' }}>
+                    ເກີນສະຕັອກ · ຈະໃສ່ໃຫ້ {max}
+                  </div>
+                )}
+                <div className="grid grid-cols-3 gap-1.5">
+                  {['1','2','3','4','5','6','7','8','9'].map(d => (
+                    <button key={d} onClick={() => setQtyInput(v => (v + d).replace(/^0+/, '').slice(0, 4))}
+                      className="py-3 rounded-xl text-xl font-black active:scale-95 transition-transform"
+                      style={{ background: 'var(--cream2)', color: 'var(--brown)' }}>{d}</button>
+                  ))}
+                  <button onClick={() => setQtyInput('')}
+                    className="py-3 rounded-xl text-sm font-black active:scale-95 transition-transform"
+                    style={{ background: 'var(--cream3)', color: 'var(--brown2)' }}>C</button>
+                  <button onClick={() => setQtyInput(v => (v + '0').replace(/^0+/, '').slice(0, 4))}
+                    className="py-3 rounded-xl text-xl font-black active:scale-95 transition-transform"
+                    style={{ background: 'var(--cream2)', color: 'var(--brown)' }}>0</button>
+                  <button onClick={() => setQtyInput(v => v.slice(0, -1))}
+                    className="py-3 rounded-xl text-lg font-black active:scale-95 transition-transform"
+                    style={{ background: 'var(--cream3)', color: 'var(--brown2)' }}>⌫</button>
+                </div>
+              </div>
+              <div className="px-6 pb-6 flex gap-3">
+                <button onClick={close} className="flex-1 py-3 rounded-2xl font-black text-sm border-2"
+                  style={{ borderColor: 'var(--cream3)', color: 'var(--gray3)', background: 'var(--cream2)' }}>ປິດ</button>
+                <button onClick={apply} className="flex-1 py-3 rounded-2xl font-black text-sm text-white"
+                  style={{ background: 'var(--brown)' }}>✓ ໃສ່</button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
 
       {/* Cash received / change modal. Kip notes are all round thousands, so
           the field is typed in thousands — "61" means 61,000 — which keeps
