@@ -3905,26 +3905,28 @@ export default function StaffPage() {
             onClick={close}
           >
             <div
-              className="w-full max-w-xs rounded-3xl overflow-hidden shadow-2xl"
+              className="w-full max-w-sm rounded-3xl overflow-hidden shadow-2xl"
               style={{ background: 'var(--warm-white)' }}
               onClick={e => e.stopPropagation()}
             >
-              <div className="px-6 py-5 text-center" style={{ background: 'var(--brown)' }}>
+              <div className="px-6 py-4 text-center" style={{ background: 'var(--brown)' }}>
                 <div className="font-serif text-xl font-black" style={{ color: 'var(--cream)' }}>ຮັບເງິນສົດ</div>
                 <div className="text-xs font-bold mt-1" style={{ color: 'rgba(253,246,238,0.6)' }}>
                   ຍອດຕ້ອງຈ່າຍ: {qoTotalPrice.toLocaleString()} ກີບ
                 </div>
               </div>
-              <div className="px-6 py-5 flex flex-col gap-3">
+              <div className="px-5 py-4 flex flex-col gap-2.5">
                 <div>
                   <div className="text-xs font-black mb-1" style={{ color: 'var(--gray3)' }}>
-                    ລູກຄ້າສົ່ງເງິນມາເທົ່າໃດ <span style={{ color: 'var(--brown3)' }}>(ພິມເປັນຫຼັກພັນ)</span>
+                    ລູກຄ້າສົ່ງເງິນມາເທົ່າໃດ <span style={{ color: 'var(--brown3)' }}>(ຫຼັກພັນ)</span>
                   </div>
+                  {/* readOnly on purpose — the keypad below drives this, so
+                      tapping the box never summons the OS on-screen keyboard,
+                      which covers the whole screen on the shop's terminal. */}
                   <div className="relative">
                     <input
-                      type="number" inputMode="numeric" value={cashReceived}
-                      onChange={e => setCashReceived(e.target.value)}
-                      placeholder="0" autoFocus
+                      readOnly value={cashReceived}
+                      placeholder="0"
                       className="input-field w-full text-2xl font-black text-center pr-16"
                     />
                     <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm font-black" style={{ color: 'var(--gray3)' }}>
@@ -3935,18 +3937,44 @@ export default function StaffPage() {
                     = {received.toLocaleString()} ກີບ
                   </div>
                 </div>
-                <div className="grid grid-cols-4 gap-2">
+                <div className="grid grid-cols-5 gap-1.5">
                   {[20, 50, 100, 200].map(n => (
                     <button key={n} onClick={() => setCashReceived(String(n))}
                       className="py-2 rounded-xl text-xs font-black" style={{ background: 'var(--cream2)', color: 'var(--brown2)' }}>
                       {n}k
                     </button>
                   ))}
+                  <button onClick={() => setCashReceived(String(Math.ceil(qoTotalPrice / 1000)))}
+                    className="py-2 rounded-xl text-xs font-black" style={{ background: 'var(--cream3)', color: 'var(--brown)' }}>
+                    ພໍດີ
+                  </button>
                 </div>
-                <button onClick={() => setCashReceived(String(Math.ceil(qoTotalPrice / 1000)))}
-                  className="py-2 rounded-xl text-xs font-black" style={{ background: 'var(--cream2)', color: 'var(--brown2)' }}>
-                  ພໍດີ · Exact
-                </button>
+                <div className="grid grid-cols-3 gap-1.5">
+                  {['1','2','3','4','5','6','7','8','9'].map(d => (
+                    <button key={d}
+                      onClick={() => setCashReceived(v => (v + d).replace(/^0+/, '').slice(0, 5))}
+                      className="py-3 rounded-xl text-xl font-black active:scale-95 transition-transform"
+                      style={{ background: 'var(--cream2)', color: 'var(--brown)' }}>
+                      {d}
+                    </button>
+                  ))}
+                  <button onClick={() => setCashReceived('')}
+                    className="py-3 rounded-xl text-sm font-black active:scale-95 transition-transform"
+                    style={{ background: 'var(--cream3)', color: 'var(--brown2)' }}>
+                    C
+                  </button>
+                  <button
+                    onClick={() => setCashReceived(v => (v + '0').replace(/^0+/, '').slice(0, 5))}
+                    className="py-3 rounded-xl text-xl font-black active:scale-95 transition-transform"
+                    style={{ background: 'var(--cream2)', color: 'var(--brown)' }}>
+                    0
+                  </button>
+                  <button onClick={() => setCashReceived(v => v.slice(0, -1))}
+                    className="py-3 rounded-xl text-lg font-black active:scale-95 transition-transform"
+                    style={{ background: 'var(--cream3)', color: 'var(--brown2)' }}>
+                    ⌫
+                  </button>
+                </div>
                 <div className="rounded-2xl p-4 text-center" style={{ background: enough ? '#dcfce7' : 'var(--cream2)' }}>
                   <div className="text-xs font-black tracking-widest uppercase" style={{ color: enough ? '#15803d' : 'var(--gray3)' }}>
                     {received === 0 ? 'ເງິນທອນ' : enough ? 'ເງິນທອນ · ຄືນ' : 'ຍັງຂາດອີກ'}
@@ -3961,12 +3989,19 @@ export default function StaffPage() {
                   ປິດ
                 </button>
                 <button
-                  onClick={() => { setCashModalOpen(false); setCashReceived(''); submitQuickOrder('cash') }}
+                  onClick={() => {
+                    setCashModalOpen(false)
+                    setCashReceived('')
+                    // Cash sale: staff needs the drawer open either way — to
+                    // drop the note in, and to pull the change out.
+                    kickDrawer()
+                    submitQuickOrder('cash')
+                  }}
                   disabled={!enough || qoSubmitting}
                   className="flex-1 py-3 rounded-2xl font-black text-sm text-white disabled:opacity-40"
                   style={{ background: '#15803d' }}
                 >
-                  ✓ ຢືນຢັນ
+                  ✓ ຢືນຢັນ {change > 0 ? `· ທອນ ${change.toLocaleString()}` : ''}
                 </button>
               </div>
             </div>
