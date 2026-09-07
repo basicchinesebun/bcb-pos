@@ -7,6 +7,10 @@ export default function DisplayPage() {
   const [shopInfo, setShopInfo] = useState({ name: 'Basic Chinese Bun' })
   const [qrImage, setQrImage] = useState(null)
   const [order, setOrder] = useState({ items: [], total: 0 })
+  const [menus, setMenus] = useState([])
+  const [prices, setPrices] = useState([])
+  const [images, setImages] = useState({})
+  const [stock, setStock] = useState([])
 
   useEffect(() => {
     if (!supabase) return
@@ -16,6 +20,10 @@ export default function DisplayPage() {
       if (cfg.shop_info) try { setShopInfo(JSON.parse(cfg.shop_info)) } catch (_) {}
       if (cfg.qr_image) setQrImage(cfg.qr_image)
       if (cfg.display_order) try { setOrder(JSON.parse(cfg.display_order)) } catch (_) {}
+      if (cfg.menus) try { setMenus(JSON.parse(cfg.menus)) } catch (_) {}
+      if (cfg.prices) try { setPrices(JSON.parse(cfg.prices)) } catch (_) {}
+      if (cfg.menu_images) try { setImages(JSON.parse(cfg.menu_images)) } catch (_) {}
+      if (cfg.stock_shop) try { setStock(JSON.parse(cfg.stock_shop)) } catch (_) {}
     })
     const ch = supabase.channel('customer-display')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'shop_config' }, payload => {
@@ -24,6 +32,10 @@ export default function DisplayPage() {
         if (key === 'display_order') { try { setOrder(JSON.parse(val)) } catch (_) {} }
         else if (key === 'qr_image') setQrImage(val)
         else if (key === 'shop_info') { try { setShopInfo(JSON.parse(val)) } catch (_) {} }
+        else if (key === 'menus') { try { setMenus(JSON.parse(val)) } catch (_) {} }
+        else if (key === 'prices') { try { setPrices(JSON.parse(val)) } catch (_) {} }
+        else if (key === 'menu_images') { try { setImages(JSON.parse(val)) } catch (_) {} }
+        else if (key === 'stock_shop') { try { setStock(JSON.parse(val)) } catch (_) {} }
       })
       .subscribe()
     return () => supabase.removeChannel(ch)
@@ -32,24 +44,50 @@ export default function DisplayPage() {
   const hasOrder = order.items && order.items.length > 0
 
   return (
-    <div className="min-h-dvh flex flex-col items-center justify-center select-none px-8 py-10" style={{ background: 'var(--brown)' }}>
-      <div className="font-serif font-black text-center mb-8" style={{ fontSize: 'clamp(24px,4vw,42px)', color: 'var(--cream)' }}>
+    <div className="min-h-dvh flex flex-col select-none px-6 py-6 md:px-10 md:py-8" style={{ background: 'var(--brown)' }}>
+      <div className="font-serif font-black text-center mb-6 flex-shrink-0" style={{ fontSize: 'clamp(22px,3.5vw,38px)', color: 'var(--cream)' }}>
         {shopInfo.name}
       </div>
 
       {!hasOrder ? (
-        <div className="flex flex-col items-center gap-6 text-center">
-          <div className="font-black" style={{ fontSize: 'clamp(18px,2.4vw,28px)', color: 'rgba(253,246,238,0.7)' }}>
-            ສະແກນເພື່ອຊຳລະເງິນ · Scan to Pay
+        <div className="flex-1 overflow-hidden flex flex-col min-h-0">
+          <div className="text-center font-black mb-4 flex-shrink-0" style={{ fontSize: 'clamp(14px,1.6vw,20px)', letterSpacing: '0.08em', textTransform: 'uppercase', color: 'rgba(253,246,238,0.55)' }}>
+            ເມນູມື້ນີ້ · Today's Menu
           </div>
-          {qrImage ? (
-            <img src={qrImage} alt="QR ຊຳລະເງິນ" className="rounded-2xl" style={{ width: 'min(60vw, 420px)', background: '#fff', padding: 16 }} />
+          {menus.length === 0 ? (
+            <div className="flex-1 flex flex-col items-center justify-center gap-6 text-center">
+              <div className="text-sm font-bold" style={{ color: 'rgba(253,246,238,0.4)' }}>ຍັງບໍ່ໄດ້ຕັ້ງເມນູ</div>
+              {qrImage && (
+                <img src={qrImage} alt="QR ຊຳລະເງິນ" className="rounded-2xl" style={{ width: 'min(50vw, 320px)', background: '#fff', padding: 16 }} />
+              )}
+            </div>
           ) : (
-            <div className="text-sm font-bold" style={{ color: 'rgba(253,246,238,0.4)' }}>ຍັງບໍ່ໄດ້ອັບໂຫລດ QR</div>
+            <div className="flex-1 min-h-0 overflow-y-auto grid gap-4 grid-cols-2 md:grid-cols-3 xl:grid-cols-4 auto-rows-min pb-2">
+              {menus.map((m, i) => {
+                const isOut = (stock[i] || 0) <= 0
+                return (
+                  <div key={i} className="rounded-2xl overflow-hidden flex flex-col" style={{ background: 'var(--warm-white)', opacity: isOut ? 0.45 : 1 }}>
+                    <div className="aspect-square w-full overflow-hidden flex items-center justify-center" style={{ background: 'var(--cream2)' }}>
+                      {images[i] ? (
+                        <img src={images[i]} alt={m.lo} className="w-full h-full object-cover" loading="lazy" />
+                      ) : (
+                        <span className="text-4xl">🥟</span>
+                      )}
+                    </div>
+                    <div className="px-3 py-2 flex-1 flex flex-col justify-between">
+                      <div className="font-bold leading-tight" style={{ color: 'var(--brown)', fontSize: 'clamp(12px,1.1vw,16px)' }}>{m.lo}</div>
+                      <div className="font-black mt-1" style={{ color: isOut ? 'var(--gray3)' : 'var(--brown2)', fontSize: 'clamp(13px,1.3vw,18px)' }}>
+                        {isOut ? 'ໝົດ' : `${(prices[i] || 0).toLocaleString()} ກີບ`}
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
           )}
         </div>
       ) : (
-        <div className="w-full max-w-3xl grid gap-8" style={{ gridTemplateColumns: qrImage ? '1.3fr 1fr' : '1fr' }}>
+        <div className="flex-1 w-full max-w-3xl mx-auto grid gap-8 items-center" style={{ gridTemplateColumns: qrImage ? '1.3fr 1fr' : '1fr' }}>
           <div className="rounded-3xl overflow-hidden" style={{ background: 'var(--warm-white)' }}>
             <div className="px-6 py-4 text-xs font-black tracking-widest uppercase" style={{ background: 'var(--cream2)', color: 'var(--gray3)' }}>
               ລາຍການ · Your Order
