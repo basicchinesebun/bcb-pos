@@ -114,6 +114,7 @@ export default function StaffPage() {
   const [chatKbH, setChatKbH] = useState(0)
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [statsCollapsed, setStatsCollapsed] = useState(false)
+  const [headerCollapsed, setHeaderCollapsed] = useState(false)
   const [customerSearchCollapsed, setCustomerSearchCollapsed] = useState(true)
   const [mainSearchCollapsed, setMainSearchCollapsed] = useState(true)
   const [batchOpen, setBatchOpen] = useState(false)
@@ -1915,6 +1916,18 @@ export default function StaffPage() {
       {/* ─── ORDERS TAB ─── */}
       {tab === 'orders' && (
         <div className="flex-1 flex flex-col overflow-hidden">
+          {headerCollapsed ? (
+            <div className="flex-shrink-0 flex items-center justify-between px-4 py-1.5" style={{ background: 'var(--brown)' }}>
+              <div className="flex items-center gap-2">
+                <span className="font-serif text-sm font-black" style={{ color: 'var(--cream)' }}>{shopInfo.name}</span>
+                {pendingOnline > 0 && <span className="bg-red-500 text-white text-xs rounded-full px-2 py-0.5">{pendingOnline}</span>}
+                <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: liveStatus === 'live' ? '#22c55e' : '#f59e0b' }} />
+              </div>
+              <button onClick={() => setHeaderCollapsed(false)} className="text-xs font-black px-2 py-1 rounded-lg" style={{ color: 'var(--cream)' }}>
+                ▼ ສະແດງ
+              </button>
+            </div>
+          ) : (
           <div className="flex-shrink-0 flex items-center justify-between px-4 py-3" style={{ background: 'var(--brown)' }}>
             <div className="flex items-center gap-2">
               <div className="font-serif text-lg font-black" style={{ color: 'var(--cream)' }}>
@@ -1946,9 +1959,12 @@ export default function StaffPage() {
               )}
               <button onClick={kickDrawer} title="ເປີດລິ້ນຊັກ" className="text-xs font-black px-3 py-2 rounded-lg border border-[rgba(253,246,238,0.35)] text-[#fdf6ee]">🔓</button>
               <button onClick={() => alert('ຕ້ອງຊອກຫາ ↺ Reset ໃນລາຍການ')} className="text-xs font-black px-3 py-2 rounded-lg border border-red-400 text-red-300">↺</button>
+              <button onClick={() => setHeaderCollapsed(true)} title="ເຊື່ອງແຖບເທິງ" className="text-xs font-black px-3 py-2 rounded-lg border border-[rgba(253,246,238,0.35)] text-[#fdf6ee]">▲</button>
             </div>
           </div>
+          )}
 
+          {!headerCollapsed && (
           <div className="flex-shrink-0 flex items-center justify-end px-3 pt-2">
             <button
               onClick={() => setStatsCollapsed(v => !v)}
@@ -1958,7 +1974,8 @@ export default function StaffPage() {
               {statsCollapsed ? '▼ ສະຖິຕິ' : '▲ ເຊື່ອງສະຖິຕິ'}
             </button>
           </div>
-          {!statsCollapsed && (
+          )}
+          {!headerCollapsed && !statsCollapsed && (
             <div className="flex-shrink-0 grid grid-cols-3 gap-2 p-3 pt-1">
               {[['ລໍຖ້າ', waiting, 'var(--brown)'], ['ສຳເລັດ', done, 'var(--green,#2d6a2d)'], ['ທັງໝົດ', orders.length, 'var(--gray3)']].map(([l, n, c]) => (
                 <div key={l} className="card text-center py-2">
@@ -2590,6 +2607,7 @@ export default function StaffPage() {
 
             {/* Orders Main */}
             <div className="flex-1 flex flex-col overflow-hidden min-w-0">
+              {!headerCollapsed && (
               <div className="flex-shrink-0 px-3 pt-3 pb-1">
               <div className="flex gap-2 items-center mb-2">
                 <button
@@ -2669,7 +2687,8 @@ export default function StaffPage() {
                   )}
                 </div>
               )}
-              </div>{/* end fixed header */}
+              </div>
+              )}{/* end fixed header */}
 
               <div className="flex-1 overflow-y-auto px-3 pb-20">
               {/* Customer search results */}
