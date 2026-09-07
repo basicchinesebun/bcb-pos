@@ -400,6 +400,7 @@ export default function StaffPage() {
         qnum: qnumData, type: 'walkin', status: 'confirmed',
         items: JSON.stringify(items), total, bag_label: packingLabel,
         done: false, cancelled: false, paid: true, payment_method: paymentMethod,
+        paid_amount: total,
         ...(qoName.trim() ? { customer: JSON.stringify({ name: qoName.trim() }) } : {}),
       })
       if (error) throw error
@@ -422,11 +423,30 @@ export default function StaffPage() {
     finally { setQoSubmitting(false) }
   }
 
+  // Taking payment is also what sends a walk-in order to the kitchen. These
+  // used to be two separate taps (💰 then ✓ ຢືນຢັນ) and the second one got
+  // forgotten, leaving paid orders sitting invisible to the kitchen.
   async function markPaid(o, method) {
-    setOrders(prev => prev.map(ord => ord.id === o.id ? { ...ord, paid: true, payment_method: method } : ord))
-    await supabase.from('orders').update({ paid: true, payment_method: method }).eq('id', o.id)
+    const patch = { paid: true, payment_method: method, paid_amount: o.total || 0, status: 'confirmed' }
+    setOrders(prev => prev.map(ord => ord.id === o.id ? { ...ord, ...patch } : ord))
+    await supabase.from('orders').update(patch).eq('id', o.id)
     setPayingId(null)
-    showToast(`💰 #${String(o.qnum).padStart(4,'0')} ຮັບເງິນແລ້ວ`, 'green')
+    showToast(`💰 #${String(o.qnum).padStart(4,'0')} ຮັບເງິນ + ສົ່ງຄົວແລ້ວ`, 'green')
+    logActivity('mark_paid', `#${String(o.qnum).padStart(4, '0')} · ${method}`)
+    if (method === 'cash') kickDrawer()
+    if (settings.autoprintOn) setTimeout(() => smartPrint({ ...o, ...patch }), 300)
+  }
+
+  // After an edit changes the total, the money already in the drawer no
+  // longer matches. Records the top-up / refund staff just handled so the
+  // order stops flagging a balance.
+  async function settleBalance(o) {
+    const patch = { paid_amount: o.total || 0 }
+    setOrders(prev => prev.map(ord => ord.id === o.id ? { ...ord, ...patch } : ord))
+    await supabase.from('orders').update(patch).eq('id', o.id)
+    logActivity('settle_balance', `#${String(o.qnum).padStart(4, '0')} → ${(o.total || 0).toLocaleString()}`)
+    showToast(`💰 #${String(o.qnum).padStart(4,'0')} ເຄລຍຍອດແລ້ວ`, 'green')
+    kickDrawer()
   }
 
   function announce(qnum) {
@@ -2965,6 +2985,37 @@ export default function StaffPage() {
                           ລວມ: {(o.total || 0).toLocaleString()} ກີບ
                         </div>
 
+                        {/* Money already collected no longer matches the total
+                            — almost always because the order was edited after
+                            payment. Stays up until staff settles it. */}
+                        {(() => {
+                          if (o.paid_amount == null) return null
+                          const diff = (o.total || 0) - o.paid_amount
+                          if (diff === 0) return null
+                          const owed = diff > 0
+                          return (
+                            <div className="mb-3 rounded-xl p-3 flex items-center justify-between gap-2"
+                              style={{ background: owed ? '#fef3c7' : '#dbeafe', border: `2px solid ${owed ? '#f59e0b' : '#3b82f6'}` }}>
+                              <div>
+                                <div className="text-xs font-black" style={{ color: owed ? '#92400e' : '#1e40af' }}>
+                                  {owed ? '⚠️ ຕ້ອງເກັບເພີ່ມ' : '↩️ ຕ້ອງທອນຄືນ'}
+                                </div>
+                                <div className="text-lg font-black" style={{ color: owed ? '#92400e' : '#1e40af' }}>
+                                  {Math.abs(diff).toLocaleString()} ກີບ
+                                </div>
+                                <div className="text-xs font-bold mt-0.5" style={{ color: 'var(--gray3)' }}>
+                                  ຮັບມາແລ້ວ {Number(o.paid_amount).toLocaleString()}
+                                </div>
+                              </div>
+                              <button onClick={() => settleBalance(o)}
+                                className="py-2 px-3 rounded-xl text-xs font-black text-white flex-shrink-0"
+                                style={{ background: owed ? '#f59e0b' : '#3b82f6' }}>
+                                ✓ ເຄລຍແລ້ວ
+                              </button>
+                            </div>
+                          )
+                        })()}
+
                         {/* Actions */}
                         <div className="flex gap-2 flex-wrap">
                           {o.cancelled ? (
@@ -3793,6 +3844,31 @@ export default function StaffPage() {
                 {Object.entries(editItems).reduce((s, [i, q]) => s + (prices[+i] || 0) * q, 0).toLocaleString()} ກີບ
               </span>
             </div>
+            {/* If the customer already paid, spell out the difference this
+                edit creates before it's saved — swapping a 28,000 item for a
+                33,000 one means 5,000 still has to change hands. */}
+            {(() => {
+              const paid = editOrder.paid_amount != null ? Number(editOrder.paid_amount) : null
+              if (paid == null) return null
+              const newTotal = Object.entries(editItems).reduce((s, [i, q]) => s + (prices[+i] || 0) * q, 0)
+              const diff = newTotal - paid
+              if (diff === 0) return null
+              const owed = diff > 0
+              return (
+                <div className="mb-3 rounded-xl p-3 text-center"
+                  style={{ background: owed ? '#fef3c7' : '#dbeafe', border: `2px solid ${owed ? '#f59e0b' : '#3b82f6'}` }}>
+                  <div className="text-xs font-black" style={{ color: owed ? '#92400e' : '#1e40af' }}>
+                    {owed ? '⚠️ ຕ້ອງເກັບເພີ່ມຈາກລູກຄ້າ' : '↩️ ຕ້ອງທອນຄືນລູກຄ້າ'}
+                  </div>
+                  <div className="text-2xl font-black" style={{ color: owed ? '#92400e' : '#1e40af' }}>
+                    {Math.abs(diff).toLocaleString()} ກີບ
+                  </div>
+                  <div className="text-xs font-bold" style={{ color: 'var(--gray3)' }}>
+                    ຮັບມາແລ້ວ {paid.toLocaleString()} → ຍອດໃໝ່ {newTotal.toLocaleString()}
+                  </div>
+                </div>
+              )
+            })()}
             <button onClick={saveEditOrder} disabled={editSaving} className="btn-primary w-full">
               {editSaving ? '...' : '✅ ບັນທຶກການແກ້ໄຂ'}
             </button>
