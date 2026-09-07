@@ -44,14 +44,14 @@ export default function DisplayPage() {
   const hasOrder = order.items && order.items.length > 0
 
   return (
-    <div className="min-h-dvh flex flex-col select-none px-6 py-6 md:px-10 md:py-8" style={{ background: 'var(--brown)' }}>
-      <div className="font-serif font-black text-center mb-6 flex-shrink-0" style={{ fontSize: 'clamp(22px,3.5vw,38px)', color: 'var(--cream)' }}>
+    <div className="min-h-dvh flex flex-col select-none px-6 py-4 md:px-10 md:py-5" style={{ background: 'var(--brown)' }}>
+      <div className="font-serif font-black text-center mb-2 flex-shrink-0" style={{ fontSize: 'clamp(20px,3vw,34px)', color: 'var(--cream)' }}>
         {shopInfo.name}
       </div>
 
       {!hasOrder ? (
         <div className="flex-1 overflow-hidden flex flex-col min-h-0">
-          <div className="text-center font-black mb-4 flex-shrink-0" style={{ fontSize: 'clamp(14px,1.6vw,20px)', letterSpacing: '0.08em', textTransform: 'uppercase', color: 'rgba(253,246,238,0.55)' }}>
+          <div className="text-center font-black mb-2 flex-shrink-0" style={{ fontSize: 'clamp(13px,1.4vw,18px)', letterSpacing: '0.08em', textTransform: 'uppercase', color: 'rgba(253,246,238,0.55)' }}>
             ເມນູມື້ນີ້ · Today's Menu
           </div>
           {menus.length === 0 ? (
@@ -62,21 +62,21 @@ export default function DisplayPage() {
               )}
             </div>
           ) : (
-            <div className="flex-1 min-h-0 overflow-y-auto grid gap-4 grid-cols-2 md:grid-cols-3 xl:grid-cols-4 auto-rows-min pb-2">
+            <div className="flex-1 min-h-0 overflow-hidden grid gap-2.5 grid-cols-2 md:grid-cols-3 xl:grid-cols-4 auto-rows-min content-start">
               {menus.map((m, i) => {
                 const isOut = (stock[i] || 0) <= 0
                 return (
-                  <div key={i} className="rounded-2xl overflow-hidden flex flex-col" style={{ background: 'var(--warm-white)', opacity: isOut ? 0.45 : 1 }}>
-                    <div className="aspect-square w-full overflow-hidden flex items-center justify-center" style={{ background: 'var(--cream2)' }}>
+                  <div key={i} className="rounded-xl overflow-hidden flex flex-col" style={{ background: 'var(--warm-white)', opacity: isOut ? 0.45 : 1 }}>
+                    <div className="aspect-[16/10] w-full overflow-hidden flex items-center justify-center" style={{ background: 'var(--cream2)' }}>
                       {images[i] ? (
                         <img src={images[i]} alt={m.lo} className="w-full h-full object-cover" loading="lazy" />
                       ) : (
-                        <span className="text-4xl">🥟</span>
+                        <span className="text-3xl">🥟</span>
                       )}
                     </div>
-                    <div className="px-3 py-2 flex-1 flex flex-col justify-between">
-                      <div className="font-bold leading-tight" style={{ color: 'var(--brown)', fontSize: 'clamp(12px,1.1vw,16px)' }}>{m.lo}</div>
-                      <div className="font-black mt-1" style={{ color: isOut ? 'var(--gray3)' : 'var(--brown2)', fontSize: 'clamp(13px,1.3vw,18px)' }}>
+                    <div className="px-2.5 py-1.5 flex-1 flex flex-col justify-between min-w-0">
+                      <div className="font-bold leading-tight truncate" style={{ color: 'var(--brown)', fontSize: 'clamp(11px,1vw,14px)' }}>{m.lo}</div>
+                      <div className="font-black mt-0.5" style={{ color: isOut ? 'var(--gray3)' : 'var(--brown2)', fontSize: 'clamp(12px,1.15vw,16px)' }}>
                         {isOut ? 'ໝົດ' : `${(prices[i] || 0).toLocaleString()} ກີບ`}
                       </div>
                     </div>
