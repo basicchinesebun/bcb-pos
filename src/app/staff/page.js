@@ -408,6 +408,8 @@ export default function StaffPage() {
       await supabase.from('shop_config').upsert({ key: 'stock_shop', value: JSON.stringify(newStock) })
       setQoQnum(qnumData); setQoStep(3)
       showToast(`✅ ຄິວ ${String(qnumData).padStart(4, '0')} · ${paymentMethod === 'cash' ? '💵 ສດ' : '📱 ໂອນ'}`, 'green')
+      // Sale is done — hand the customer screen back to the menu board.
+      clearDisplay()
       if (settings.autoprintOn) {
         const printObj = {
           qnum: qnumData, type: 'walkin', items, total,
@@ -676,16 +678,20 @@ export default function StaffPage() {
   const qoTotalItems = Object.values(qoEffSel).reduce((s, q) => s + q, 0)
   const qoTotalPrice = Object.entries(qoEffSel).reduce((s, [i, q]) => s + (prices[+i] || 0) * q, 0)
 
-  // Mirror the in-progress Quick Order to a customer-facing display (/display)
-  // so the customer can watch their order build up and see the total to pay.
-  useEffect(() => {
-    if (!supabase) return
-    const t = setTimeout(() => {
-      const items = Object.entries(qoEffSel).map(([i, qty]) => ({ name: menus[+i]?.lo || '', qty, sub: (prices[+i] || 0) * qty }))
-      saveConfig('display_order', { items, total: qoTotalPrice, updatedAt: Date.now() })
-    }, 400)
-    return () => clearTimeout(t)
-  }, [qoTotalItems, qoTotalPrice])
+  // Push the Quick Order cart to the customer-facing display (/display).
+  // Deliberately NOT wired to every tap: while staff are still picking items
+  // the customer screen stays on the menu board, and the order + payment QR
+  // only takes it over once a payment method is chosen. Half-built orders
+  // flashing up while the customer is still reading the menu is worse than
+  // useless.
+  function pushCartToDisplay() {
+    const items = Object.entries(qoEffSel).map(([i, qty]) => ({ name: menus[+i]?.lo || '', qty, sub: (prices[+i] || 0) * qty }))
+    saveConfig('display_order', { items, total: qoTotalPrice, updatedAt: Date.now() })
+  }
+
+  function clearDisplay() {
+    saveConfig('display_order', { items: [], total: 0, updatedAt: Date.now() })
+  }
 
   // ─── Orders ───
   const filteredOrders = orders.filter(o => {
@@ -3468,12 +3474,12 @@ export default function StaffPage() {
                       <span className="text-sm font-black" style={{ color: 'var(--brown)' }}>{qoTotalPrice.toLocaleString()} ກີບ</span>
                     </div>
                     <div className="grid grid-cols-2 gap-2 mb-2">
-                      <button onClick={() => setCashModalOpen(true)} disabled={qoSubmitting}
+                      <button onClick={() => { pushCartToDisplay(); setCashModalOpen(true) }} disabled={qoSubmitting}
                         className="py-4 rounded-2xl font-black text-base text-white active:scale-95 transition-all"
                         style={{ background: '#15803d' }}>
                         {qoSubmitting ? '...' : '💵 ສດ'}
                       </button>
-                      <button onClick={() => submitQuickOrder('qr')} disabled={qoSubmitting}
+                      <button onClick={() => { pushCartToDisplay(); submitQuickOrder('qr') }} disabled={qoSubmitting}
                         className="py-4 rounded-2xl font-black text-base text-white active:scale-95 transition-all"
                         style={{ background: '#1d4ed8' }}>
                         {qoSubmitting ? '...' : '📱 ໂອນ'}
@@ -3583,11 +3589,11 @@ export default function StaffPage() {
                       <span className="font-black" style={{ color: 'var(--brown)' }}>{qoTotalPrice.toLocaleString()} ກີບ</span>
                     </div>
                     <div className="grid grid-cols-2 gap-3">
-                      <button onClick={() => setCashModalOpen(true)} disabled={qoSubmitting}
+                      <button onClick={() => { pushCartToDisplay(); setCashModalOpen(true) }} disabled={qoSubmitting}
                         className="py-4 rounded-2xl font-black text-base text-white" style={{ background: '#15803d' }}>
                         {qoSubmitting ? '...' : '💵 ສດ · ຮັບຄິວ'}
                       </button>
-                      <button onClick={() => submitQuickOrder('qr')} disabled={qoSubmitting}
+                      <button onClick={() => { pushCartToDisplay(); submitQuickOrder('qr') }} disabled={qoSubmitting}
                         className="py-4 rounded-2xl font-black text-base text-white" style={{ background: '#1d4ed8' }}>
                         {qoSubmitting ? '...' : '📱 ໂອນ · ຮັບຄິວ'}
                       </button>
@@ -3897,7 +3903,8 @@ export default function StaffPage() {
         const received = (Number(cashReceived) || 0) * 1000
         const change = received - qoTotalPrice
         const enough = received >= qoTotalPrice && received > 0
-        const close = () => { setCashModalOpen(false); setCashReceived('') }
+        // Backing out of payment puts the customer screen back on the menu.
+        const close = () => { setCashModalOpen(false); setCashReceived(''); clearDisplay() }
         return (
           <div
             className="fixed inset-0 z-[60] flex items-center justify-center p-5"
