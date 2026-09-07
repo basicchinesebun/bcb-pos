@@ -113,6 +113,8 @@ export default function StaffPage() {
   const [qoName, setQoName] = useState('')
   const [chatKbH, setChatKbH] = useState(0)
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [statsCollapsed, setStatsCollapsed] = useState(false)
+  const [customerSearchCollapsed, setCustomerSearchCollapsed] = useState(false)
   const [batchOpen, setBatchOpen] = useState(false)
   const [batchSelected, setBatchSelected] = useState(new Set())
   const [selectedSlipIds, setSelectedSlipIds] = useState(new Set())
@@ -1946,14 +1948,25 @@ export default function StaffPage() {
             </div>
           </div>
 
-          <div className="flex-shrink-0 grid grid-cols-3 gap-2 p-3">
-            {[['ລໍຖ້າ', waiting, 'var(--brown)'], ['ສຳເລັດ', done, 'var(--green,#2d6a2d)'], ['ທັງໝົດ', orders.length, 'var(--gray3)']].map(([l, n, c]) => (
-              <div key={l} className="card text-center py-2">
-                <div className="text-2xl font-black" style={{ color: c }}>{n}</div>
-                <div className="text-xs font-bold mt-0.5" style={{ color: 'var(--gray3)' }}>{l}</div>
-              </div>
-            ))}
+          <div className="flex-shrink-0 flex items-center justify-end px-3 pt-2">
+            <button
+              onClick={() => setStatsCollapsed(v => !v)}
+              className="text-xs font-black px-2 py-1 rounded-lg"
+              style={{ color: 'var(--gray3)' }}
+            >
+              {statsCollapsed ? '▼ ສະຖິຕິ' : '▲ ເຊື່ອງສະຖິຕິ'}
+            </button>
           </div>
+          {!statsCollapsed && (
+            <div className="flex-shrink-0 grid grid-cols-3 gap-2 p-3 pt-1">
+              {[['ລໍຖ້າ', waiting, 'var(--brown)'], ['ສຳເລັດ', done, 'var(--green,#2d6a2d)'], ['ທັງໝົດ', orders.length, 'var(--gray3)']].map(([l, n, c]) => (
+                <div key={l} className="card text-center py-2">
+                  <div className="text-2xl font-black" style={{ color: c }}>{n}</div>
+                  <div className="text-xs font-bold mt-0.5" style={{ color: 'var(--gray3)' }}>{l}</div>
+                </div>
+              ))}
+            </div>
+          )}
 
           {/* Sidebar + Orders layout */}
           <div className={`flex-1 overflow-hidden flex flex-col md:grid max-w-[1800px] mx-auto w-full transition-all duration-300 ${sidebarOpen ? 'md:grid-cols-[320px_1fr]' : 'md:grid-cols-[0px_1fr]'}`}>
@@ -2621,21 +2634,33 @@ export default function StaffPage() {
               </div>
 
               {/* Customer search */}
-              <div className="relative mb-3">
-                <input
-                  type="text"
-                  value={customerSearch}
-                  onChange={e => setCustomerSearch(e.target.value)}
-                  placeholder="ຊື່, ເບີໂທ, ເລກຄິວ (0001)..."
-                  className="input-field w-full text-sm pl-8"
-                />
-                <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-sm" style={{ color: 'var(--gray3)' }}>👤</span>
-                {customerSearch && (
-                  <button onClick={() => setCustomerSearch('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs font-black px-2 py-0.5 rounded" style={{ color: 'var(--brown)', background: 'var(--cream2)' }}>
-                    ລ້າງ · Clear
-                  </button>
-                )}
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-xs font-bold" style={{ color: 'var(--gray3)' }}>ຄົ້ນຫາລູກຄ້າ · Customer</span>
+                <button
+                  onClick={() => setCustomerSearchCollapsed(v => !v)}
+                  className="text-xs font-black px-2 py-0.5 rounded"
+                  style={{ color: 'var(--brown2)' }}
+                >
+                  {customerSearchCollapsed ? '▼ ສະແດງ' : '▲ ເຊື່ອງ'}
+                </button>
               </div>
+              {!customerSearchCollapsed && (
+                <div className="relative mb-3">
+                  <input
+                    type="text"
+                    value={customerSearch}
+                    onChange={e => setCustomerSearch(e.target.value)}
+                    placeholder="ຊື່, ເບີໂທ, ເລກຄິວ (0001)..."
+                    className="input-field w-full text-sm pl-8"
+                  />
+                  <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-sm" style={{ color: 'var(--gray3)' }}>👤</span>
+                  {customerSearch && (
+                    <button onClick={() => setCustomerSearch('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs font-black px-2 py-0.5 rounded" style={{ color: 'var(--brown)', background: 'var(--cream2)' }}>
+                      ລ້າງ · Clear
+                    </button>
+                  )}
+                </div>
+              )}
               </div>{/* end fixed header */}
 
               <div className="flex-1 overflow-y-auto px-3 pb-20">
