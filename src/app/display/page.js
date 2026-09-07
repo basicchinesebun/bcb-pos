@@ -43,23 +43,15 @@ export default function DisplayPage() {
 
   const hasOrder = order.items && order.items.length > 0
 
-  // The board fits exactly 8 cards (4 x 2). Shops carry more menu items than
-  // that, and nobody is standing at the customer screen to scroll it, so page
-  // through the whole menu on a timer instead of only ever showing the first 8.
-  const PAGE_SIZE = 8
-  const pageCount = Math.max(1, Math.ceil(menus.length / PAGE_SIZE))
-  const [page, setPage] = useState(0)
-
-  useEffect(() => {
-    if (pageCount <= 1) { setPage(0); return }
-    const t = setInterval(() => setPage(p => (p + 1) % pageCount), 8000)
-    return () => clearInterval(t)
-  }, [pageCount])
-
-  const safePage = page % pageCount
+  // The board fits exactly 8 cards (4 x 2) and stays on one page — no
+  // rotation. Shops carry more items than that, so order them the same way
+  // /preorder does: anything in stock floats to the front, sold-out items
+  // sink to the back and fall off the board entirely once there are enough
+  // in-stock items to fill it.
   const pageMenus = menus
     .map((m, i) => ({ m, i }))
-    .slice(safePage * PAGE_SIZE, safePage * PAGE_SIZE + PAGE_SIZE)
+    .sort((a, b) => ((stock[a.i] || 0) === 0 ? 1 : 0) - ((stock[b.i] || 0) === 0 ? 1 : 0))
+    .slice(0, 8)
 
   return (
     <div className="h-dvh overflow-hidden flex flex-col select-none px-6 py-4 md:px-10 md:py-5" style={{ background: 'var(--brown)' }}>
@@ -80,26 +72,16 @@ export default function DisplayPage() {
               )}
             </div>
           ) : (
-            <>
-              <div className="flex-1 min-h-0 overflow-hidden grid gap-2.5 grid-cols-4 grid-rows-2">
-                {pageMenus.map(({ m, i }) => {
-                  const left = stock[i] || 0
-                  const isOut = left <= 0
-                  return (
+            <div className="flex-1 min-h-0 overflow-hidden grid gap-2.5 grid-cols-4 grid-rows-2">
+              {pageMenus.map(({ m, i }) => {
+                const isOut = (stock[i] || 0) <= 0
+                return (
                     <div key={i} className="rounded-xl overflow-hidden flex flex-col h-full" style={{ background: 'var(--warm-white)', opacity: isOut ? 0.45 : 1 }}>
                       <div className="relative flex-1 min-h-0 w-full overflow-hidden flex items-center justify-center" style={{ background: 'var(--cream2)' }}>
                         {images[i] ? (
                           <img src={images[i]} alt={m.lo} className="w-full h-full object-cover" loading="lazy" />
                         ) : (
                           <span className="text-3xl">🥟</span>
-                        )}
-                        {!isOut && (
-                          <span
-                            className="absolute top-1.5 right-1.5 px-2 py-0.5 rounded-full font-black"
-                            style={{ background: 'rgba(61,31,10,0.85)', color: 'var(--cream)', fontSize: 'clamp(10px,0.9vw,13px)' }}
-                          >
-                            ເຫຼືອ {left}
-                          </span>
                         )}
                       </div>
                       <div className="px-2.5 py-1.5 flex-shrink-0 min-w-0">
@@ -111,22 +93,7 @@ export default function DisplayPage() {
                     </div>
                   )
                 })}
-              </div>
-              {pageCount > 1 && (
-                <div className="flex-shrink-0 flex justify-center gap-1.5 pt-2">
-                  {Array.from({ length: pageCount }).map((_, p) => (
-                    <span
-                      key={p}
-                      className="rounded-full transition-all"
-                      style={{
-                        width: p === safePage ? 18 : 6, height: 6,
-                        background: p === safePage ? 'var(--cream)' : 'rgba(253,246,238,0.3)',
-                      }}
-                    />
-                  ))}
-                </div>
-              )}
-            </>
+            </div>
           )}
         </div>
       ) : (
