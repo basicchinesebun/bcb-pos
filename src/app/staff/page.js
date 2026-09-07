@@ -3423,7 +3423,12 @@ export default function StaffPage() {
               </div>
               <div className="flex-1 overflow-y-auto p-4">
                 <div className="grid grid-cols-2 md:grid-cols-5 xl:grid-cols-8 gap-3">
-                  {menus.map((m, i) => {
+                  {/* Sold-out items sink to the end, same as /order and
+                      /preorder, so staff aren't hunting past them. */}
+                  {menus.map((_, i) => i)
+                    .sort((a, b) => ((stockShop[a] || 0) === 0 ? 1 : 0) - ((stockShop[b] || 0) === 0 ? 1 : 0))
+                    .map(i => {
+                    const m = menus[i]
                     const qty = qoSelected[i] || 0
                     const s = stockShop[i] || 0
                     const isOut = s === 0
@@ -3885,9 +3890,11 @@ export default function StaffPage() {
         </div>
       )}
 
-      {/* Cancel Order Modal — collects reason */}
+      {/* Cash received / change modal. Kip notes are all round thousands, so
+          the field is typed in thousands — "61" means 61,000 — which keeps
+          staff from tapping three zeros on every single sale. */}
       {cashModalOpen && (() => {
-        const received = Number(cashReceived) || 0
+        const received = (Number(cashReceived) || 0) * 1000
         const change = received - qoTotalPrice
         const enough = received >= qoTotalPrice && received > 0
         const close = () => { setCashModalOpen(false); setCashReceived('') }
@@ -3910,23 +3917,33 @@ export default function StaffPage() {
               </div>
               <div className="px-6 py-5 flex flex-col gap-3">
                 <div>
-                  <div className="text-xs font-black mb-1" style={{ color: 'var(--gray3)' }}>ລູກຄ້າສົ່ງເງິນມາເທົ່າໃດ</div>
-                  <input
-                    type="number" inputMode="numeric" value={cashReceived}
-                    onChange={e => setCashReceived(e.target.value)}
-                    placeholder="0" autoFocus
-                    className="input-field w-full text-2xl font-black text-center"
-                  />
+                  <div className="text-xs font-black mb-1" style={{ color: 'var(--gray3)' }}>
+                    ລູກຄ້າສົ່ງເງິນມາເທົ່າໃດ <span style={{ color: 'var(--brown3)' }}>(ພິມເປັນຫຼັກພັນ)</span>
+                  </div>
+                  <div className="relative">
+                    <input
+                      type="number" inputMode="numeric" value={cashReceived}
+                      onChange={e => setCashReceived(e.target.value)}
+                      placeholder="0" autoFocus
+                      className="input-field w-full text-2xl font-black text-center pr-16"
+                    />
+                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm font-black" style={{ color: 'var(--gray3)' }}>
+                      ,000
+                    </span>
+                  </div>
+                  <div className="text-center text-sm font-black mt-1" style={{ color: 'var(--brown2)' }}>
+                    = {received.toLocaleString()} ກີບ
+                  </div>
                 </div>
                 <div className="grid grid-cols-4 gap-2">
-                  {[20000, 50000, 100000, 200000].map(n => (
+                  {[20, 50, 100, 200].map(n => (
                     <button key={n} onClick={() => setCashReceived(String(n))}
                       className="py-2 rounded-xl text-xs font-black" style={{ background: 'var(--cream2)', color: 'var(--brown2)' }}>
-                      {(n / 1000)}k
+                      {n}k
                     </button>
                   ))}
                 </div>
-                <button onClick={() => setCashReceived(String(qoTotalPrice))}
+                <button onClick={() => setCashReceived(String(Math.ceil(qoTotalPrice / 1000)))}
                   className="py-2 rounded-xl text-xs font-black" style={{ background: 'var(--cream2)', color: 'var(--brown2)' }}>
                   ພໍດີ · Exact
                 </button>
