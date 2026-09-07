@@ -116,6 +116,7 @@ export default function StaffPage() {
   const [statsCollapsed, setStatsCollapsed] = useState(false)
   const [headerCollapsed, setHeaderCollapsed] = useState(false)
   const [customerSearchCollapsed, setCustomerSearchCollapsed] = useState(true)
+  const [displayOrderId, setDisplayOrderId] = useState(null)
   const [mainSearchCollapsed, setMainSearchCollapsed] = useState(true)
   const [batchOpen, setBatchOpen] = useState(false)
   const [batchSelected, setBatchSelected] = useState(new Set())
@@ -825,9 +826,17 @@ export default function StaffPage() {
   // Pushes an order that already exists (e.g. self-ordered via /order while
   // queuing) onto the customer-facing display so they can scan-pay at the
   // counter, without staff re-entering it item by item in Quick Order.
+  // Tapping the same order's 📺 again clears it back to the idle menu board.
   function showOnDisplay(o) {
+    if (displayOrderId === o.id) {
+      saveConfig('display_order', { items: [], total: 0, updatedAt: Date.now() })
+      setDisplayOrderId(null)
+      showToast('📺 ເອົາອອກຈາກຈໍລູກຄ້າແລ້ວ', 'orange')
+      return
+    }
     const items = typeof o.items === 'string' ? JSON.parse(o.items) : o.items || []
     saveConfig('display_order', { items, total: o.total || 0, updatedAt: Date.now() })
+    setDisplayOrderId(o.id)
     showToast(`📺 ສົ່ງຄິວ #${String(o.qnum).padStart(4, '0')} ຂຶ້ນຈໍລູກຄ້າ`, 'green')
   }
 
@@ -2963,7 +2972,13 @@ export default function StaffPage() {
                               <button onClick={() => doneOrder(o)} className="flex-[4] py-3 rounded-xl text-sm font-black" style={{ background: 'var(--brown)', color: 'var(--cream)' }}>✓ Done</button>
                               <button onClick={() => announce(o.qnum)} className="flex-[2] py-3 rounded-xl text-sm font-black" style={{ background: 'var(--brown2)', color: 'var(--cream)' }}>📢</button>
                               <button onClick={() => smartPrint(o)} className="py-3 px-3 rounded-xl text-sm font-black bg-blue-50 text-blue-700">🖨</button>
-                              <button onClick={() => showOnDisplay(o)} title="ສະແດງໃສ່ຈໍລູກຄ້າ" className="py-3 px-3 rounded-xl text-sm font-black bg-purple-50 text-purple-700">📺</button>
+                              <button
+                                onClick={() => showOnDisplay(o)}
+                                title={displayOrderId === o.id ? 'ເອົາອອກຈາກຈໍລູກຄ້າ' : 'ສະແດງໃສ່ຈໍລູກຄ້າ'}
+                                className={`py-3 px-3 rounded-xl text-sm font-black ${displayOrderId === o.id ? 'bg-purple-700 text-white' : 'bg-purple-50 text-purple-700'}`}
+                              >
+                                📺
+                              </button>
                               <button onClick={() => cancelOrder(o)} className="py-3 px-3 rounded-xl text-sm font-black border-2 border-red-400 text-red-600">✕</button>
                             </>
                           )}
