@@ -115,6 +115,7 @@ export default function StaffPage() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [statsCollapsed, setStatsCollapsed] = useState(false)
   const [customerSearchCollapsed, setCustomerSearchCollapsed] = useState(false)
+  const [mainSearchCollapsed, setMainSearchCollapsed] = useState(true)
   const [batchOpen, setBatchOpen] = useState(false)
   const [batchSelected, setBatchSelected] = useState(new Set())
   const [selectedSlipIds, setSelectedSlipIds] = useState(new Set())
@@ -2619,19 +2620,29 @@ export default function StaffPage() {
                   {[['all','ທັງໝົດ'],['walkin','🏪'],['online','🌐']].map(([f,l]) => (
                     <button key={f} onClick={() => setFilter(f)} className={`px-3 py-1 rounded-lg text-xs font-black border ${filter===f ? 'bg-[#3d1f0a] text-[#fdf6ee] border-[#3d1f0a]' : 'border-[#e8d5c0] text-[#8a6a55]'}`}>{l}</button>
                   ))}
+                  <button
+                    onClick={() => setMainSearchCollapsed(v => !v)}
+                    className={`px-3 py-1 rounded-lg text-xs font-black border ${!mainSearchCollapsed ? 'bg-[#3d1f0a] text-[#fdf6ee] border-[#3d1f0a]' : 'border-[#e8d5c0] text-[#8a6a55]'}`}
+                    title="ຄົ້ນຫາ: ເລກຄິວ, ຊື່, ເບີໂທ, ເມນູ"
+                  >
+                    🔍
+                  </button>
                 </div>
               </div>
-              <div className="relative mb-3">
-                <input
-                  type="text"
-                  value={search}
-                  onChange={e => setSearch(e.target.value)}
-                  placeholder="ຄົ້ນຫາ: ເລກຄິວ, ຊື່, ເບີໂທ, ເມນູ..."
-                  className="input-field w-full text-sm pl-8"
-                />
-                <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-sm" style={{ color: 'var(--gray3)' }}>🔍</span>
-                {search && <button onClick={() => setSearch('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs font-black" style={{ color: 'var(--gray3)' }}>✕</button>}
-              </div>
+              {!mainSearchCollapsed && (
+                <div className="relative mb-3">
+                  <input
+                    type="text"
+                    value={search}
+                    onChange={e => setSearch(e.target.value)}
+                    placeholder="ຄົ້ນຫາ: ເລກຄິວ, ຊື່, ເບີໂທ, ເມນູ..."
+                    className="input-field w-full text-sm pl-8"
+                    autoFocus
+                  />
+                  <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-sm" style={{ color: 'var(--gray3)' }}>🔍</span>
+                  {search && <button onClick={() => setSearch('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs font-black" style={{ color: 'var(--gray3)' }}>✕</button>}
+                </div>
+              )}
 
               {/* Customer search */}
               <div className="flex items-center justify-between mb-1">
