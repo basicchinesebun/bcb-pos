@@ -732,13 +732,27 @@ export default function StaffPage() {
   // only takes it over once a payment method is chosen. Half-built orders
   // flashing up while the customer is still reading the menu is worse than
   // useless.
-  function pushCartToDisplay() {
+  // Both writes go through one chain. They used to be fire-and-forget, so on
+  // the transfer path (push then submit then clear, back to back) the push
+  // could land *after* the clear and leave the customer screen stuck showing
+  // a finished order.
+  const displaySaveChainRef = useRef(Promise.resolve())
+  function writeDisplay(payload) {
+    displaySaveChainRef.current = displaySaveChainRef.current
+      .then(() => saveConfig('display_order', { ...payload, updatedAt: Date.now() }))
+      .catch(() => {})
+    return displaySaveChainRef.current
+  }
+
+  // method is passed through so the screen only puts the payment QR up for a
+  // transfer — on a cash sale the QR is just noise in the customer's face.
+  function pushCartToDisplay(method) {
     const items = Object.entries(qoEffSel).map(([i, qty]) => ({ name: menus[+i]?.lo || '', qty, sub: (prices[+i] || 0) * qty }))
-    saveConfig('display_order', { items, total: qoTotalPrice, updatedAt: Date.now() })
+    writeDisplay({ items, total: qoTotalPrice, method: method || null })
   }
 
   function clearDisplay() {
-    saveConfig('display_order', { items: [], total: 0, updatedAt: Date.now() })
+    writeDisplay({ items: [], total: 0, method: null })
   }
 
   // ─── Orders ───
@@ -885,13 +899,13 @@ export default function StaffPage() {
   // Tapping the same order's 📺 again clears it back to the idle menu board.
   function showOnDisplay(o) {
     if (displayOrderId === o.id) {
-      saveConfig('display_order', { items: [], total: 0, updatedAt: Date.now() })
+      clearDisplay()
       setDisplayOrderId(null)
       showToast('📺 ເອົາອອກຈາກຈໍລູກຄ້າແລ້ວ', 'orange')
       return
     }
     const items = typeof o.items === 'string' ? JSON.parse(o.items) : o.items || []
-    saveConfig('display_order', { items, total: o.total || 0, updatedAt: Date.now() })
+    writeDisplay({ items, total: o.total || 0, method: 'qr' })
     setDisplayOrderId(o.id)
     showToast(`📺 ສົ່ງຄິວ #${String(o.qnum).padStart(4, '0')} ຂຶ້ນຈໍລູກຄ້າ`, 'green')
   }
@@ -3562,12 +3576,12 @@ export default function StaffPage() {
                       <span className="text-sm font-black" style={{ color: 'var(--brown)' }}>{qoTotalPrice.toLocaleString()} ກີບ</span>
                     </div>
                     <div className="grid grid-cols-2 gap-2 mb-2">
-                      <button onClick={() => { pushCartToDisplay(); setCashModalOpen(true) }} disabled={qoSubmitting}
+                      <button onClick={() => { pushCartToDisplay('cash'); setCashModalOpen(true) }} disabled={qoSubmitting}
                         className="py-4 rounded-2xl font-black text-base text-white active:scale-95 transition-all"
                         style={{ background: '#15803d' }}>
                         {qoSubmitting ? '...' : '💵 ສດ'}
                       </button>
-                      <button onClick={() => { pushCartToDisplay(); submitQuickOrder('qr') }} disabled={qoSubmitting}
+                      <button onClick={() => { pushCartToDisplay('qr'); submitQuickOrder('qr') }} disabled={qoSubmitting}
                         className="py-4 rounded-2xl font-black text-base text-white active:scale-95 transition-all"
                         style={{ background: '#1d4ed8' }}>
                         {qoSubmitting ? '...' : '📱 ໂອນ'}
@@ -3677,11 +3691,11 @@ export default function StaffPage() {
                       <span className="font-black" style={{ color: 'var(--brown)' }}>{qoTotalPrice.toLocaleString()} ກີບ</span>
                     </div>
                     <div className="grid grid-cols-2 gap-3">
-                      <button onClick={() => { pushCartToDisplay(); setCashModalOpen(true) }} disabled={qoSubmitting}
+                      <button onClick={() => { pushCartToDisplay('cash'); setCashModalOpen(true) }} disabled={qoSubmitting}
                         className="py-4 rounded-2xl font-black text-base text-white" style={{ background: '#15803d' }}>
                         {qoSubmitting ? '...' : '💵 ສດ · ຮັບຄິວ'}
                       </button>
-                      <button onClick={() => { pushCartToDisplay(); submitQuickOrder('qr') }} disabled={qoSubmitting}
+                      <button onClick={() => { pushCartToDisplay('qr'); submitQuickOrder('qr') }} disabled={qoSubmitting}
                         className="py-4 rounded-2xl font-black text-base text-white" style={{ background: '#1d4ed8' }}>
                         {qoSubmitting ? '...' : '📱 ໂອນ · ຮັບຄິວ'}
                       </button>

@@ -14,7 +14,8 @@ export default function DisplayPage() {
 
   useEffect(() => {
     if (!supabase) return
-    supabase.from('shop_config').select('key,value').then(({ data }) => {
+    async function refresh() {
+      const { data } = await supabase.from('shop_config').select('key,value')
       if (!data) return
       const cfg = Object.fromEntries(data.map(r => [r.key, r.value]))
       if (cfg.shop_info) try { setShopInfo(JSON.parse(cfg.shop_info)) } catch (_) {}
@@ -24,7 +25,12 @@ export default function DisplayPage() {
       if (cfg.prices) try { setPrices(JSON.parse(cfg.prices)) } catch (_) {}
       if (cfg.menu_images) try { setImages(JSON.parse(cfg.menu_images)) } catch (_) {}
       if (cfg.stock_shop) try { setStock(JSON.parse(cfg.stock_shop)) } catch (_) {}
-    })
+    }
+    refresh()
+    // This screen runs unattended all day, so it can't depend on the realtime
+    // socket staying up — if it drops, the board silently freezes on whatever
+    // it last received (a finished order's QR, for instance). Poll as a floor.
+    const poll = setInterval(refresh, 8000)
     const ch = supabase.channel('customer-display')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'shop_config' }, payload => {
         const key = payload.new?.key
@@ -38,10 +44,14 @@ export default function DisplayPage() {
         else if (key === 'stock_shop') { try { setStock(JSON.parse(val)) } catch (_) {} }
       })
       .subscribe()
-    return () => supabase.removeChannel(ch)
+    return () => { clearInterval(poll); supabase.removeChannel(ch) }
   }, [])
 
   const hasOrder = order.items && order.items.length > 0
+  // Cash sale: the customer is handing over notes, a payment QR on screen is
+  // just clutter. Only put it up for a transfer (or when staff pushed an
+  // existing order up for the customer to scan at the counter).
+  const showQr = !!qrImage && order.method !== 'cash'
 
   // The board fits exactly 8 cards (4 x 2) and stays on one page — no
   // rotation. Shops carry more items than that, so order them the same way
@@ -97,7 +107,7 @@ export default function DisplayPage() {
           )}
         </div>
       ) : (
-        <div className="flex-1 w-full max-w-5xl mx-auto grid gap-8 items-center" style={{ gridTemplateColumns: qrImage ? '1fr 1.15fr' : '1fr' }}>
+        <div className="flex-1 w-full max-w-5xl mx-auto grid gap-8 items-center" style={{ gridTemplateColumns: showQr ? '1fr 1.15fr' : '1fr' }}>
           <div className="rounded-3xl overflow-hidden" style={{ background: 'var(--warm-white)' }}>
             <div className="px-6 py-4 text-xs font-black tracking-widest uppercase" style={{ background: 'var(--cream2)', color: 'var(--gray3)' }}>
               ລາຍການ · Your Order
@@ -115,7 +125,7 @@ export default function DisplayPage() {
               <span className="font-serif font-black" style={{ color: 'var(--cream)', fontSize: 'clamp(28px,4vw,48px)' }}>{(order.total || 0).toLocaleString()} ກີບ</span>
             </div>
           </div>
-          {qrImage && (
+          {showQr && (
             <div className="flex flex-col items-center justify-center gap-3 rounded-3xl p-6" style={{ background: 'var(--warm-white)' }}>
               <div className="text-sm font-black tracking-widest uppercase" style={{ color: 'var(--gray3)' }}>ສະແກນຊຳລະ</div>
               <img src={qrImage} alt="QR" className="rounded-xl" style={{ width: '100%', maxWidth: 460 }} />
