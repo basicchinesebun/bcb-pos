@@ -114,7 +114,7 @@ export default function StaffPage() {
   const [chatKbH, setChatKbH] = useState(0)
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [statsCollapsed, setStatsCollapsed] = useState(false)
-  const [customerSearchCollapsed, setCustomerSearchCollapsed] = useState(false)
+  const [customerSearchCollapsed, setCustomerSearchCollapsed] = useState(true)
   const [mainSearchCollapsed, setMainSearchCollapsed] = useState(true)
   const [batchOpen, setBatchOpen] = useState(false)
   const [batchSelected, setBatchSelected] = useState(new Set())
@@ -2627,6 +2627,13 @@ export default function StaffPage() {
                   >
                     🔍
                   </button>
+                  <button
+                    onClick={() => setCustomerSearchCollapsed(v => !v)}
+                    className={`px-3 py-1 rounded-lg text-xs font-black border ${!customerSearchCollapsed ? 'bg-[#3d1f0a] text-[#fdf6ee] border-[#3d1f0a]' : 'border-[#e8d5c0] text-[#8a6a55]'}`}
+                    title="ຄົ້ນຫາລູກຄ້າ · Customer"
+                  >
+                    👤
+                  </button>
                 </div>
               </div>
               {!mainSearchCollapsed && (
@@ -2645,16 +2652,6 @@ export default function StaffPage() {
               )}
 
               {/* Customer search */}
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-xs font-bold" style={{ color: 'var(--gray3)' }}>ຄົ້ນຫາລູກຄ້າ · Customer</span>
-                <button
-                  onClick={() => setCustomerSearchCollapsed(v => !v)}
-                  className="text-xs font-black px-2 py-0.5 rounded"
-                  style={{ color: 'var(--brown2)' }}
-                >
-                  {customerSearchCollapsed ? '▼ ສະແດງ' : '▲ ເຊື່ອງ'}
-                </button>
-              </div>
               {!customerSearchCollapsed && (
                 <div className="relative mb-3">
                   <input
@@ -3301,15 +3298,15 @@ export default function StaffPage() {
       {/* Bottom Nav */}
       <div className="flex flex-shrink-0" style={{ background: 'var(--brown)', borderTop: '2px solid var(--brown2)' }}>
         {[['orders','📋','ອໍເດີ'],['sales','📊','ຍອດຂາຍ']].map(([t,icon,l]) => (
-          <button key={t} onClick={() => setTab(t)} className={`flex-1 flex flex-col items-center py-3 gap-1 border-none text-xs font-bold ${tab===t ? 'text-[#fdf6ee]' : 'text-[rgba(253,246,238,0.45)]'}`} style={{ background: 'transparent' }}>
-            <span className="text-2xl">{icon}</span>{l}
+          <button key={t} onClick={() => setTab(t)} className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 border-none text-xs font-bold ${tab===t ? 'text-[#fdf6ee]' : 'text-[rgba(253,246,238,0.45)]'}`} style={{ background: 'transparent' }}>
+            <span className="text-base">{icon}</span>{l}
           </button>
         ))}
-        <button onClick={() => setTab('chat')} className={`flex-1 flex flex-col items-center py-3 gap-1 border-none text-xs font-bold relative ${tab==='chat' ? 'text-[#fdf6ee]' : 'text-[rgba(253,246,238,0.45)]'}`} style={{ background: 'transparent' }}>
-          <span className="text-2xl relative inline-block">
+        <button onClick={() => setTab('chat')} className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 border-none text-xs font-bold relative ${tab==='chat' ? 'text-[#fdf6ee]' : 'text-[rgba(253,246,238,0.45)]'}`} style={{ background: 'transparent' }}>
+          <span className="text-base relative inline-block">
             💬
             {unreadChat > 0 && (
-              <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[9px] font-black rounded-full w-4 h-4 flex items-center justify-center leading-none">
+              <span className="absolute -top-1.5 -right-2 bg-red-500 text-white text-[9px] font-black rounded-full w-4 h-4 flex items-center justify-center leading-none">
                 {unreadChat > 9 ? '9+' : unreadChat}
               </span>
             )}
