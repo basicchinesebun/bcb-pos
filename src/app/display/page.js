@@ -62,19 +62,19 @@ export default function DisplayPage() {
               )}
             </div>
           ) : (
-            <div className="flex-1 min-h-0 overflow-hidden grid gap-2.5 grid-cols-2 md:grid-cols-3 xl:grid-cols-4 auto-rows-min content-start">
-              {menus.map((m, i) => {
+            <div className="flex-1 min-h-0 overflow-hidden grid gap-2.5 grid-cols-4 grid-rows-2">
+              {menus.map((m, i) => ({ m, i })).slice(0, 8).map(({ m, i }) => {
                 const isOut = (stock[i] || 0) <= 0
                 return (
-                  <div key={i} className="rounded-xl overflow-hidden flex flex-col" style={{ background: 'var(--warm-white)', opacity: isOut ? 0.45 : 1 }}>
-                    <div className="aspect-[16/10] w-full overflow-hidden flex items-center justify-center" style={{ background: 'var(--cream2)' }}>
+                  <div key={i} className="rounded-xl overflow-hidden flex flex-col h-full" style={{ background: 'var(--warm-white)', opacity: isOut ? 0.45 : 1 }}>
+                    <div className="flex-1 min-h-0 w-full overflow-hidden flex items-center justify-center" style={{ background: 'var(--cream2)' }}>
                       {images[i] ? (
                         <img src={images[i]} alt={m.lo} className="w-full h-full object-cover" loading="lazy" />
                       ) : (
                         <span className="text-3xl">🥟</span>
                       )}
                     </div>
-                    <div className="px-2.5 py-1.5 flex-1 flex flex-col justify-between min-w-0">
+                    <div className="px-2.5 py-1.5 flex-shrink-0 min-w-0">
                       <div className="font-bold leading-tight truncate" style={{ color: 'var(--brown)', fontSize: 'clamp(11px,1vw,14px)' }}>{m.lo}</div>
                       <div className="font-black mt-0.5" style={{ color: isOut ? 'var(--gray3)' : 'var(--brown2)', fontSize: 'clamp(12px,1.15vw,16px)' }}>
                         {isOut ? 'ໝົດ' : `${(prices[i] || 0).toLocaleString()} ກີບ`}
