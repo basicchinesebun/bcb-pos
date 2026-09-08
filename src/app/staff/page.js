@@ -1767,8 +1767,16 @@ export default function StaffPage() {
       y += Math.round(14 * s)
     }
     if (logoImg) push(() => {
-      const ls = Math.round(72 * s)
-      ctx.drawImage(logoImg, (W - ls) / 2, y + Math.round(10 * s), ls, ls)
+      // Half the paper width — a 72px logo simply hasn't got enough head dots
+      // to resolve lettering inside it. Binarised at final paper resolution,
+      // then blitted with smoothing off so the downsample can't soften it.
+      const logoPx = Math.round((W / s) * 0.5)
+      const ls = logoPx * s
+      const bin = binarizeLogo(logoImg, logoPx)
+      const smoothing = ctx.imageSmoothingEnabled
+      ctx.imageSmoothingEnabled = false
+      ctx.drawImage(bin, (W - ls) / 2, y + Math.round(10 * s), ls, ls)
+      ctx.imageSmoothingEnabled = smoothing
       y += ls + Math.round(14 * s)
     })
     push(() => { ctx.font = f(28, '900'); ctx.textAlign = 'center'; ctx.fillStyle = '#000'; ctx.fillText(si.name || 'BCB', W/2, y += Math.round(34 * s)) })
@@ -1832,6 +1840,63 @@ export default function StaffPage() {
   }
 
   // Downsample a high-res canvas to printer width for sharper 1-bit output
+  // A thermal head is 1-bit: every dot is either burned or not, there is no
+  // grey. A logo that's white lettering inside a dark shape therefore prints
+  // as a black blob — the smoothing that happens on the way down to printer
+  // resolution drags those thin white strokes toward mid-grey, and the print
+  // threshold then rounds mid-grey down to black, swallowing the letters.
+  //
+  // So binarise the logo up front, at exactly the size it will occupy on
+  // paper, using Otsu's method to pick the split point (works whatever colours
+  // the shop's logo happens to use rather than assuming a fixed cutoff). The
+  // caller then blits the result with smoothing off so nothing re-blurs it.
+  function binarizeLogo(img, sizePx) {
+    const c = document.createElement('canvas')
+    c.width = sizePx; c.height = sizePx
+    const cx = c.getContext('2d')
+    cx.imageSmoothingEnabled = true
+    cx.imageSmoothingQuality = 'high'
+    cx.fillStyle = '#fff'; cx.fillRect(0, 0, sizePx, sizePx)
+    cx.drawImage(img, 0, 0, sizePx, sizePx)
+
+    const imgData = cx.getImageData(0, 0, sizePx, sizePx)
+    const px = imgData.data
+    const n = sizePx * sizePx
+    const gray = new Uint8Array(n)
+    const hist = new Array(256).fill(0)
+    for (let i = 0; i < n; i++) {
+      const o = i * 4
+      const g = Math.round(0.299 * px[o] + 0.587 * px[o + 1] + 0.114 * px[o + 2])
+      gray[i] = g
+      hist[g]++
+    }
+
+    // Otsu: pick the cutoff that best separates the histogram into two groups.
+    let sum = 0
+    for (let t = 0; t < 256; t++) sum += t * hist[t]
+    let sumB = 0, wB = 0, best = 0, threshold = 128
+    for (let t = 0; t < 256; t++) {
+      wB += hist[t]
+      if (wB === 0) continue
+      const wF = n - wB
+      if (wF === 0) break
+      sumB += t * hist[t]
+      const mB = sumB / wB
+      const mF = (sum - sumB) / wF
+      const between = wB * wF * (mB - mF) * (mB - mF)
+      if (between > best) { best = between; threshold = t }
+    }
+
+    for (let i = 0; i < n; i++) {
+      const v = gray[i] > threshold ? 255 : 0
+      const o = i * 4
+      px[o] = px[o + 1] = px[o + 2] = v
+      px[o + 3] = 255
+    }
+    cx.putImageData(imgData, 0, 0)
+    return c
+  }
+
   function downsampleCanvas(src, targetW) {
     const ratio = targetW / src.width
     const targetH = Math.round(src.height * ratio)
