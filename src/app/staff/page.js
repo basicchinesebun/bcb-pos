@@ -1887,8 +1887,20 @@ export default function StaffPage() {
       if (between > best) { best = between; threshold = t }
     }
 
+    // A logo drawn as light artwork on a dark fill (the common "white line art
+    // on brand colour" case) would otherwise print as a solid black slab with
+    // the artwork knocked out of it — heavy, slow, and unreadable on a
+    // receipt. If most of the mark lands on the dark side, invert it, so what
+    // reaches the paper is black line art on plain white. Logos that are
+    // already dark-on-light are left as they are.
+    let darkCount = 0
+    for (let i = 0; i < n; i++) if (gray[i] <= threshold) darkCount++
+    const invert = darkCount > n / 2
+
     for (let i = 0; i < n; i++) {
-      const v = gray[i] > threshold ? 255 : 0
+      const isDark = gray[i] <= threshold
+      const ink = invert ? !isDark : isDark
+      const v = ink ? 0 : 255
       const o = i * 4
       px[o] = px[o + 1] = px[o + 2] = v
       px[o + 3] = 255
