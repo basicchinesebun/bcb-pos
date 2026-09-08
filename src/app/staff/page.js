@@ -124,13 +124,13 @@ export default function StaffPage() {
 
   // Ordering 80 of something meant 80 taps on "+". Holding a menu card opens
   // a keypad to type the quantity straight in instead.
-  function startQtyLongPress(i, isOut) {
+  function startQtyLongPress(i, isOut, bagIdx = null) {
     if (isOut) return
     longPressFiredRef.current = false
     clearTimeout(longPressRef.current)
     longPressRef.current = setTimeout(() => {
       longPressFiredRef.current = true
-      setQtyModal({ idx: i })
+      setQtyModal({ idx: i, bag: bagIdx })
       setQtyInput('')
     }, 450)
   }
@@ -373,14 +373,26 @@ export default function StaffPage() {
   }
 
   function qoAddItemToBag(bagIdx, menuIdx) {
-    if (qoBagMode === 'bags') {
-      const total = qoBagPacks.reduce((s, b) => s + (b[menuIdx] || 0), 0)
-      if (total >= (stockShop[menuIdx] || 0)) { qoShowPackToast('ໝົດ · Out of stock'); return }
-    } else {
-      const packed = qoBagPacks.reduce((s, b) => s + (b[menuIdx] || 0), 0)
-      if (packed >= (qoSelected[menuIdx] || 0)) { qoShowPackToast('ຄົບແລ້ວ'); return }
+    if (qoBagRemaining(menuIdx) <= 0) {
+      qoShowPackToast(qoBagMode === 'bags' ? 'ໝົດ · Out of stock' : 'ຄົບແລ້ວ')
+      return
     }
     setQoBagPacks(prev => { const a = prev.map(b => ({ ...b })); a[bagIdx] = { ...a[bagIdx], [menuIdx]: (a[bagIdx][menuIdx] || 0) + 1 }; return a })
+  }
+
+  // How many of this item may still be dropped into bags — capped by stock
+  // when packing freehand, or by what was actually ordered otherwise.
+  function qoBagRemaining(menuIdx) {
+    const packed = qoBagPacks.reduce((s, b) => s + (b[menuIdx] || 0), 0)
+    const cap = qoBagMode === 'bags' ? (stockShop[menuIdx] || 0) : (qoSelected[menuIdx] || 0)
+    return Math.max(0, cap - packed)
+  }
+
+  // Drop N of an item into a bag in one go, instead of N separate taps.
+  function qoAddManyToBag(bagIdx, menuIdx, n) {
+    const add = Math.min(n, qoBagRemaining(menuIdx))
+    if (add <= 0) return
+    setQoBagPacks(prev => { const a = prev.map(b => ({ ...b })); a[bagIdx] = { ...a[bagIdx], [menuIdx]: (a[bagIdx][menuIdx] || 0) + add }; return a })
   }
 
   function qoRemoveItemFromBag(bagIdx, menuIdx) {
@@ -831,6 +843,9 @@ export default function StaffPage() {
     // Optimistic update — moves card to archive immediately without waiting for realtime
     setOrders(prev => prev.map(ord => ord.id === o.id ? { ...ord, done: true, done_at: doneAt } : ord))
     await supabase.from('orders').update({ done: true, done_at: doneAt }).eq('id', o.id)
+    // If this is the order currently up on the customer screen, take it down —
+    // otherwise a finished order's total sits there until someone notices.
+    if (displayOrderId === o.id) { clearDisplay(); setDisplayOrderId(null) }
     announce(o.qnum)
     showToast(`✅ ຄິວ ${String(o.qnum).padStart(4,'0')} Done`, 'green')
     logActivity('done_order', `#${String(o.qnum).padStart(4, '0')}`)
@@ -3649,7 +3664,16 @@ export default function StaffPage() {
                             const totalPacked = qoBagPacks.reduce((acc, b) => acc + (b[i] || 0), 0)
                             const isDisabled = totalPacked >= (qoSelected[i] || 0)
                             return (
-                              <button key={i} disabled={isDisabled} onClick={() => qoAddItemToBag(n, i)}
+                              <button key={i} disabled={isDisabled}
+                                onPointerDown={() => startQtyLongPress(i, isDisabled, n)}
+                                onPointerUp={cancelQtyLongPress}
+                                onPointerLeave={cancelQtyLongPress}
+                                onPointerCancel={cancelQtyLongPress}
+                                onContextMenu={e => e.preventDefault()}
+                                onClick={() => {
+                                  if (longPressFiredRef.current) { longPressFiredRef.current = false; return }
+                                  qoAddItemToBag(n, i)
+                                }}
                                 className={`flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-black transition-transform ${isDisabled ? 'opacity-40 cursor-not-allowed' : 'active:scale-95'}`}
                                 style={{ background: 'var(--cream)', border: `2px solid ${qtyInBag > 0 ? 'var(--brown)' : '#e8d5c0'}`, color: 'var(--brown)' }}>
                                 {img ? <img src={img} className="w-8 h-8 rounded-lg object-cover flex-shrink-0" alt="" loading="lazy" /> : <span className="text-xl">{EMOJIS[i] || '🍱'}</span>}
@@ -3661,7 +3685,16 @@ export default function StaffPage() {
                             const sTotal = stockTotal[i] || 0
                             if (s === 0 && sTotal === 0) return null
                             return (
-                              <button key={i} onClick={() => qoAddItemToBag(n, i)}
+                              <button key={i}
+                                onPointerDown={() => startQtyLongPress(i, false, n)}
+                                onPointerUp={cancelQtyLongPress}
+                                onPointerLeave={cancelQtyLongPress}
+                                onPointerCancel={cancelQtyLongPress}
+                                onContextMenu={e => e.preventDefault()}
+                                onClick={() => {
+                                  if (longPressFiredRef.current) { longPressFiredRef.current = false; return }
+                                  qoAddItemToBag(n, i)
+                                }}
                                 className="flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-black active:scale-95 transition-transform"
                                 style={{ background: 'var(--cream)', border: `2px solid ${qtyInBag > 0 ? 'var(--brown)' : '#e8d5c0'}`, color: 'var(--brown)' }}>
                                 {img ? <img src={img} className="w-8 h-8 rounded-lg object-cover flex-shrink-0" alt="" loading="lazy" /> : <span className="text-xl">{EMOJIS[i] || '🍱'}</span>}
@@ -4026,17 +4059,24 @@ export default function StaffPage() {
       {/* Type a quantity straight in — opened by holding a Quick Order card */}
       {qtyModal && (() => {
         const i = qtyModal.idx
-        const max = stockShop[i] || 0
+        const intoBag = qtyModal.bag != null
+        // Packing a bag adds to whatever is already in it, capped by what's
+        // left to pack; on the menu grid it sets the line quantity outright.
+        const max = intoBag ? qoBagRemaining(i) : (stockShop[i] || 0)
         const typed = Number(qtyInput) || 0
         const tooMany = typed > max
         const close = () => { setQtyModal(null); setQtyInput('') }
         const apply = () => {
-          setQoSelected(prev => {
-            const n = { ...prev }
-            if (typed <= 0) delete n[i]
-            else n[i] = Math.min(typed, max)
-            return n
-          })
+          if (intoBag) {
+            qoAddManyToBag(qtyModal.bag, i, typed)
+          } else {
+            setQoSelected(prev => {
+              const n = { ...prev }
+              if (typed <= 0) delete n[i]
+              else n[i] = Math.min(typed, max)
+              return n
+            })
+          }
           close()
         }
         return (
@@ -4047,7 +4087,7 @@ export default function StaffPage() {
               <div className="px-6 py-4 text-center" style={{ background: 'var(--brown)' }}>
                 <div className="font-serif text-lg font-black" style={{ color: 'var(--cream)' }}>{menus[i]?.lo}</div>
                 <div className="text-xs font-bold mt-1" style={{ color: 'rgba(253,246,238,0.6)' }}>
-                  ມີໃນສະຕັອກ {max} ກ້ອນ
+                  {intoBag ? `ໃສ່ຖົງ ${qtyModal.bag + 1} · ຍັງເຫຼືອ ${max} ກ້ອນ` : `ມີໃນສະຕັອກ ${max} ກ້ອນ`}
                 </div>
               </div>
               <div className="px-5 py-4 flex flex-col gap-2.5">
@@ -4055,7 +4095,7 @@ export default function StaffPage() {
                   className="input-field w-full text-3xl font-black text-center" />
                 {tooMany && (
                   <div className="text-center text-xs font-black" style={{ color: '#dc2626' }}>
-                    ເກີນສະຕັອກ · ຈະໃສ່ໃຫ້ {max}
+                    ເກີນ · ຈະໃສ່ໃຫ້ {max}
                   </div>
                 )}
                 <div className="grid grid-cols-3 gap-1.5">
