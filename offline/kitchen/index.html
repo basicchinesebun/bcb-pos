@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="lo">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>BCB — ຈໍຄົວ</title>
+<style>
+  /* Deliberately one hand-written file with no build step: this page is served
+     to a tablet across the shop Wi-Fi and has to keep working even if every
+     other part of the toolchain is having a bad day. */
+  :root { --brown:#3d1f0a; --cream:#fdf6ee; --cream2:#f5ebe0; --warm:#fffbf6; --gray:#8a6a55; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body { margin:0; font-family:'Noto Sans Lao','Noto Serif Lao',system-ui,sans-serif; background:var(--cream); color:var(--brown); }
+  header { position:sticky; top:0; display:flex; align-items:center; justify-content:space-between;
+           gap:12px; padding:12px 18px; background:var(--brown); color:var(--cream); z-index:5; }
+  h1 { margin:0; font-size:20px; font-weight:900; }
+  #conn { font-size:14px; font-weight:900; padding:6px 12px; border-radius:999px; }
+  .on { background:#1f7a3d; color:#fff; }
+  .off { background:#b3261e; color:#fff; }
+  /* A kitchen screen that has quietly lost the till is the dangerous state:
+     it looks like a slow lunchtime instead of a broken connection. So the
+     whole page goes red until it reconnects. */
+  #lost { display:none; background:#b3261e; color:#fff; padding:14px 18px; font-weight:900; font-size:18px; text-align:center; }
+  body.disconnected #lost { display:block; }
+  main { display:grid; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); gap:14px; padding:16px; }
+  .card { background:var(--warm); border:2px solid var(--cream2); border-radius:16px; padding:14px; display:flex; flex-direction:column; gap:10px; }
+  .card.fresh { border-color:#1f7a3d; }
+  .q { font-size:40px; font-weight:900; line-height:1; }
+  .meta { font-size:13px; color:var(--gray); font-weight:700; }
+  .items { display:flex; flex-direction:column; gap:4px; font-size:18px; font-weight:700; }
+  .bags { font-size:13px; font-weight:700; color:var(--gray); background:var(--cream2); padding:8px; border-radius:10px; }
+  button.done { border:none; background:var(--brown); color:var(--cream); font-weight:900; font-size:17px;
+                padding:14px; border-radius:12px; cursor:pointer; font-family:inherit; }
+  button.done:active { opacity:.7; }
+  .empty { padding:60px 20px; text-align:center; color:var(--gray); font-weight:700; grid-column:1/-1; }
+</style>
+</head>
+<body>
+<header>
+  <h1>ຈໍຄົວ · Kitchen</h1>
+  <span id="conn" class="off">ກຳລັງເຊື່ອມຕໍ່…</span>
+</header>
+<div id="lost">⚠️ ຂາດການເຊື່ອມຕໍ່ກັບເຄື່ອງຂາຍ — ລາຍການອາດບໍ່ຄົບ. ກຳລັງລອງເຊື່ອມໃໝ່…</div>
+<main id="board"><div class="empty">ຍັງບໍ່ມີອໍເດີ</div></main>
+
+<script>
+(function () {
+  var board = document.getElementById('board')
+  var conn = document.getElementById('conn')
+  var orders = []
+  var ws = null
+  var retry = 1000
+
+  function money(n) { return (Math.round(n) || 0).toLocaleString('en-US') }
+  function pad(n) { return String(n).padStart(4, '0') }
+
+  function render() {
+    if (!orders.length) { board.innerHTML = '<div class="empty">ຍັງບໍ່ມີອໍເດີ</div>'; return }
+    board.innerHTML = ''
+    orders.forEach(function (o) {
+      var card = document.createElement('div')
+      card.className = 'card' + (o._fresh ? ' fresh' : '')
+      var items = (o.items || []).map(function (it) {
+        return '<div>' + esc(it.name) + ' × ' + it.qty + '</div>'
+      }).join('')
+      card.innerHTML =
+        '<div class="q">' + pad(o.qnum) + '</div>' +
+        '<div class="meta">' + esc((o.created_at || '').slice(11, 16)) + (o.sold_by ? ' · ' + esc(o.sold_by) : '') + '</div>' +
+        '<div class="items">' + items + '</div>' +
+        (o.bag_label ? '<div class="bags">' + esc(o.bag_label) + '</div>' : '') +
+        '<div class="meta">' + money(o.total) + ' ກີບ</div>'
+      var btn = document.createElement('button')
+      btn.className = 'done'
+      btn.textContent = 'ເສັດແລ້ວ'
+      btn.onclick = function () {
+        if (!ws || ws.readyState !== 1) { alert('ຂາດການເຊື່ອມຕໍ່ — ລອງໃໝ່ອີກຄັ້ງ'); return }
+        ws.send(JSON.stringify({ type: 'done', id: o.id }))
+        // The till is the authority on what is done; the card leaves the board
+        // when the removal comes back, so a dropped message cannot make an
+        // order silently disappear from the kitchen.
+        btn.disabled = true
+        btn.textContent = 'ກຳລັງສົ່ງ…'
+      }
+      card.appendChild(btn)
+      board.appendChild(card)
+    })
+  }
+
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]
+    })
+  }
+
+  function connect() {
+    var proto = location.protocol === 'https:' ? 'wss:' : 'ws:'
+    ws = new WebSocket(proto + '//' + location.host + '/ws')
+
+    ws.onopen = function () {
+      retry = 1000
+      conn.className = 'on'
+      conn.textContent = 'ເຊື່ອມຕໍ່ແລ້ວ'
+      document.body.classList.remove('disconnected')
+    }
+
+    ws.onmessage = function (ev) {
+      var msg
+      try { msg = JSON.parse(ev.data) } catch (e) { return }
+      if (msg.type === 'sync') { orders = msg.orders || [] }
+      else if (msg.type === 'new') {
+        msg.order._fresh = true
+        orders.push(msg.order)
+        setTimeout(function () { msg.order._fresh = false; render() }, 20000)
+        beep()
+      } else if (msg.type === 'remove') {
+        orders = orders.filter(function (o) { return o.id !== msg.id })
+      }
+      render()
+    }
+
+    ws.onclose = function () {
+      conn.className = 'off'
+      conn.textContent = 'ຂາດການເຊື່ອມຕໍ່'
+      document.body.classList.add('disconnected')
+      // Back off up to 10s. A kitchen tablet left on overnight should not
+      // hammer a till that is switched off.
+      setTimeout(connect, retry)
+      retry = Math.min(retry * 2, 10000)
+    }
+
+    ws.onerror = function () { try { ws.close() } catch (e) {} }
+  }
+
+  // A short tone on a new order — the kitchen is not watching the screen.
+  function beep() {
+    try {
+      var ctx = new (window.AudioContext || window.webkitAudioContext)()
+      var osc = ctx.createOscillator()
+      var gain = ctx.createGain()
+      osc.connect(gain); gain.connect(ctx.destination)
+      osc.frequency.value = 880
+      gain.gain.setValueAtTime(0.18, ctx.currentTime)
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4)
+      osc.start(); osc.stop(ctx.currentTime + 0.4)
+      setTimeout(function () { ctx.close() }, 700)
+    } catch (e) {}
+  }
+
+  connect()
+})()
+</script>
+</body>
+</html>
