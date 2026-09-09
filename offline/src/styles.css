@@ -386,3 +386,7 @@ select.input { cursor: pointer; }
 @media (prefers-reduced-motion: reduce) {
   .disp-called { animation: none; }
 }
+
+/* A menu that sold nothing is still listed, just dimmed — the point of showing
+   it is that it is there and empty. */
+.table .row-zero td { opacity: 0.5; }

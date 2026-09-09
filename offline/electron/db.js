@@ -315,34 +315,74 @@ function openOrders() {
 // Costs are read from the menu row at report time rather than frozen onto the
 // order. The shop wants "what would this sale earn at today's cost", and a
 // backup till that never syncs has no better source of truth anyway.
+//
+// Three shapes come out of here, because they answer different questions:
+//   byMenu  — how each menu did over the whole range
+//   byDay   — how each day did overall
+//   daily   — one row per day per menu, which is the shape worth handing to a
+//             spreadsheet or an AI to look for patterns in
+//
+// The important part for a shop carrying 17 menus but selling 7-8 on a given
+// day: menus that sold NOTHING are included, with zero. A report that lists
+// only what sold cannot answer "what isn't selling", which is the question
+// actually worth asking.
 function report({ from, to }) {
   const orders = db.prepare('SELECT * FROM orders WHERE date(created_at) BETWEEN ? AND ? AND cancelled = 0 ORDER BY id')
     .all(from, to)
-  const costById = new Map(db.prepare('SELECT id, cost FROM menus').all().map(m => [m.id, m.cost || 0]))
+  const menus = db.prepare('SELECT id, name, cost, price, active FROM menus ORDER BY sort, id').all()
+  const costById = new Map(menus.map(m => [m.id, m.cost || 0]))
 
   let total = 0, cash = 0, transfer = 0, cost = 0
   const byMenu = new Map()
   const byStaff = new Map()
+  const byDay = new Map()
+  const dailyMenu = new Map()   // 'date|name' -> per-day-per-menu totals
+
+  // Seed every menu at zero so the ones that did not sell are still counted.
+  // Deleted menus are picked up from the order rows below, since old bills
+  // keep the name they were sold under.
+  for (const m of menus) {
+    byMenu.set(m.name, { menu_id: m.id, name: m.name, qty: 0, revenue: 0, cost: 0, active: m.active, onMenu: true })
+  }
 
   for (const o of orders) {
+    const day = (o.created_at || '').slice(0, 10)
     total += o.total || 0
     if (o.payment_method === 'cash') cash += o.total || 0
     else transfer += o.total || 0
 
     let items = []
     try { items = JSON.parse(o.items) } catch (_) { items = [] }
+
     let orderCost = 0
     for (const it of items) {
       const c = (costById.get(it.menu_id) || 0) * it.qty
       orderCost += c
       const key = it.name || `#${it.menu_id}`
-      const agg = byMenu.get(key) || { name: key, qty: 0, revenue: 0, cost: 0 }
+
+      const agg = byMenu.get(key) || { menu_id: it.menu_id, name: key, qty: 0, revenue: 0, cost: 0, active: 0, onMenu: false }
       agg.qty += it.qty
       agg.revenue += it.sub || 0
       agg.cost += c
       byMenu.set(key, agg)
+
+      const dk = `${day}|${key}`
+      const d = dailyMenu.get(dk) || { date: day, menu_id: it.menu_id, name: key, qty: 0, revenue: 0, cost: 0 }
+      d.qty += it.qty
+      d.revenue += it.sub || 0
+      d.cost += c
+      dailyMenu.set(dk, d)
     }
     cost += orderCost
+
+    const dayAgg = byDay.get(day) || { date: day, bills: 0, total: 0, cash: 0, transfer: 0, cost: 0, pieces: 0 }
+    dayAgg.bills += 1
+    dayAgg.total += o.total || 0
+    if (o.payment_method === 'cash') dayAgg.cash += o.total || 0
+    else dayAgg.transfer += o.total || 0
+    dayAgg.cost += orderCost
+    dayAgg.pieces += items.reduce((s, it) => s + it.qty, 0)
+    byDay.set(day, dayAgg)
 
     const who = o.sold_by || 'ບໍ່ລະບຸ'
     const st = byStaff.get(who) || { name: who, bills: 0, total: 0 }
@@ -351,12 +391,42 @@ function report({ from, to }) {
     byStaff.set(who, st)
   }
 
+  const days = [...byDay.keys()].sort()
+
+  // Fill in the gaps: for each day the shop actually traded, every menu on the
+  // board gets a row, zero included. Rows are only produced for trading days —
+  // a closed shop is not a menu that failed to sell, and padding the calendar
+  // with false zeroes would tell an analysis exactly the wrong story.
+  const daily = []
+  for (const day of days) {
+    for (const m of byMenu.values()) {
+      if (!m.onMenu && !dailyMenu.has(`${day}|${m.name}`)) continue
+      const hit = dailyMenu.get(`${day}|${m.name}`)
+      daily.push({
+        date: day,
+        menu_id: m.menu_id,
+        name: m.name,
+        qty: hit ? hit.qty : 0,
+        revenue: hit ? hit.revenue : 0,
+        cost: hit ? hit.cost : 0,
+        profit: hit ? hit.revenue - hit.cost : 0,
+      })
+    }
+  }
+
+  const menuRows = [...byMenu.values()].sort((a, b) => b.qty - a.qty || a.name.localeCompare(b.name))
+
   return {
     from, to,
     bills: orders.length,
     total, cash, transfer, cost,
     profit: total - cost,
-    byMenu: [...byMenu.values()].sort((a, b) => b.qty - a.qty),
+    tradingDays: days.length,
+    byMenu: menuRows,
+    soldMenus: menuRows.filter(m => m.qty > 0).length,
+    unsoldMenus: menuRows.filter(m => m.qty === 0 && m.onMenu).map(m => m.name),
+    byDay: [...byDay.values()].map(d => ({ ...d, profit: d.total - d.cost })).sort((a, b) => a.date.localeCompare(b.date)),
+    daily,
     byStaff: [...byStaff.values()].sort((a, b) => b.total - a.total),
     cancelled: db.prepare('SELECT COUNT(*) n FROM orders WHERE date(created_at) BETWEEN ? AND ? AND cancelled = 1').get(from, to).n,
   }
