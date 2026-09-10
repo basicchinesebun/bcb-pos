@@ -330,6 +330,9 @@ export default function StaffPage() {
 
   function resetQo() {
     setQoBagMode('items'); setQoSelected({}); setQoBagPacks([{}]); setQoStep(1); setQoQnum(null); setQoName('')
+    // Moving on to the next customer is what takes the finished order off the
+    // customer screen — not the moment the sale was saved.
+    clearDisplay()
   }
 
   function openEditOrder(o) {
@@ -449,8 +452,13 @@ export default function StaffPage() {
       else setStockShop(freshStock)
       setQoQnum(qnumData); setQoStep(3)
       showToast(`✅ ຄິວ ${String(qnumData).padStart(4, '0')} · ${paymentMethod === 'cash' ? '💵 ສດ' : '📱 ໂອນ'}`, 'green')
-      // Sale is done — hand the customer screen back to the menu board.
-      clearDisplay()
+      // Deliberately NOT clearing the customer screen here. Saving the order
+      // takes a second; scanning the QR and actually paying takes far longer.
+      // The order + QR stays up through the queue-ticket step and is cleared
+      // by resetQo when staff moves on to the next customer. Re-push it now
+      // that the queue number exists, so the customer can see their number
+      // alongside the total and the QR.
+      writeDisplay({ items, total, method: paymentMethod, qnum: qnumData })
       if (settings.autoprintOn) {
         const printObj = {
           qnum: qnumData, type: 'walkin', items, total,

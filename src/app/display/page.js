@@ -48,10 +48,11 @@ export default function DisplayPage() {
   }, [])
 
   const hasOrder = order.items && order.items.length > 0
-  // Cash sale: the customer is handing over notes, a payment QR on screen is
-  // just clutter. Only put it up for a transfer (or when staff pushed an
-  // existing order up for the customer to scan at the counter).
-  const showQr = !!qrImage && order.method !== 'cash'
+  // QR goes up for every payment method. It was hidden on cash sales for a
+  // while on the theory that it was clutter, but at the counter the customer
+  // often switches to transferring once they see the total — and staff want
+  // it there without having to re-ring the sale.
+  const showQr = !!qrImage
 
   // The board fits exactly 8 cards (4 x 2) and stays on one page — no
   // rotation. Shops carry more items than that, so order them the same way
@@ -109,9 +110,18 @@ export default function DisplayPage() {
       ) : (
         <div className="flex-1 w-full max-w-5xl mx-auto grid gap-8 items-center" style={{ gridTemplateColumns: showQr ? '1fr 1.15fr' : '1fr' }}>
           <div className="rounded-3xl overflow-hidden" style={{ background: 'var(--warm-white)' }}>
-            <div className="px-6 py-4 text-xs font-black tracking-widest uppercase" style={{ background: 'var(--cream2)', color: 'var(--gray3)' }}>
-              ລາຍການ · Your Order
-            </div>
+            {order.qnum ? (
+              <div className="px-6 py-3 text-center" style={{ background: 'var(--cream2)' }}>
+                <div className="text-xs font-black tracking-widest uppercase" style={{ color: 'var(--gray3)' }}>ເລກຄິວ · QUEUE</div>
+                <div className="font-serif font-black leading-none" style={{ color: 'var(--brown)', fontSize: 'clamp(36px,5vw,64px)' }}>
+                  {String(order.qnum).padStart(4, '0')}
+                </div>
+              </div>
+            ) : (
+              <div className="px-6 py-4 text-xs font-black tracking-widest uppercase" style={{ background: 'var(--cream2)', color: 'var(--gray3)' }}>
+                ລາຍການ · Your Order
+              </div>
+            )}
             <div className="px-6 py-2">
               {order.items.map((it, i) => (
                 <div key={i} className="flex justify-between py-3 border-b border-[#f5ebe0]" style={{ fontSize: 'clamp(16px,2vw,22px)' }}>
