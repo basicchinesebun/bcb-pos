@@ -3,11 +3,14 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { supabase } from '../../lib/supabase'
 
+// Allocated by the database, not here. Reading the counter, adding one and
+// writing it back hands two customers the same queue number whenever two
+// orders are taken at the same moment — a second till, or the /order kiosk
+// and the counter together. next_qnum does the increment under a row lock.
 async function nextWalkinQnum() {
-  const { data } = await supabase.from('shop_config').select('value').eq('key', 'next_queue_walkin').single()
-  const next = (parseInt(data?.value || '0') || 0) + 1
-  await supabase.from('shop_config').upsert({ key: 'next_queue_walkin', value: String(next) }, { onConflict: 'key' })
-  return next
+  const { data, error } = await supabase.rpc('next_qnum', { p_key: 'next_queue_walkin' })
+  if (error || data == null) throw new Error('ອອກເລກຄິວບໍ່ໄດ້: ' + (error?.message || 'no value'))
+  return data
 }
 
 const EMOJIS = ['🥟','🍫','🍵','🧁','🍞','🥐','🍮','🍡','🧆','🫕']
@@ -448,18 +451,16 @@ export default function StaffPage() {
         ...(qoName.trim() ? { customer: JSON.stringify({ name: qoName.trim() }) } : {}),
       })
       if (error) throw error
-      // Re-read stock straight from the DB rather than trusting local state,
-      // which can be stale if another till sold something since this page
-      // loaded. onConflict:'key' is required — shop_config's primary key is
-      // id, not key, so without it this becomes an INSERT that trips the
-      // UNIQUE(key) constraint and the deduction is silently lost.
-      const { data: stockRow } = await supabase.from('shop_config').select('value').eq('key', 'stock_shop').single()
-      const freshStock = stockRow?.value ? JSON.parse(stockRow.value) : [...stockShop]
-      Object.entries(effSel).forEach(([i, qty]) => { freshStock[+i] = Math.max(0, (freshStock[+i] || 0) - qty) })
-      const { error: stockErr } = await supabase.from('shop_config')
-        .upsert({ key: 'stock_shop', value: JSON.stringify(freshStock) }, { onConflict: 'key' })
+      // Subtract inside the database. Reading the stock out, subtracting here
+      // and writing it back loses a deduction whenever two sales land at once
+      // — the second read happens before the first write, so one sale's items
+      // never come off. deduct_stock locks the row, so concurrent sales queue
+      // up behind each other.
+      const { data: newStock, error: stockErr } = await supabase.rpc('deduct_stock', {
+        p_key: 'stock_shop', p_deltas: effSel,
+      })
       if (stockErr) showToast('⚠️ ຫັກສະຕັອກບໍ່ສຳເລັດ', 'orange')
-      else setStockShop(freshStock)
+      else if (newStock) setStockShop(newStock)
       setQoQnum(qnumData); setQoStep(3)
       showToast(`✅ ຄິວ ${String(qnumData).padStart(4, '0')} · ${paymentMethod === 'cash' ? '💵 ສດ' : '📱 ໂອນ'}`, 'green')
       // Deliberately NOT clearing the customer screen here. Saving the order
@@ -738,7 +739,7 @@ export default function StaffPage() {
         { key: 'stock_shop', value: JSON.stringify(loadedStockShop) },
         { key: 'stock_online', value: JSON.stringify(loadedStockOnline) },
         { key: 'next_queue', value: '0' },
-      ])
+      ], { onConflict: 'key' })
     }
     configLoadedRef.current = true
   }

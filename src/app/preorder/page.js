@@ -382,12 +382,10 @@ export default function PreOrderPage() {
 
       // Only decrement stock for real orders, not shadow-banned ones
       if (!isBlocked) {
-        const { data: stockRow } = await supabase.from('shop_config').select('value').eq('key', 'stock_online').single()
-        const freshStock = stockRow ? JSON.parse(stockRow.value) : [...stock]
-        Object.entries(selected).forEach(([i, qty]) => {
-          freshStock[+i] = Math.max(0, (freshStock[+i] || 0) - qty)
-        })
-        await supabase.from('shop_config').upsert({ key: 'stock_online', value: JSON.stringify(freshStock) }, { onConflict: 'key' })
+        // Subtract inside the database — see deduct_stock. Read-modify-write
+        // from here loses a deduction whenever two people check out at once,
+        // which online is the normal case rather than the rare one.
+        await supabase.rpc('deduct_stock', { p_key: 'stock_online', p_deltas: selected })
       }
 
       setCurrentOrder(order)

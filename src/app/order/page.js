@@ -5,11 +5,14 @@ import { supabase } from '../../lib/supabase'
 import ContactSection from '../../components/ContactSection'
 import ClosedOverlay from '../../components/ClosedOverlay'
 
+// Allocated by the database, not here. Reading the counter, adding one and
+// writing it back hands two customers the same queue number whenever two
+// orders are taken at the same moment — a second till, or the /order kiosk
+// and the counter together. next_qnum does the increment under a row lock.
 async function nextWalkinQnum() {
-  const { data } = await supabase.from('shop_config').select('value').eq('key', 'next_queue_walkin').single()
-  const next = (parseInt(data?.value || '0') || 0) + 1
-  await supabase.from('shop_config').upsert({ key: 'next_queue_walkin', value: String(next) }, { onConflict: 'key' })
-  return next
+  const { data, error } = await supabase.rpc('next_qnum', { p_key: 'next_queue_walkin' })
+  if (error || data == null) throw new Error('ອອກເລກຄິວບໍ່ໄດ້: ' + (error?.message || 'no value'))
+  return data
 }
 
 const EMOJIS = ['🥟','🍫','🍵','🧁','🍞','🥐','🍮']
@@ -220,15 +223,10 @@ export default function OrderPage() {
       })
       if (error) throw error
 
-      // Decrement stock
-      const newStock = [...stock]
-      Object.entries(effectiveSelected).forEach(([i, qty]) => {
-        newStock[+i] = Math.max(0, (newStock[+i] || 0) - qty)
-      })
-      // onConflict:'key' is required — shop_config's primary key is id, so
-      // without it this is an INSERT that violates UNIQUE(key) and the stock
-      // deduction is silently dropped.
-      await supabase.from('shop_config').upsert({ key: 'stock_shop', value: JSON.stringify(newStock) }, { onConflict: 'key' })
+      // Subtract inside the database — see deduct_stock. Doing the arithmetic
+      // here against a copy of the stock read earlier loses a deduction
+      // whenever two orders land at once.
+      await supabase.rpc('deduct_stock', { p_key: 'stock_shop', p_deltas: effectiveSelected })
 
       setQnum(nextQ)
       setStep(4)
