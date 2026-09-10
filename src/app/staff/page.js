@@ -1385,6 +1385,23 @@ export default function StaffPage() {
     if (!hasUsb) { showToast('❌ ໃຊ້ Chrome ສຳລັບ USB', 'red'); return }
     try {
       showToast('ກຳລັງເຊື່ອມ USB...', 'blue')
+      // Let go of a device we already hold. WebUSB refuses to claim an
+      // interface that is still claimed, so pressing USB a second time in the
+      // same session failed at claimInterface even though the endpoint was
+      // found — which read as "no endpoint" because the claim error was
+      // swallowed.
+      if (usbDeviceRef.current) {
+        const prev = usbDeviceRef.current
+        usbDeviceRef.current = null
+        usbEndpointRef.current = null
+        setUsbConnected(false)
+        try {
+          for (const iface of prev.configuration?.interfaces || []) {
+            if (iface.claimed) await prev.releaseInterface(iface.interfaceNumber)
+          }
+        } catch { }
+        try { await prev.close() } catch { }
+      }
       const device = await navigator.usb.requestDevice({ filters: [] })
       await device.open()
       if (device.configuration === null) {
@@ -1417,21 +1434,26 @@ export default function StaffPage() {
       ]
 
       let endpoint = null
+      let lastErr = null
       for (const { iface, alt, ep } of candidates) {
         try {
-          await device.claimInterface(iface.interfaceNumber)
+          if (!iface.claimed) await device.claimInterface(iface.interfaceNumber)
           if (iface.alternate?.alternateSetting !== alt.alternateSetting) {
             await device.selectAlternateInterface(iface.interfaceNumber, alt.alternateSetting)
           }
           endpoint = ep
           break
-        } catch {
+        } catch (err) {
+          lastErr = err
           try { await device.releaseInterface(iface.interfaceNumber) } catch { }
         }
       }
       if (!endpoint) {
         const detail = found.map(c => `${c.ep.direction}/${c.ep.type}`).join(', ') || 'none'
-        showToast(`❌ ບໍ່ພົບ USB endpoint [${detail}]`, 'red')
+        // Report the claim failure, not just the endpoint list. Hiding it sent
+        // this diagnosis down the wrong path more than once.
+        const why = lastErr ? ` — ${lastErr.message || lastErr.name}` : ''
+        showToast(`❌ USB ໃຊ້ບໍ່ໄດ້ [${detail}]${why}`, 'red')
         try { await device.close() } catch { }
         return
       }
