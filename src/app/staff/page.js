@@ -1326,21 +1326,16 @@ export default function StaffPage() {
 
   // ─── USB Printer (WebUSB / ESC/POS) ───
   const usbDeviceRef = useRef(null)
-  const usbEndpointRef = useRef(null)
   const [usbConnected, setUsbConnected] = useState(false)
   const hasUsb = typeof navigator !== 'undefined' && 'usb' in navigator
 
-  // Hand the printer back when the page goes away. Chrome normally releases
-  // on unload, but a tab that is killed rather than closed can leave the
-  // interface claimed, and then every later attempt fails with "Unable to
-  // claim interface" until the printer is unplugged.
+  // Belt and braces on top of claiming only while sending: if the page is
+  // hidden mid-print, hand the interface straight back.
   useEffect(() => {
     if (!hasUsb) return
     const release = () => {
       const dev = usbDeviceRef.current
-      if (!dev) return
-      usbDeviceRef.current = null
-      usbEndpointRef.current = null
+      if (!dev || !dev.opened) return
       try {
         for (const iface of dev.configuration?.interfaces || []) {
           if (iface.claimed) dev.releaseInterface(iface.interfaceNumber)
@@ -1403,191 +1398,209 @@ export default function StaffPage() {
     }
   }
 
-  // Hand back every device this page has a handle on — not just the one we
-  // think we are holding. A React remount, a reload, or an attempt that failed
-  // partway can leave an orphaned open handle that nothing owns, and Windows
-  // then refuses the next claim. That is why connecting worked sometimes and
-  // failed other times with the same printer and the same driver.
+  // The printer is claimed only for as long as it takes to send something,
+  // never held open between prints.
+  //
+  // Holding the claim is what made this fail after every reload: the page
+  // being torn down still owned the interface while the new page was already
+  // asking for it, Windows refused the second claim, and the app reported a
+  // dead printer that was in fact fine. Nothing this page does can hurry the
+  // old page's release along, so the fix is to not be holding it in the first
+  // place. Between prints the device sits unclaimed and any page — a reload,
+  // a second tab, a restarted browser — can pick it up immediately.
+  //
+  // usbDeviceRef therefore holds a *permitted* device, not an open one.
+
+  async function releaseUsb(device) {
+    if (!device) return
+    try {
+      for (const iface of device.configuration?.interfaces || []) {
+        if (iface.claimed) await device.releaseInterface(iface.interfaceNumber)
+      }
+    } catch { }
+    try { if (device.opened) await device.close() } catch { }
+  }
+
   async function releaseAllUsb() {
-    usbDeviceRef.current = null
-    usbEndpointRef.current = null
-    setUsbConnected(false)
     let devices = []
     try { devices = await navigator.usb.getDevices() } catch { return }
-    for (const d of devices) {
-      if (!d.opened) continue
-      try {
-        for (const iface of d.configuration?.interfaces || []) {
-          if (iface.claimed) await d.releaseInterface(iface.interfaceNumber)
+    for (const d of devices) await releaseUsb(d)
+  }
+
+  // Open, configure and claim, returning the OUT endpoint to write to.
+  // Throws with a readable reason if it can't.
+  async function acquireUsb(device) {
+    if (!device.opened) await device.open()
+    if (device.configuration === null) {
+      // Don't assume the configuration is numbered 1 — ask the device.
+      const cfg = device.configurations?.[0]
+      await device.selectConfiguration(cfg ? cfg.configurationValue : 1)
+    }
+
+    // Find an endpoint we can push bytes at. Three things this has to cope
+    // with, each of which broke it in turn on the shop's printer:
+    //  - the endpoint can live in a non-active alternate setting, so every
+    //    alternate of every interface has to be examined;
+    //  - it isn't necessarily 'bulk'. Cheap ESC/POS units often expose an
+    //    interrupt OUT instead, which transferOut drives just the same. So
+    //    prefer bulk, then accept any OUT endpoint;
+    //  - an interface claimed on a failed attempt must be released, or every
+    //    retry fails identically until the app restarts.
+    const found = []
+    for (const iface of device.configuration.interfaces) {
+      for (const alt of iface.alternates) {
+        for (const ep of alt.endpoints) found.push({ iface, alt, ep })
+      }
+    }
+    const candidates = [
+      ...found.filter(c => c.ep.direction === 'out' && c.ep.type === 'bulk'),
+      ...found.filter(c => c.ep.direction === 'out' && c.ep.type !== 'bulk'),
+    ]
+    if (!candidates.length) {
+      const detail = found.map(c => `${c.ep.direction}/${c.ep.type}`).join(', ') || 'none'
+      throw new Error(`ບໍ່ພົບ OUT endpoint [${detail}]`)
+    }
+
+    const claimOnce = async () => {
+      let lastErr = null
+      for (const { iface, alt, ep } of candidates) {
+        try {
+          if (!iface.claimed) await device.claimInterface(iface.interfaceNumber)
+          if (iface.alternate?.alternateSetting !== alt.alternateSetting) {
+            await device.selectAlternateInterface(iface.interfaceNumber, alt.alternateSetting)
+          }
+          return { endpoint: ep, err: null }
+        } catch (err) {
+          lastErr = err
+          try { await device.releaseInterface(iface.interfaceNumber) } catch { }
         }
-      } catch { }
-      try { await d.close() } catch { }
+      }
+      return { endpoint: null, err: lastErr }
+    }
+
+    // A page being torn down releases its claim a moment after we ask, so an
+    // immediate retry is normal rather than exceptional. Give it a few seconds
+    // before deciding the printer really is unavailable.
+    let claimErr = null
+    for (let attempt = 0; attempt < 6; attempt++) {
+      if (attempt > 0) {
+        await new Promise(r => setTimeout(r, 300 * attempt))
+        if (attempt > 2) { try { await device.reset() } catch { } }
+      }
+      const { endpoint, err } = await claimOnce()
+      if (endpoint) return endpoint
+      claimErr = err
+    }
+    throw new Error(claimErr ? (claimErr.message || claimErr.name) : 'claim failed')
+  }
+
+  // Claim, write, release. Every USB write in the app goes through here.
+  //
+  // Serialised, because printing a receipt and kicking the drawer are started
+  // together and each one claims the device: run them at the same time and the
+  // second claim is refused by the first.
+  const usbChainRef = useRef(Promise.resolve())
+  function usbSend(data, chunkSize = 64) {
+    const run = usbChainRef.current.then(() => usbSendNow(data, chunkSize))
+    usbChainRef.current = run.catch(() => {})
+    return run
+  }
+
+  async function usbSendNow(data, chunkSize) {
+    const device = usbDeviceRef.current
+    if (!device) throw new Error('ຍັງບໍ່ໄດ້ເຊື່ອມເຄື່ອງພິມ')
+    let endpoint
+    try {
+      endpoint = await acquireUsb(device)
+    } catch (e) {
+      await releaseUsb(device)
+      throw e
+    }
+    try {
+      for (let i = 0; i < data.length; i += chunkSize) {
+        const chunk = data.slice(i, i + chunkSize)
+        const res = await device.transferOut(endpoint.endpointNumber, chunk)
+        // A raster receipt is one long stream where every line's bytes are
+        // positional. Drop or truncate a single chunk and every line after it
+        // shifts sideways, so the whole receipt prints skewed rather than
+        // failing outright — bail loudly instead.
+        if (res?.status && res.status !== 'ok') throw new Error(`transfer ${res.status}`)
+        if (res?.bytesWritten != null && res.bytesWritten < chunk.length) {
+          throw new Error(`short write ${res.bytesWritten}/${chunk.length}`)
+        }
+      }
+    } finally {
+      await releaseUsb(device)
     }
   }
 
-  // silent: connect to an already-permitted printer without showing the
-  // chooser. The staff should not have to pick the printer out of a list every
-  // time the page reloads mid-service.
+  // silent: adopt an already-permitted printer without showing the chooser.
+  // Staff should not have to pick the printer out of a list every time the
+  // page reloads mid-service.
   async function connectUsbPrinter({ silent = false } = {}) {
     if (!hasUsb) {
       if (!silent) showToast('❌ ໃຊ້ Chrome ສຳລັບ USB', 'red')
       return false
     }
     try {
-      if (!silent) showToast('ກຳລັງເຊື່ອມ USB...', 'blue')
-      await releaseAllUsb()
       let device = null
       if (silent) {
         const granted = await navigator.usb.getDevices()
         device = granted[0] || null
         if (!device) return false
       } else {
+        showToast('ກຳລັງເຊື່ອມ USB...', 'blue')
         device = await navigator.usb.requestDevice({ filters: [] })
       }
-      await device.open()
-      if (device.configuration === null) {
-        // Don't assume the configuration is numbered 1 — ask the device.
-        const cfg = device.configurations?.[0]
-        await device.selectConfiguration(cfg ? cfg.configurationValue : 1)
-      }
-
-      // Find an endpoint we can push bytes at. Three things this has to cope
-      // with, each of which broke it in turn on the shop's printer:
-      //  - the endpoint can live in a non-active alternate setting, so every
-      //    alternate of every interface has to be examined;
-      //  - it isn't necessarily 'bulk'. This printer reports 1 interface with
-      //    2 endpoints and neither is bulk — cheap ESC/POS units often expose
-      //    interrupt OUT instead, which transferOut drives just the same. So
-      //    prefer bulk, then accept any OUT endpoint;
-      //  - an interface claimed on a failed attempt must be released, or every
-      //    retry fails identically until the app restarts.
-      const found = []
-      for (const iface of device.configuration.interfaces) {
-        for (const alt of iface.alternates) {
-          for (const ep of alt.endpoints) {
-            found.push({ iface, alt, ep })
-          }
-        }
-      }
-      const candidates = [
-        ...found.filter(c => c.ep.direction === 'out' && c.ep.type === 'bulk'),
-        ...found.filter(c => c.ep.direction === 'out' && c.ep.type !== 'bulk'),
-      ]
-
-      async function claimOne() {
-        let lastErr = null
-        for (const { iface, alt, ep } of candidates) {
-          try {
-            if (!iface.claimed) await device.claimInterface(iface.interfaceNumber)
-            if (iface.alternate?.alternateSetting !== alt.alternateSetting) {
-              await device.selectAlternateInterface(iface.interfaceNumber, alt.alternateSetting)
-            }
-            return { endpoint: ep, err: null }
-          } catch (err) {
-            lastErr = err
-            try { await device.releaseInterface(iface.interfaceNumber) } catch { }
-          }
-        }
-        return { endpoint: null, err: lastErr }
-      }
-
-      // Closing a handle is not instant in the Windows kernel, so a claim
-      // fired straight afterwards is still refused — which is what made this
-      // succeed on some attempts and fail on others with nothing else changed.
-      // Back off and try again, resetting the device from the second retry on.
-      let endpoint = null, claimErr = null
-      for (let attempt = 0; attempt < 5 && candidates.length; attempt++) {
-        if (attempt > 0) {
-          await new Promise(r => setTimeout(r, 250 * attempt))
-          if (attempt > 1) { try { await device.reset() } catch { } }
-        }
-        const r = await claimOne()
-        endpoint = r.endpoint
-        claimErr = r.err
-        if (endpoint) break
-      }
-      if (!endpoint) {
-        if (silent) { try { await device.close() } catch { } ; return false }
-        // A toast disappears before it can be read or photographed, and three
-        // rounds of this were lost to guessing at what it had said. Put the
-        // whole report in a dialog that stays up until it's dismissed.
-        const hex = n => '0x' + Number(n || 0).toString(16).padStart(4, '0')
-        const eps = found.map(c =>
-          `  if#${c.iface.interfaceNumber} alt${c.alt.alternateSetting} ep${c.ep.endpointNumber} ${c.ep.direction}/${c.ep.type}`
-        ).join('\n') || '  (none)'
-        alert(
-          'ເຊື່ອມ USB ບໍ່ໄດ້ / USB connect failed\n\n' +
-          `device: ${device.productName || '?'} — ${device.manufacturerName || '?'}\n` +
-          `id: ${hex(device.vendorId)}:${hex(device.productId)}\n` +
-          `interfaces: ${device.configuration?.interfaces?.length ?? 0}\n` +
-          `endpoints:\n${eps}\n` +
-          `out candidates: ${candidates.length}\n\n` +
-          `error: ${claimErr ? (claimErr.name + ': ' + (claimErr.message || '')) : '(no OUT endpoint to claim)'}`
-        )
-        try { await device.close() } catch { }
-        return false
-      }
+      // Prove it can actually be driven, then let go again.
+      await releaseUsb(device)
+      await acquireUsb(device)
+      await releaseUsb(device)
       usbDeviceRef.current = device
-      usbEndpointRef.current = endpoint
       setUsbConnected(true)
-      showToast(`🖨 USB ${device.productName || 'Printer'} ✅`, 'green')
-      navigator.usb.addEventListener('disconnect', (ev) => {
-        if (ev.device !== device) return
-        usbDeviceRef.current = null
-        usbEndpointRef.current = null
-        setUsbConnected(false)
-        showToast('USB ຕັດການເຊື່ອມ', 'orange')
-      })
+      if (!silent) showToast(`🖨 USB ${device.productName || 'Printer'} ✅`, 'green')
       return true
     } catch (e) {
-      // NotFoundError just means the picker was dismissed — not a fault.
-      // Anything else (open() denied, driver wrong) needs to be readable
-      // long enough to photograph, same reason as above.
-      if (!silent && e.name !== 'NotFoundError') {
-        alert('ເຊື່ອມ USB ບໍ່ໄດ້ / USB connect failed\n\n' + e.name + ': ' + (e.message || ''))
-      }
+      if (e.name === 'NotFoundError') return false  // chooser dismissed
+      if (!silent) showToast('❌ USB: ' + (e.message || e.name), 'red')
       return false
     }
   }
 
-  // Reconnect to the printer by itself after a reload. Chrome remembers the
-  // permission, so there is no reason to make someone re-pick the printer out
-  // of a chooser in the middle of service.
+  // Adopt the printer by itself, and keep trying for a while. Right after a
+  // reload the previous page may still be letting go, so the first attempt
+  // legitimately fails; quietly retrying means nobody has to press anything.
   useEffect(() => {
     if (!hasUsb) return
-    let cancelled = false
-    const t = setTimeout(() => { if (!cancelled) connectUsbPrinter({ silent: true }) }, 800)
-    return () => { cancelled = true; clearTimeout(t) }
+    let stop = false
+    ;(async () => {
+      await releaseAllUsb()
+      for (let i = 0; i < 15 && !stop; i++) {
+        if (usbDeviceRef.current) return
+        if (await connectUsbPrinter({ silent: true })) return
+        await new Promise(r => setTimeout(r, 2000))
+      }
+    })()
+    return () => { stop = true }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasUsb])
 
   async function usbPrint(o) {
-    if (!usbDeviceRef.current || !usbEndpointRef.current) { printOrder(o); return }
+    if (!usbDeviceRef.current) { printOrder(o); return }
     let data
     const pw = shopInfo.printerWidth || 384
     try {
       const hires = await renderReceiptCanvas(o, pw * 2)
       data = canvasToEscPos(downsampleCanvas(hires, pw))
     } catch { data = buildEscPos(o) }
-    // A raster receipt is one long stream where every line's bytes are
-    // positional. Drop or truncate a single chunk and every line after it
-    // shifts sideways, so the whole receipt prints skewed rather than failing
-    // outright. transferOut reports both a status and a short-write count and
-    // neither was being checked — bail loudly instead of printing a crooked
-    // receipt and calling it a success.
-    const chunkSize = 64
     try {
-      for (let i = 0; i < data.length; i += chunkSize) {
-        const chunk = data.slice(i, i + chunkSize)
-        const res = await usbDeviceRef.current.transferOut(usbEndpointRef.current.endpointNumber, chunk)
-        if (res?.status && res.status !== 'ok') throw new Error(`transfer ${res.status}`)
-        if (res?.bytesWritten != null && res.bytesWritten < chunk.length) {
-          throw new Error(`short write ${res.bytesWritten}/${chunk.length}`)
-        }
-      }
+      await usbSend(data)
       showToast('ພິມແລ້ວ ✅', 'green')
     } catch (e) {
-      showToast('❌ USB ພິມຜິດ: ' + (e?.message || 'error'), 'red')
+      // Fall back to the browser's own print dialog rather than losing the
+      // receipt: the customer is standing at the counter waiting for it.
+      showToast('⚠️ USB ພິມບໍ່ໄດ້, ໃຊ້ browser: ' + (e?.message || 'error'), 'orange')
+      printOrder(o)
     }
   }
 
@@ -1719,9 +1732,9 @@ export default function StaffPage() {
   }
 
   function smartPrint(o) {
-    const method = usbDeviceRef.current && usbEndpointRef.current ? 'usb' : btCharRef.current ? 'bluetooth' : serialPortRef.current ? 'serial' : 'browser'
+    const method = usbDeviceRef.current ? 'usb' : btCharRef.current ? 'bluetooth' : serialPortRef.current ? 'serial' : 'browser'
     logReceiptPrint(o, method)
-    if (usbDeviceRef.current && usbEndpointRef.current) usbPrint(o)
+    if (usbDeviceRef.current) usbPrint(o)
     else if (btCharRef.current) btPrint(o)
     else if (serialPortRef.current) serialPrint(o)
     else printOrder(o)
@@ -1752,8 +1765,13 @@ export default function StaffPage() {
       }
     }
     try {
-      if (usbDeviceRef.current && usbEndpointRef.current) {
-        await send(p => usbDeviceRef.current.transferOut(usbEndpointRef.current.endpointNumber, p))
+      if (usbDeviceRef.current) {
+        // One claim for all four pulses — claiming per pulse would make the
+        // drawer wait through four open/close cycles.
+        const all = new Uint8Array(DRAWER_PULSES.reduce((n, p) => n + p.length, 0))
+        let at = 0
+        for (const p of DRAWER_PULSES) { all.set(p, at); at += p.length }
+        await usbSend(all)
       } else if (btCharRef.current) {
         await send(p => btCharRef.current.writeValue(p))
       } else if (serialPortRef.current) {
@@ -2216,16 +2234,11 @@ export default function StaffPage() {
     ctx.font = '700 18px Arial, sans-serif'
     ctx.fillText(`${pw} dots  offset ${Math.round(Number(shopInfo.printOffset) || 0)}`, pw / 2, 132)
     const data = canvasToEscPos(canvas)
-    if (usbDeviceRef.current && usbEndpointRef.current) {
-      try {
-        for (let i = 0; i < data.length; i += 64) {
-          await usbDeviceRef.current.transferOut(usbEndpointRef.current.endpointNumber, data.slice(i, i + 64))
-        }
-        showToast('ພິມທົດສອບແລ້ວ ✅', 'green')
-      } catch (e) { showToast('❌ ' + (e?.message || 'error'), 'red') }
-      return
-    }
-    showToast('❌ ຕ້ອງເຊື່ອມ USB ກ່ອນ', 'red')
+    if (!usbDeviceRef.current) { showToast('❌ ຕ້ອງເຊື່ອມ USB ກ່ອນ', 'red'); return }
+    try {
+      await usbSend(data)
+      showToast('ພິມທົດສອບແລ້ວ ✅', 'green')
+    } catch (e) { showToast('❌ ' + (e?.message || 'error'), 'red') }
   }
 
   async function printOrder(o) {
