@@ -1429,7 +1429,7 @@ export default function StaffPage() {
 
   // Open, configure and claim, returning the OUT endpoint to write to.
   // Throws with a readable reason if it can't.
-  async function acquireUsb(device) {
+  async function acquireUsb(device, { attempts = 6, allowReset = true } = {}) {
     if (!device.opened) await device.open()
     if (device.configuration === null) {
       // Don't assume the configuration is numbered 1 — ask the device.
@@ -1482,16 +1482,38 @@ export default function StaffPage() {
     // immediate retry is normal rather than exceptional. Give it a few seconds
     // before deciding the printer really is unavailable.
     let claimErr = null
-    for (let attempt = 0; attempt < 6; attempt++) {
+    for (let attempt = 0; attempt < attempts; attempt++) {
       if (attempt > 0) {
         await new Promise(r => setTimeout(r, 300 * attempt))
-        if (attempt > 2) { try { await device.reset() } catch { } }
+        // Reset from the first retry, not the third. A printer left in a bad
+        // state by an abrupt teardown stays stuck until it is power-cycled,
+        // and this one is built into the terminal — there is no cable to pull,
+        // so a USB-level reset is the only power cycle available. The silent
+        // background adopt skips it: that loop runs for half a minute after
+        // every load, and resetting the printer repeatedly could interrupt a
+        // print another tab is in the middle of.
+        if (allowReset) { try { await device.reset() } catch { } }
       }
       const { endpoint, err } = await claimOnce()
       if (endpoint) return endpoint
       claimErr = err
     }
     throw new Error(claimErr ? (claimErr.message || claimErr.name) : 'claim failed')
+  }
+
+  // Drop the browser's permission for every USB device, which makes Chrome
+  // let go of any handle it is still holding internally. That is the only
+  // lever a web page has once a claim has leaked; without it the printer stays
+  // unavailable until the whole terminal is restarted.
+  async function forgetAllUsb() {
+    usbDeviceRef.current = null
+    setUsbConnected(false)
+    let devices = []
+    try { devices = await navigator.usb.getDevices() } catch { return }
+    for (const d of devices) {
+      await releaseUsb(d)
+      try { if (d.forget) await d.forget() } catch { }
+    }
   }
 
   // Claim, write, release. Every USB write in the app goes through here.
@@ -1554,7 +1576,7 @@ export default function StaffPage() {
       }
       // Prove it can actually be driven, then let go again.
       await releaseUsb(device)
-      await acquireUsb(device)
+      await acquireUsb(device, silent ? { attempts: 2, allowReset: false } : {})
       await releaseUsb(device)
       usbDeviceRef.current = device
       setUsbConnected(true)
@@ -1562,7 +1584,31 @@ export default function StaffPage() {
       return true
     } catch (e) {
       if (e.name === 'NotFoundError') return false  // chooser dismissed
-      if (!silent) showToast('❌ USB: ' + (e.message || e.name), 'red')
+      if (silent) return false
+      // A claim that stays refused after every retry means a handle has leaked
+      // somewhere this page cannot see. Drop the permission so Chrome releases
+      // its side, then offer to pick the printer again — that beats telling
+      // someone mid-service to restart the terminal.
+      if (/claim/i.test(e.message || '')) {
+        await forgetAllUsb()
+        showToast('ກຳລັງລ້າງການເຊື່ອມ USB...', 'orange')
+        await new Promise(r => setTimeout(r, 1200))
+        try {
+          const device = await navigator.usb.requestDevice({ filters: [] })
+          await acquireUsb(device)
+          await releaseUsb(device)
+          usbDeviceRef.current = device
+          setUsbConnected(true)
+          showToast(`🖨 USB ${device.productName || 'Printer'} ✅`, 'green')
+          return true
+        } catch (e2) {
+          if (e2.name !== 'NotFoundError') {
+            showToast('❌ USB: ' + (e2.message || e2.name) + ' — ລອງ Restart ເຄື່ອງ', 'red')
+          }
+          return false
+        }
+      }
+      showToast('❌ USB: ' + (e.message || e.name), 'red')
       return false
     }
   }
@@ -2448,6 +2494,15 @@ export default function StaffPage() {
               )}
               <button onClick={kickDrawer} title="ເປີດລິ້ນຊັກ" className="text-xs font-black px-3 py-2 rounded-lg border border-[rgba(253,246,238,0.35)] text-[#fdf6ee]">🔓</button>
               <button onClick={printAlignmentTest} title="ພິມໄມ້ບັນທັດທົດສອບຕຳແໜ່ງ" className="text-xs font-black px-3 py-2 rounded-lg border border-[rgba(253,246,238,0.35)] text-[#fdf6ee]">📐</button>
+              <button
+                onClick={async () => {
+                  showToast('ກຳລັງລ້າງການເຊື່ອມ USB...', 'orange')
+                  await forgetAllUsb()
+                  await new Promise(r => setTimeout(r, 1200))
+                  await connectUsbPrinter()
+                }}
+                title="ລ້າງ USB ທີ່ຄ້າງ ແລ້ວເຊື່ອມໃໝ່"
+                className="text-xs font-black px-3 py-2 rounded-lg border border-[rgba(253,246,238,0.35)] text-[#fdf6ee]">🔄USB</button>
               <button onClick={() => alert('ຕ້ອງຊອກຫາ ↺ Reset ໃນລາຍການ')} className="text-xs font-black px-3 py-2 rounded-lg border border-red-400 text-red-300">↺</button>
               <button onClick={() => setHeaderCollapsed(true)} title="ເຊື່ອງແຖບເທິງ" className="text-xs font-black px-3 py-2 rounded-lg border border-[rgba(253,246,238,0.35)] text-[#fdf6ee]">▲</button>
             </div>
