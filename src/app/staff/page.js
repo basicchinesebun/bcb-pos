@@ -1433,27 +1433,48 @@ export default function StaffPage() {
         ...found.filter(c => c.ep.direction === 'out' && c.ep.type !== 'bulk'),
       ]
 
-      let endpoint = null
-      let lastErr = null
-      for (const { iface, alt, ep } of candidates) {
-        try {
-          if (!iface.claimed) await device.claimInterface(iface.interfaceNumber)
-          if (iface.alternate?.alternateSetting !== alt.alternateSetting) {
-            await device.selectAlternateInterface(iface.interfaceNumber, alt.alternateSetting)
+      async function claimOne() {
+        let lastErr = null
+        for (const { iface, alt, ep } of candidates) {
+          try {
+            if (!iface.claimed) await device.claimInterface(iface.interfaceNumber)
+            if (iface.alternate?.alternateSetting !== alt.alternateSetting) {
+              await device.selectAlternateInterface(iface.interfaceNumber, alt.alternateSetting)
+            }
+            return { endpoint: ep, err: null }
+          } catch (err) {
+            lastErr = err
+            try { await device.releaseInterface(iface.interfaceNumber) } catch { }
           }
-          endpoint = ep
-          break
-        } catch (err) {
-          lastErr = err
-          try { await device.releaseInterface(iface.interfaceNumber) } catch { }
         }
+        return { endpoint: null, err: lastErr }
+      }
+
+      let { endpoint, err: claimErr } = await claimOne()
+      if (!endpoint && candidates.length) {
+        // A claim held by a crashed tab or a previous browser session survives
+        // in the OS, and no amount of releasing from this page can shift it.
+        // reset() is the only lever WebUSB offers; retry once behind it.
+        try { await device.reset() } catch { }
+        ;({ endpoint, err: claimErr } = await claimOne())
       }
       if (!endpoint) {
-        const detail = found.map(c => `${c.ep.direction}/${c.ep.type}`).join(', ') || 'none'
-        // Report the claim failure, not just the endpoint list. Hiding it sent
-        // this diagnosis down the wrong path more than once.
-        const why = lastErr ? ` — ${lastErr.message || lastErr.name}` : ''
-        showToast(`❌ USB ໃຊ້ບໍ່ໄດ້ [${detail}]${why}`, 'red')
+        // A toast disappears before it can be read or photographed, and three
+        // rounds of this were lost to guessing at what it had said. Put the
+        // whole report in a dialog that stays up until it's dismissed.
+        const hex = n => '0x' + Number(n || 0).toString(16).padStart(4, '0')
+        const eps = found.map(c =>
+          `  if#${c.iface.interfaceNumber} alt${c.alt.alternateSetting} ep${c.ep.endpointNumber} ${c.ep.direction}/${c.ep.type}`
+        ).join('\n') || '  (none)'
+        alert(
+          'ເຊື່ອມ USB ບໍ່ໄດ້ / USB connect failed\n\n' +
+          `device: ${device.productName || '?'} — ${device.manufacturerName || '?'}\n` +
+          `id: ${hex(device.vendorId)}:${hex(device.productId)}\n` +
+          `interfaces: ${device.configuration?.interfaces?.length ?? 0}\n` +
+          `endpoints:\n${eps}\n` +
+          `out candidates: ${candidates.length}\n\n` +
+          `error: ${claimErr ? (claimErr.name + ': ' + (claimErr.message || '')) : '(no OUT endpoint to claim)'}`
+        )
         try { await device.close() } catch { }
         return
       }
@@ -1469,7 +1490,12 @@ export default function StaffPage() {
         showToast('USB ຕັດການເຊື່ອມ', 'orange')
       })
     } catch (e) {
-      if (e.name !== 'NotFoundError') showToast('❌ USB: ' + (e.message || e.name), 'red')
+      // NotFoundError just means the picker was dismissed — not a fault.
+      // Anything else (open() denied, driver wrong) needs to be readable
+      // long enough to photograph, same reason as above.
+      if (e.name !== 'NotFoundError') {
+        alert('ເຊື່ອມ USB ບໍ່ໄດ້ / USB connect failed\n\n' + e.name + ': ' + (e.message || ''))
+      }
     }
   }
 
