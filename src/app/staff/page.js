@@ -1426,13 +1426,26 @@ export default function StaffPage() {
       const hires = await renderReceiptCanvas(o, pw * 2)
       data = canvasToEscPos(downsampleCanvas(hires, pw))
     } catch { data = buildEscPos(o) }
+    // A raster receipt is one long stream where every line's bytes are
+    // positional. Drop or truncate a single chunk and every line after it
+    // shifts sideways, so the whole receipt prints skewed rather than failing
+    // outright. transferOut reports both a status and a short-write count and
+    // neither was being checked — bail loudly instead of printing a crooked
+    // receipt and calling it a success.
     const chunkSize = 64
     try {
       for (let i = 0; i < data.length; i += chunkSize) {
-        await usbDeviceRef.current.transferOut(usbEndpointRef.current.endpointNumber, data.slice(i, i + chunkSize))
+        const chunk = data.slice(i, i + chunkSize)
+        const res = await usbDeviceRef.current.transferOut(usbEndpointRef.current.endpointNumber, chunk)
+        if (res?.status && res.status !== 'ok') throw new Error(`transfer ${res.status}`)
+        if (res?.bytesWritten != null && res.bytesWritten < chunk.length) {
+          throw new Error(`short write ${res.bytesWritten}/${chunk.length}`)
+        }
       }
       showToast('ພິມແລ້ວ ✅', 'green')
-    } catch { showToast('❌ USB ພິມຜິດ', 'red') }
+    } catch (e) {
+      showToast('❌ USB ພິມຜິດ: ' + (e?.message || 'error'), 'red')
+    }
   }
 
   async function connectPrinter() {
