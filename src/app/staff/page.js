@@ -1393,36 +1393,45 @@ export default function StaffPage() {
         await device.selectConfiguration(cfg ? cfg.configurationValue : 1)
       }
 
-      // Look through every alternate setting of every interface, not just the
-      // one that happens to be active. Printers commonly expose their bulk
-      // OUT endpoint in a non-default alternate, and only checking
-      // iface.alternate missed those entirely — "ບໍ່ພົບ USB endpoint" even
-      // though the printer was right there. Also release an interface we
-      // claimed but couldn't use, otherwise it stays claimed and every retry
-      // fails the same way until the app is restarted.
-      let endpoint = null
-      let seen = 0
+      // Find an endpoint we can push bytes at. Three things this has to cope
+      // with, each of which broke it in turn on the shop's printer:
+      //  - the endpoint can live in a non-active alternate setting, so every
+      //    alternate of every interface has to be examined;
+      //  - it isn't necessarily 'bulk'. This printer reports 1 interface with
+      //    2 endpoints and neither is bulk — cheap ESC/POS units often expose
+      //    interrupt OUT instead, which transferOut drives just the same. So
+      //    prefer bulk, then accept any OUT endpoint;
+      //  - an interface claimed on a failed attempt must be released, or every
+      //    retry fails identically until the app restarts.
+      const found = []
       for (const iface of device.configuration.interfaces) {
         for (const alt of iface.alternates) {
-          seen += alt.endpoints.length
-          const ep = alt.endpoints.find(e => e.direction === 'out' && e.type === 'bulk')
-          if (!ep) continue
-          try {
-            await device.claimInterface(iface.interfaceNumber)
-            if (iface.alternate?.alternateSetting !== alt.alternateSetting) {
-              await device.selectAlternateInterface(iface.interfaceNumber, alt.alternateSetting)
-            }
-            endpoint = ep
-            break
-          } catch {
-            try { await device.releaseInterface(iface.interfaceNumber) } catch { }
+          for (const ep of alt.endpoints) {
+            found.push({ iface, alt, ep })
           }
         }
-        if (endpoint) break
+      }
+      const candidates = [
+        ...found.filter(c => c.ep.direction === 'out' && c.ep.type === 'bulk'),
+        ...found.filter(c => c.ep.direction === 'out' && c.ep.type !== 'bulk'),
+      ]
+
+      let endpoint = null
+      for (const { iface, alt, ep } of candidates) {
+        try {
+          await device.claimInterface(iface.interfaceNumber)
+          if (iface.alternate?.alternateSetting !== alt.alternateSetting) {
+            await device.selectAlternateInterface(iface.interfaceNumber, alt.alternateSetting)
+          }
+          endpoint = ep
+          break
+        } catch {
+          try { await device.releaseInterface(iface.interfaceNumber) } catch { }
+        }
       }
       if (!endpoint) {
-        const n = device.configuration.interfaces.length
-        showToast(`❌ ບໍ່ພົບ USB endpoint (${n} interface, ${seen} endpoint)`, 'red')
+        const detail = found.map(c => `${c.ep.direction}/${c.ep.type}`).join(', ') || 'none'
+        showToast(`❌ ບໍ່ພົບ USB endpoint [${detail}]`, 'red')
         try { await device.close() } catch { }
         return
       }
