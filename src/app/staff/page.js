@@ -157,16 +157,26 @@ export default function StaffPage() {
       try {
         const css = await fetch('https://fonts.googleapis.com/css2?family=Noto+Sans+Lao:wght@400;700&display=swap').then(r => r.text())
         const blocks = css.split('@font-face').slice(1)
+        let loaded = 0
         for (const block of blocks) {
-          const urlMatch = block.match(/url\((https:\/\/fonts\.gstatic\.com[^)]+\.woff2)\)/)
+          // Google serves woff2 to modern browsers but falls back to ttf for
+          // clients it doesn't recognise — matching only woff2 meant the font
+          // silently never loaded in that case.
+          const urlMatch = block.match(/url\((https:\/\/fonts\.gstatic\.com[^)]+\.(?:woff2|ttf))\)/)
           const weightMatch = block.match(/font-weight:\s*(\d+)/)
           if (!urlMatch) continue
           try {
             const face = new FontFace('NotoLaoR', `url(${urlMatch[1]})`, { weight: weightMatch?.[1] || '400' })
             document.fonts.add(await face.load())
+            loaded++
           } catch { }
         }
-        receiptFontRef.current = 'NotoLaoR'
+        // Only claim the family if a face actually loaded. Setting it
+        // unconditionally pointed the canvas at a font that didn't exist, so
+        // every glyph fell through to whatever Lao font the machine happened
+        // to have installed — including ones that render ASCII digits as Lao
+        // numerals, which is how a queue number printed as ໐໐໑໕.
+        if (loaded > 0) receiptFontRef.current = 'NotoLaoR'
       } catch { /* fall back to system Noto Sans Lao */ }
     })()
   }, [])
@@ -1799,7 +1809,14 @@ export default function StaffPage() {
     if (si.phone) push(() => { ctx.font = f(18); ctx.textAlign = 'center'; ctx.fillStyle = '#000'; ctx.fillText('Tel: ' + si.phone, W/2, y += Math.round(24 * s)) })
     push(() => { y += Math.round(8 * s); dash() })
     push(() => { ctx.font = f(17); ctx.textAlign = 'center'; ctx.fillStyle = '#000'; ctx.fillText('ເລກຄິວ · QUEUE', W/2, y += Math.round(22 * s)) })
-    push(() => { ctx.font = f(88, '900'); ctx.textAlign = 'center'; ctx.fillText(String(o.qnum).padStart(4, '0'), W/2, y += Math.round(96 * s)) })
+    // Digits only, so pin it to a Latin-digit stack rather than the Lao
+    // receipt font — some installed Lao fonts map ASCII digits to Lao
+    // numerals and the queue number is the one thing that must stay readable.
+    push(() => {
+      ctx.font = `900 ${Math.round(88 * s)}px Arial, Helvetica, 'DejaVu Sans', sans-serif`
+      ctx.textAlign = 'center'
+      ctx.fillText(String(o.qnum ?? '').padStart(4, '0'), W/2, y += Math.round(96 * s))
+    })
     push(() => { ctx.font = f(18); ctx.textAlign = 'center'; ctx.fillStyle = '#000'; ctx.fillText(dateStr, W/2, y += Math.round(24 * s)) })
     push(() => { y += Math.round(8 * s); dash() })
     // Item name was drawn from the left edge with no width limit while the
