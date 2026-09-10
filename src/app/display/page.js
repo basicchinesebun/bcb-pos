@@ -52,6 +52,38 @@ export default function DisplayPage() {
     return () => { clearInterval(poll); supabase.removeChannel(ch) }
   }, [])
 
+  // This board faces the customer and nobody is meant to operate it, so take
+  // away everything a stray touch, a nudged mouse or an idle timer can do to
+  // it: no context menu, no text selection drag, no pinch zoom, no going back
+  // a page, and no screen blanking mid-service.
+  useEffect(() => {
+    const block = e => e.preventDefault()
+    document.addEventListener('contextmenu', block)
+    document.addEventListener('dragstart', block)
+    document.addEventListener('gesturestart', block)
+
+    let lock = null
+    let released = false
+    const acquireLock = async () => {
+      if (released || !navigator.wakeLock) return
+      try { lock = await navigator.wakeLock.request('screen') } catch { }
+    }
+    // The lock is dropped whenever the screen is hidden, so take it again on
+    // the way back rather than quietly losing it for the rest of the day.
+    const onVisible = () => { if (document.visibilityState === 'visible') acquireLock() }
+    acquireLock()
+    document.addEventListener('visibilitychange', onVisible)
+
+    return () => {
+      released = true
+      document.removeEventListener('contextmenu', block)
+      document.removeEventListener('dragstart', block)
+      document.removeEventListener('gesturestart', block)
+      document.removeEventListener('visibilitychange', onVisible)
+      try { lock?.release() } catch { }
+    }
+  }, [])
+
   const hasOrder = order.items && order.items.length > 0
   // QR goes up for every payment method. It was hidden on cash sales for a
   // while on the theory that it was clutter, but at the counter the customer
@@ -70,7 +102,7 @@ export default function DisplayPage() {
     .slice(0, 8)
 
   return (
-    <div className="h-dvh overflow-hidden flex flex-col select-none px-6 py-4 md:px-10 md:py-5" style={{ background: 'var(--brown)' }}>
+    <div className="h-dvh overflow-hidden flex flex-col select-none px-6 py-4 md:px-10 md:py-5" style={{ background: 'var(--brown)', touchAction: 'none', cursor: 'none', WebkitUserSelect: 'none', userSelect: 'none' }}>
       <div className="font-serif font-black text-center mb-2 flex-shrink-0" style={{ fontSize: 'clamp(20px,3vw,34px)', color: 'var(--cream)' }}>
         {shopInfo.name}
       </div>

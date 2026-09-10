@@ -1,0 +1,15 @@
+{
+  "name": "Basic Chinese Bun Display",
+  "short_name": "BCB Display",
+  "start_url": "/display",
+  "scope": "/display",
+  "display": "fullscreen",
+  "display_override": ["fullscreen", "standalone"],
+  "orientation": "landscape",
+  "theme_color": "#3E2723",
+  "background_color": "#3E2723",
+  "icons": [
+    {"src": "/icon-display-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable"},
+    {"src": "/icon-display-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable"}
+  ]
+}
