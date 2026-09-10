@@ -1575,7 +1575,7 @@ export default function StaffPage() {
   // Staff should not have to pick the printer out of a list every time the
   // page reloads mid-service.
   const usbConnectingRef = useRef(false)
-  async function connectUsbPrinter({ silent = false } = {}) {
+  async function connectUsbPrinter({ silent = false, force = false } = {}) {
     if (!hasUsb) {
       if (!silent) showToast('❌ ໃຊ້ Chrome ສຳລັບ USB', 'red')
       return false
@@ -1594,12 +1594,24 @@ export default function StaffPage() {
         device = granted[0] || null
         if (!device) return false
       } else {
-        showToast('ກຳລັງເຊື່ອມ USB...', 'blue')
-        device = await navigator.usb.requestDevice({ filters: [] })
+        // requestDevice waits for a person to pick from Chrome's chooser, so
+        // it deliberately has no timeout — but on a dual-screen till the
+        // chooser can open on the customer display where nobody sees it, and
+        // "connecting…" then sits there forever looking like a hang. Say what
+        // to look for, and stop blocking the button after a while.
+        showToast('👉 ເລືອກ ICOD_Thermal_Printer ໃນໜ້າຕ່າງທີ່ເດັ້ງຂຶ້ນ (ອາດຢູ່ຈໍທີ 2)', 'blue')
+        const picked = navigator.usb.requestDevice({ filters: [] })
+        const unstick = setTimeout(() => {
+          usbConnectingRef.current = false
+          showToast('❓ ບໍ່ເຫັນໜ້າຕ່າງເລືອກເຄື່ອງພິມ? ເບິ່ງຈໍທີ 2 ຫຼື ຍ້າຍໜ້າຕ່າງ Chrome', 'orange')
+        }, 30000)
+        try { device = await picked } finally { clearTimeout(unstick) }
       }
       // Prove it can actually be driven, then let go again.
       await releaseUsb(device)
-      await acquireUsb(device, silent ? { attempts: 2, allowReset: false } : {})
+      // force: a silent attempt that is still allowed to reset the printer,
+      // used by the recovery button where a stuck device is the whole point.
+      await acquireUsb(device, silent && !force ? { attempts: 2, allowReset: false } : {})
       await releaseUsb(device)
       usbDeviceRef.current = device
       setUsbConnected(true)
@@ -2521,10 +2533,22 @@ export default function StaffPage() {
               <button onClick={printAlignmentTest} title="ພິມໄມ້ບັນທັດທົດສອບຕຳແໜ່ງ" className="text-xs font-black px-3 py-2 rounded-lg border border-[rgba(253,246,238,0.35)] text-[#fdf6ee]">📐</button>
               <button
                 onClick={async () => {
+                  // Deliberately does NOT forget the device. Forgetting drops
+                  // the permission, which forces Chrome's chooser to open —
+                  // and on this dual-screen till that window appears where
+                  // nobody sees it, so the button just hung on "connecting…".
+                  // Releasing and re-acquiring clears a stuck printer without
+                  // needing anyone to pick anything.
                   showToast('ກຳລັງລ້າງການເຊື່ອມ USB...', 'orange')
-                  await forgetAllUsb()
-                  await new Promise(r => setTimeout(r, 1200))
-                  await connectUsbPrinter()
+                  usbDeviceRef.current = null
+                  setUsbConnected(false)
+                  await releaseAllUsb()
+                  await new Promise(r => setTimeout(r, 800))
+                  if (await connectUsbPrinter({ silent: true, force: true })) {
+                    showToast('🖨 USB ພ້ອມໃຊ້ ✅', 'green')
+                  } else {
+                    showToast('❌ ຍັງເຊື່ອມບໍ່ໄດ້ — ກົດປຸ່ມ USB', 'red')
+                  }
                 }}
                 title="ລ້າງ USB ທີ່ຄ້າງ ແລ້ວເຊື່ອມໃໝ່"
                 className="text-xs font-black px-3 py-2 rounded-lg border border-[rgba(253,246,238,0.35)] text-[#fdf6ee]">🔄USB</button>
