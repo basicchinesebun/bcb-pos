@@ -1411,14 +1411,25 @@ export default function StaffPage() {
   //
   // usbDeviceRef therefore holds a *permitted* device, not an open one.
 
+  // None of the WebUSB calls take a timeout, and on Windows a device that has
+  // got itself stuck answers open()/reset()/claimInterface() by never settling
+  // at all. That reads as the app hanging on "connecting…" forever with no
+  // error to show, so cap every one of them.
+  function usbCall(promise, ms, label) {
+    return Promise.race([
+      Promise.resolve(promise),
+      new Promise((_, reject) => setTimeout(() => reject(new Error(`${label} ຄ້າງ (timeout)`)), ms)),
+    ])
+  }
+
   async function releaseUsb(device) {
     if (!device) return
     try {
       for (const iface of device.configuration?.interfaces || []) {
-        if (iface.claimed) await device.releaseInterface(iface.interfaceNumber)
+        if (iface.claimed) await usbCall(device.releaseInterface(iface.interfaceNumber), 3000, 'release')
       }
     } catch { }
-    try { if (device.opened) await device.close() } catch { }
+    try { if (device.opened) await usbCall(device.close(), 3000, 'close') } catch { }
   }
 
   async function releaseAllUsb() {
@@ -1430,11 +1441,11 @@ export default function StaffPage() {
   // Open, configure and claim, returning the OUT endpoint to write to.
   // Throws with a readable reason if it can't.
   async function acquireUsb(device, { attempts = 6, allowReset = true } = {}) {
-    if (!device.opened) await device.open()
+    if (!device.opened) await usbCall(device.open(), 5000, 'open')
     if (device.configuration === null) {
       // Don't assume the configuration is numbered 1 — ask the device.
       const cfg = device.configurations?.[0]
-      await device.selectConfiguration(cfg ? cfg.configurationValue : 1)
+      await usbCall(device.selectConfiguration(cfg ? cfg.configurationValue : 1), 5000, 'selectConfiguration')
     }
 
     // Find an endpoint we can push bytes at. Three things this has to cope
@@ -1465,14 +1476,14 @@ export default function StaffPage() {
       let lastErr = null
       for (const { iface, alt, ep } of candidates) {
         try {
-          if (!iface.claimed) await device.claimInterface(iface.interfaceNumber)
+          if (!iface.claimed) await usbCall(device.claimInterface(iface.interfaceNumber), 4000, 'claim')
           if (iface.alternate?.alternateSetting !== alt.alternateSetting) {
-            await device.selectAlternateInterface(iface.interfaceNumber, alt.alternateSetting)
+            await usbCall(device.selectAlternateInterface(iface.interfaceNumber, alt.alternateSetting), 4000, 'selectAlt')
           }
           return { endpoint: ep, err: null }
         } catch (err) {
           lastErr = err
-          try { await device.releaseInterface(iface.interfaceNumber) } catch { }
+          try { await usbCall(device.releaseInterface(iface.interfaceNumber), 3000, 'release') } catch { }
         }
       }
       return { endpoint: null, err: lastErr }
@@ -1481,8 +1492,12 @@ export default function StaffPage() {
     // A page being torn down releases its claim a moment after we ask, so an
     // immediate retry is normal rather than exceptional. Give it a few seconds
     // before deciding the printer really is unavailable.
+    // Cap the whole thing too: retries plus per-call timeouts can otherwise
+    // add up to most a minute, and someone at the counter gives up and presses
+    // the button again long before that.
+    const deadline = Date.now() + 12000
     let claimErr = null
-    for (let attempt = 0; attempt < attempts; attempt++) {
+    for (let attempt = 0; attempt < attempts && Date.now() < deadline; attempt++) {
       if (attempt > 0) {
         await new Promise(r => setTimeout(r, 300 * attempt))
         // Reset from the first retry, not the third. A printer left in a bad
@@ -1492,7 +1507,7 @@ export default function StaffPage() {
         // background adopt skips it: that loop runs for half a minute after
         // every load, and resetting the printer repeatedly could interrupt a
         // print another tab is in the middle of.
-        if (allowReset) { try { await device.reset() } catch { } }
+        if (allowReset) { try { await usbCall(device.reset(), 4000, 'reset') } catch { } }
       }
       const { endpoint, err } = await claimOnce()
       if (endpoint) return endpoint
@@ -1512,7 +1527,7 @@ export default function StaffPage() {
     try { devices = await navigator.usb.getDevices() } catch { return }
     for (const d of devices) {
       await releaseUsb(d)
-      try { if (d.forget) await d.forget() } catch { }
+      try { if (d.forget) await usbCall(d.forget(), 3000, 'forget') } catch { }
     }
   }
 
@@ -1541,7 +1556,7 @@ export default function StaffPage() {
     try {
       for (let i = 0; i < data.length; i += chunkSize) {
         const chunk = data.slice(i, i + chunkSize)
-        const res = await device.transferOut(endpoint.endpointNumber, chunk)
+        const res = await usbCall(device.transferOut(endpoint.endpointNumber, chunk), 8000, 'transfer')
         // A raster receipt is one long stream where every line's bytes are
         // positional. Drop or truncate a single chunk and every line after it
         // shifts sideways, so the whole receipt prints skewed rather than
@@ -1559,11 +1574,19 @@ export default function StaffPage() {
   // silent: adopt an already-permitted printer without showing the chooser.
   // Staff should not have to pick the printer out of a list every time the
   // page reloads mid-service.
+  const usbConnectingRef = useRef(false)
   async function connectUsbPrinter({ silent = false } = {}) {
     if (!hasUsb) {
       if (!silent) showToast('❌ ໃຊ້ Chrome ສຳລັບ USB', 'red')
       return false
     }
+    // Pressing the button again while an attempt is still running used to
+    // start a second one that fought the first for the same interface.
+    if (usbConnectingRef.current) {
+      if (!silent) showToast('ກຳລັງເຊື່ອມຢູ່ ລໍຖ້າ...', 'blue')
+      return false
+    }
+    usbConnectingRef.current = true
     try {
       let device = null
       if (silent) {
@@ -1610,6 +1633,8 @@ export default function StaffPage() {
       }
       showToast('❌ USB: ' + (e.message || e.name), 'red')
       return false
+    } finally {
+      usbConnectingRef.current = false
     }
   }
 
