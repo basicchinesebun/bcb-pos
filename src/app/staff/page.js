@@ -10,6 +10,16 @@ async function nextWalkinQnum() {
   return next
 }
 
+// Bucket a timestamp by the shop's own calendar day. toISOString() gives the
+// UTC day, and Laos is UTC+7 — so every sale before 07:00 local was being filed
+// under the previous day, which is most of a bun shop's morning. The browser
+// runs on the shop's clock, so local time is shop time.
+function localDayStr(value) {
+  const d = value instanceof Date ? value : new Date(value)
+  const p = n => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
+}
+
 const EMOJIS = ['🥟','🍫','🍵','🧁','🍞','🥐','🍮','🍡','🧆','🫕']
 
 const STATUS_COLORS = {
@@ -80,8 +90,8 @@ export default function StaffPage() {
 
   const [archiveOpen, setArchiveOpen] = useState(false)
   const [expandedArchive, setExpandedArchive] = useState(new Set())
-  const [salesDateFrom, setSalesDateFrom] = useState(new Date().toISOString().split('T')[0])
-  const [salesDateTo, setSalesDateTo] = useState(new Date().toISOString().split('T')[0])
+  const [salesDateFrom, setSalesDateFrom] = useState(localDayStr(new Date()))
+  const [salesDateTo, setSalesDateTo] = useState(localDayStr(new Date()))
   const [isOnline, setIsOnline] = useState(true)
   const [liveStatus, setLiveStatus] = useState('connecting') // 'live' | 'connecting' | 'error'
   const [loading, setLoading] = useState(true)
@@ -815,10 +825,10 @@ export default function StaffPage() {
   const done = orders.filter(o => o.done).length
   const pendingOnline = orders.filter(o => o.type === 'online' && o.status === 'pending' && !o.cancelled).length
 
-  const todayStr = new Date().toISOString().split('T')[0]
+  const todayStr = localDayStr(new Date())
   const todayMenuCount = {}
   orders.filter(o => !o.cancelled && o.status !== 'rejected' && o.status !== 'blocked').forEach(o => {
-    const oDate = new Date(o.created_at).toISOString().split('T')[0]
+    const oDate = localDayStr(o.created_at)
     if (oDate !== todayStr) return
     const items = typeof o.items === 'string' ? JSON.parse(o.items) : o.items || []
     items.forEach(it => { todayMenuCount[it.menuIdx] = (todayMenuCount[it.menuIdx] || 0) + it.qty })
@@ -1966,7 +1976,7 @@ export default function StaffPage() {
   // ─── Sales ───
   const salesOrders = orders.filter(o => {
     if (!o.done) return false
-    const d = new Date(o.done_at || o.created_at).toISOString().split('T')[0]
+    const d = localDayStr(o.done_at || o.created_at)
     return d >= salesDateFrom && d <= salesDateTo
   })
   const salesTotal = salesOrders.reduce((s, o) => s + (o.total || 0), 0)
@@ -1985,9 +1995,110 @@ export default function StaffPage() {
   const salesProfit = salesTotal - totalCost
   const hasCosts = costs.some(c => c > 0)
 
+  // ─── Per-day and per-menu breakdown ───
+  // `menuCount` above is built purely from what appeared on bills, so a menu
+  // nobody bought has no row at all — which makes the question actually worth
+  // asking ("what isn't selling?") unanswerable. The shop carries 17 menus and
+  // sells 7 or 8 on a given day, and wants to see the other 9.
+  //
+  // Three shapes come out of this, because they answer different questions:
+  //   menuStats  — how each menu did over the whole range, zeroes included
+  //   dayStats   — how each day did overall
+  //   dailyRows  — one row per day per menu, the shape worth handing to a
+  //                spreadsheet or an AI: every row is one fact, so it pivots
+  //                and charts without reshaping first
+  const menuIndexOf = it => {
+    if (typeof it.menuIdx === 'number' && menus[it.menuIdx]) return it.menuIdx
+    const i = menus.findIndex(m => (m.lo || m) === it.name)
+    return i >= 0 ? i : -1
+  }
+  const menuNameAt = i => menus[i]?.lo || menus[i]?.en || `ເມນູ ${i + 1}`
+
+  const { menuStats, dayStats, dailyRows, unsoldMenus } = (() => {
+    // Seed every menu on the board at zero, so the ones that did not sell are
+    // still counted rather than silently absent.
+    const onBoard = menus.map((m, i) => ({
+      idx: i, name: menuNameAt(i), qty: 0, revenue: 0, cost: 0, onMenu: true,
+    }))
+    const offBoard = new Map()   // sold under a name no longer on the board
+    const dayMap = new Map()
+    const dailyMap = new Map()
+
+    salesOrders.forEach(o => {
+      const day = localDayStr(o.done_at || o.created_at)
+      const items = typeof o.items === 'string' ? JSON.parse(o.items) : o.items || []
+      let orderCost = 0
+      let orderPieces = 0
+
+      items.forEach(it => {
+        const idx = menuIndexOf(it)
+        const unitCost = idx >= 0 ? (costs[idx] || 0) : 0
+        const lineCost = unitCost * it.qty
+        orderCost += lineCost
+        orderPieces += it.qty
+
+        let agg
+        if (idx >= 0) {
+          agg = onBoard[idx]
+        } else {
+          agg = offBoard.get(it.name) || { idx: -1, name: it.name, qty: 0, revenue: 0, cost: 0, onMenu: false }
+          offBoard.set(it.name, agg)
+        }
+        agg.qty += it.qty
+        agg.revenue += it.sub || 0
+        agg.cost += lineCost
+
+        const key = `${day}|${agg.name}`
+        const d = dailyMap.get(key) || { date: day, name: agg.name, qty: 0, revenue: 0, cost: 0 }
+        d.qty += it.qty
+        d.revenue += it.sub || 0
+        d.cost += lineCost
+        dailyMap.set(key, d)
+      })
+
+      const dd = dayMap.get(day) || { date: day, orders: 0, pieces: 0, total: 0, walkin: 0, online: 0, cost: 0 }
+      dd.orders += 1
+      dd.pieces += orderPieces
+      dd.total += o.total || 0
+      dd.cost += orderCost
+      if (o.type === 'online') dd.online += o.total || 0
+      else dd.walkin += o.total || 0
+      dayMap.set(day, dd)
+    })
+
+    const allMenus = [...onBoard, ...offBoard.values()]
+    const days = [...dayMap.keys()].sort()
+
+    // Fill the gaps: on every day the shop actually traded, each menu on the
+    // board gets a row, zero included. Rows exist only for trading days — a
+    // closed shop is not a menu that failed to sell, and padding the calendar
+    // with false zeroes would tell an analysis the opposite of the truth.
+    const rows = []
+    for (const day of days) {
+      for (const m of allMenus) {
+        const hit = dailyMap.get(`${day}|${m.name}`)
+        if (!m.onMenu && !hit) continue
+        rows.push({
+          date: day,
+          name: m.name,
+          qty: hit ? hit.qty : 0,
+          revenue: hit ? hit.revenue : 0,
+          cost: hit ? hit.cost : 0,
+        })
+      }
+    }
+
+    return {
+      menuStats: allMenus.sort((a, b) => b.qty - a.qty || a.name.localeCompare(b.name)),
+      dayStats: [...dayMap.values()].sort((a, b) => a.date.localeCompare(b.date)),
+      dailyRows: rows,
+      unsoldMenus: onBoard.filter(m => m.qty === 0).map(m => m.name),
+    }
+  })()
+
   function setSalesRangePreset(preset) {
     const today = new Date()
-    const toStr = d => d.toISOString().split('T')[0]
+    const toStr = localDayStr
     if (preset === 'today') { setSalesDateFrom(toStr(today)); setSalesDateTo(toStr(today)) }
     else if (preset === 'yesterday') {
       const y = new Date(today); y.setDate(y.getDate() - 1)
@@ -2009,7 +2120,7 @@ export default function StaffPage() {
       const dt = new Date(o.done_at || o.created_at)
       rows.push([
         String(o.qnum).padStart(4, '0'),
-        dt.toISOString().split('T')[0],
+        localDayStr(dt),
         dt.toLocaleTimeString('lo-LA', { hour: '2-digit', minute: '2-digit' }),
         o.type === 'online' ? 'Online' : 'Walk-in',
         items.map(it => `${it.name} x${it.qty}`).join('; '),
@@ -2031,6 +2142,41 @@ export default function StaffPage() {
     a.click()
     URL.revokeObjectURL(url)
     logActivity('export_sales_csv', `${salesDateFrom} - ${salesDateTo}`)
+  }
+
+  // One row per day per menu, zeroes included, with the day's totals repeated
+  // on each row. This is the shape to hand to a spreadsheet or an AI: nothing
+  // needs reshaping before it can be pivoted, charted or asked questions of.
+  // A 0 means the menu was on the board that day and nobody bought it, which
+  // is the interesting number when 17 menus are carried and 8 actually sell.
+  function exportDailyMenuCSV() {
+    const esc = v => `"${String(v ?? '').replace(/"/g, '""')}"`
+    const showCost = hasCosts && (!profitPin || profitUnlocked)
+    const rows = [[
+      'date', 'menu', 'qty', 'revenue_lak',
+      ...(showCost ? ['cost_lak', 'profit_lak'] : []),
+      'day_total_lak', 'day_orders', 'day_pieces', 'weekday',
+    ]]
+    dailyRows.forEach(r => {
+      const day = dayStats.find(d => d.date === r.date)
+      rows.push([
+        r.date, r.name, r.qty, r.revenue,
+        ...(showCost ? [r.cost, r.revenue - r.cost] : []),
+        day ? day.total : 0,
+        day ? day.orders : 0,
+        day ? day.pieces : 0,
+        new Date(r.date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long' }),
+      ])
+    })
+    const csv = '\ufeff' + rows.map(r => r.map(esc).join(',')).join('\r\n')
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `bcb_daily_menu_${salesDateFrom}_${salesDateTo}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+    logActivity('export_daily_menu_csv', `${salesDateFrom} - ${salesDateTo} (${dailyRows.length} ແຖວ)`)
   }
 
   if (loading) return (
@@ -3295,7 +3441,11 @@ export default function StaffPage() {
                   style={{ background: 'var(--cream2)', color: 'var(--brown2)', border: '1.5px solid var(--cream3)' }}>{l}</button>
               ))}
             </div>
-            <button onClick={exportSalesCSV} className="btn-outline w-full mb-4 text-sm py-2.5">📤 Export CSV ({salesOrders.length} ອໍເດີ)</button>
+            <div className="flex gap-2 mb-4">
+              <button onClick={exportSalesCSV} className="btn-outline flex-1 text-sm py-2.5">📤 ລາຍອໍເດີ ({salesOrders.length})</button>
+              <button onClick={exportDailyMenuCSV} disabled={!dailyRows.length}
+                className="btn-outline flex-1 text-sm py-2.5 disabled:opacity-40">📊 ລາຍວັນ × ເມນູ (ສຳລັບ AI)</button>
+            </div>
 
             <div className="rounded-2xl p-4 mb-3" style={{ background: 'var(--brown)' }}>
               <div className="flex justify-between items-center">
@@ -3354,14 +3504,55 @@ export default function StaffPage() {
               ))}
             </div>
 
-            <div className="text-xs font-black tracking-widest uppercase mb-3" style={{ color: 'var(--gray3)' }}>ເມນູຂາຍດີ</div>
+            {unsoldMenus.length > 0 && (
+              <>
+                <div className="text-xs font-black tracking-widest uppercase mb-3" style={{ color: 'var(--gray3)' }}>
+                  ເມນູທີ່ບໍ່ໄດ້ຂາຍເລີຍ · {unsoldMenus.length} ຈາກ {menus.length}
+                </div>
+                <div className="card mb-4">
+                  <div className="flex flex-wrap gap-1.5">
+                    {unsoldMenus.map(n => (
+                      <span key={n} className="text-xs font-black px-2.5 py-1 rounded-full"
+                        style={{ background: 'var(--cream2)', color: 'var(--gray3)', border: '1.5px solid var(--cream3)' }}>{n}</span>
+                    ))}
+                  </div>
+                </div>
+              </>
+            )}
+
+            {dayStats.length > 1 && (
+              <>
+                <div className="text-xs font-black tracking-widest uppercase mb-3" style={{ color: 'var(--gray3)' }}>ຍອດຂາຍລາຍວັນ</div>
+                <div className="card mb-4">
+                  {dayStats.map(d => (
+                    <div key={d.date} className="flex justify-between items-baseline py-2 border-b border-[#f5ebe0] last:border-0">
+                      <div>
+                        <div className="text-sm font-black" style={{ color: 'var(--brown)' }}>{d.date}</div>
+                        <div className="text-xs font-bold" style={{ color: 'var(--gray3)' }}>
+                          {d.orders} ອໍເດີ · {d.pieces} ກ້ອນ
+                          {hasCosts && (!profitPin || profitUnlocked) ? ` · ກຳໄລ ${(d.total - d.cost).toLocaleString()}` : ''}
+                        </div>
+                      </div>
+                      <span className="text-sm font-black" style={{ color: 'var(--brown)' }}>{d.total.toLocaleString()}</span>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+
+            <div className="text-xs font-black tracking-widest uppercase mb-3" style={{ color: 'var(--gray3)' }}>ທຸກເມນູ · ຂາຍດີ ຫາ ຂາຍບໍ່ໄດ້</div>
             <div className="card">
-              {Object.entries(menuCount).sort((a,b)=>b[1]-a[1]).map(([name, qty]) => (
-                <div key={name} className="flex justify-between py-2 border-b border-[#f5ebe0] text-sm font-bold" style={{ color: 'var(--brown)' }}>
-                  <span>{name}</span><span>{qty} ກ້ອນ</span>
+              {menuStats.map(m => (
+                <div key={m.name} className="flex justify-between items-baseline py-2 border-b border-[#f5ebe0] last:border-0 text-sm font-bold"
+                  style={{ color: 'var(--brown)', opacity: m.qty === 0 ? 0.45 : 1 }}>
+                  <span>{m.name}{m.onMenu ? '' : ' (ລຶບແລ້ວ)'}</span>
+                  <span className="text-right">
+                    {m.qty} ກ້ອນ
+                    <span className="block text-xs font-black" style={{ color: 'var(--gray3)' }}>{m.revenue.toLocaleString()} ກີບ</span>
+                  </span>
                 </div>
               ))}
-              {Object.keys(menuCount).length === 0 && <div className="text-center py-4 text-sm font-bold" style={{ color: 'var(--cream3)' }}>ຍັງບໍ່ມີຍອດ</div>}
+              {menuStats.length === 0 && <div className="text-center py-4 text-sm font-bold" style={{ color: 'var(--cream3)' }}>ຍັງບໍ່ມີເມນູ</div>}
             </div>
           </div>
         </div>
