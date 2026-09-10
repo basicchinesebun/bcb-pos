@@ -1538,9 +1538,26 @@ export default function StaffPage() {
   // second claim is refused by the first.
   const usbChainRef = useRef(Promise.resolve())
   function usbSend(data, chunkSize = 64) {
-    const run = usbChainRef.current.then(() => usbSendNow(data, chunkSize))
+    const run = usbChainRef.current.then(() => usbSendRecovering(data, chunkSize))
     usbChainRef.current = run.catch(() => {})
     return run
+  }
+
+  // A printer that wedges in the middle of a busy service must not cost the
+  // queue a receipt, and nobody has time to press buttons at the till. Hand
+  // everything back and try the whole thing once more before giving up —
+  // acquireUsb resets the device on its own retries, so this second pass
+  // starts from a genuinely clean state.
+  async function usbSendRecovering(data, chunkSize) {
+    try {
+      return await usbSendNow(data, chunkSize)
+    } catch (first) {
+      try {
+        await releaseAllUsb()
+        await new Promise(r => setTimeout(r, 500))
+        return await usbSendNow(data, chunkSize)
+      } catch { throw first }
+    }
   }
 
   async function usbSendNow(data, chunkSize) {
@@ -1650,21 +1667,39 @@ export default function StaffPage() {
     }
   }
 
-  // Adopt the printer by itself, and keep trying for a while. Right after a
-  // reload the previous page may still be letting go, so the first attempt
-  // legitimately fails; quietly retrying means nobody has to press anything.
+  // Adopt the printer by itself and keep watching for the rest of the session,
+  // not just for a while after load. The till runs all day through a queue of
+  // customers: if the printer drops out at 11am nobody is going to notice a
+  // grey button, they will notice a receipt that didn't come out. Re-adopting
+  // in the background means the next sale just works.
   useEffect(() => {
     if (!hasUsb) return
     let stop = false
-    ;(async () => {
-      await releaseAllUsb()
-      for (let i = 0; i < 15 && !stop; i++) {
-        if (usbDeviceRef.current) return
-        if (await connectUsbPrinter({ silent: true })) return
-        await new Promise(r => setTimeout(r, 2000))
-      }
-    })()
-    return () => { stop = true }
+    let busy = false
+    const tick = async () => {
+      if (stop || busy || usbConnectingRef.current) return
+      busy = true
+      try {
+        // A remembered device can go stale — unplugged, or the permission
+        // revoked from Chrome's settings. Don't keep showing it as connected.
+        if (usbDeviceRef.current) {
+          try {
+            const granted = await navigator.usb.getDevices()
+            if (!granted.includes(usbDeviceRef.current)) {
+              usbDeviceRef.current = null
+              setUsbConnected(false)
+            }
+          } catch { }
+        }
+        if (!usbDeviceRef.current) await connectUsbPrinter({ silent: true })
+      } finally { busy = false }
+    }
+    releaseAllUsb().then(tick)
+    // Fast while it is still settling after a reload, then a slow heartbeat.
+    const early = setInterval(tick, 2000)
+    setTimeout(() => clearInterval(early), 30000)
+    const beat = setInterval(tick, 15000)
+    return () => { stop = true; clearInterval(early); clearInterval(beat) }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasUsb])
 
