@@ -3702,7 +3702,7 @@ export default function StaffPage() {
               <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-4">
                 {/* Quick options (items mode only) */}
                 {qoBagMode === 'items' && (
-                  <div className="grid grid-cols-3 gap-3">
+                  <div className="grid grid-cols-3 gap-3 flex-shrink-0">
                     {[{ id: 'single', icon: '🛍', label: 'ຖົງດຽວ' }, { id: 'bytype', icon: '🛍🛍', label: 'ແຍກເມນູ' }, { id: 'each', icon: '🛍🛍🛍', label: 'ແຍກທຸກກ້ອນ' }].map(opt => (
                       <button key={opt.id} onClick={() => qoHandleQuickBag(opt.id)}
                         className="rounded-2xl p-3 text-center active:scale-95 transition-all"
@@ -3718,7 +3718,7 @@ export default function StaffPage() {
                 {qoBagPacks.map((bag, n) => {
                   const bagItems = Object.entries(bag).filter(([, q]) => q > 0)
                   return (
-                    <div key={n} className="rounded-2xl border-2 border-[#3d1f0a] overflow-hidden">
+                    <div key={n} className="rounded-2xl border-2 border-[#3d1f0a] overflow-hidden flex-shrink-0">
                       <div className="flex items-center justify-between px-4 py-3 gap-2 flex-wrap" style={{ background: 'var(--brown)' }}>
                         <div className="font-serif font-black flex-shrink-0" style={{ color: 'var(--cream)' }}>ຖົງ {n + 1}</div>
                         <div className="flex gap-1 flex-wrap">
@@ -3787,7 +3787,7 @@ export default function StaffPage() {
                 })}
 
                 <button onClick={() => setQoBagPacks(prev => [...prev, {}])}
-                  className="flex items-center gap-2 px-6 py-3 rounded-2xl font-black self-end active:scale-95 transition-all"
+                  className="flex items-center gap-2 px-6 py-3 rounded-2xl font-black self-end flex-shrink-0 active:scale-95 transition-all"
                   style={{ background: 'var(--brown)', color: 'var(--cream)' }}>
                   ➕ ເພີ່ມຖົງ
                 </button>
