@@ -1403,28 +1403,47 @@ export default function StaffPage() {
     }
   }
 
-  async function connectUsbPrinter() {
-    if (!hasUsb) { showToast('❌ ໃຊ້ Chrome ສຳລັບ USB', 'red'); return }
+  // Hand back every device this page has a handle on — not just the one we
+  // think we are holding. A React remount, a reload, or an attempt that failed
+  // partway can leave an orphaned open handle that nothing owns, and Windows
+  // then refuses the next claim. That is why connecting worked sometimes and
+  // failed other times with the same printer and the same driver.
+  async function releaseAllUsb() {
+    usbDeviceRef.current = null
+    usbEndpointRef.current = null
+    setUsbConnected(false)
+    let devices = []
+    try { devices = await navigator.usb.getDevices() } catch { return }
+    for (const d of devices) {
+      if (!d.opened) continue
+      try {
+        for (const iface of d.configuration?.interfaces || []) {
+          if (iface.claimed) await d.releaseInterface(iface.interfaceNumber)
+        }
+      } catch { }
+      try { await d.close() } catch { }
+    }
+  }
+
+  // silent: connect to an already-permitted printer without showing the
+  // chooser. The staff should not have to pick the printer out of a list every
+  // time the page reloads mid-service.
+  async function connectUsbPrinter({ silent = false } = {}) {
+    if (!hasUsb) {
+      if (!silent) showToast('❌ ໃຊ້ Chrome ສຳລັບ USB', 'red')
+      return false
+    }
     try {
-      showToast('ກຳລັງເຊື່ອມ USB...', 'blue')
-      // Let go of a device we already hold. WebUSB refuses to claim an
-      // interface that is still claimed, so pressing USB a second time in the
-      // same session failed at claimInterface even though the endpoint was
-      // found — which read as "no endpoint" because the claim error was
-      // swallowed.
-      if (usbDeviceRef.current) {
-        const prev = usbDeviceRef.current
-        usbDeviceRef.current = null
-        usbEndpointRef.current = null
-        setUsbConnected(false)
-        try {
-          for (const iface of prev.configuration?.interfaces || []) {
-            if (iface.claimed) await prev.releaseInterface(iface.interfaceNumber)
-          }
-        } catch { }
-        try { await prev.close() } catch { }
+      if (!silent) showToast('ກຳລັງເຊື່ອມ USB...', 'blue')
+      await releaseAllUsb()
+      let device = null
+      if (silent) {
+        const granted = await navigator.usb.getDevices()
+        device = granted[0] || null
+        if (!device) return false
+      } else {
+        device = await navigator.usb.requestDevice({ filters: [] })
       }
-      const device = await navigator.usb.requestDevice({ filters: [] })
       await device.open()
       if (device.configuration === null) {
         // Don't assume the configuration is numbered 1 — ask the device.
@@ -1472,15 +1491,23 @@ export default function StaffPage() {
         return { endpoint: null, err: lastErr }
       }
 
-      let { endpoint, err: claimErr } = await claimOne()
-      if (!endpoint && candidates.length) {
-        // A claim held by a crashed tab or a previous browser session survives
-        // in the OS, and no amount of releasing from this page can shift it.
-        // reset() is the only lever WebUSB offers; retry once behind it.
-        try { await device.reset() } catch { }
-        ;({ endpoint, err: claimErr } = await claimOne())
+      // Closing a handle is not instant in the Windows kernel, so a claim
+      // fired straight afterwards is still refused — which is what made this
+      // succeed on some attempts and fail on others with nothing else changed.
+      // Back off and try again, resetting the device from the second retry on.
+      let endpoint = null, claimErr = null
+      for (let attempt = 0; attempt < 5 && candidates.length; attempt++) {
+        if (attempt > 0) {
+          await new Promise(r => setTimeout(r, 250 * attempt))
+          if (attempt > 1) { try { await device.reset() } catch { } }
+        }
+        const r = await claimOne()
+        endpoint = r.endpoint
+        claimErr = r.err
+        if (endpoint) break
       }
       if (!endpoint) {
+        if (silent) { try { await device.close() } catch { } ; return false }
         // A toast disappears before it can be read or photographed, and three
         // rounds of this were lost to guessing at what it had said. Put the
         // whole report in a dialog that stays up until it's dismissed.
@@ -1498,7 +1525,7 @@ export default function StaffPage() {
           `error: ${claimErr ? (claimErr.name + ': ' + (claimErr.message || '')) : '(no OUT endpoint to claim)'}`
         )
         try { await device.close() } catch { }
-        return
+        return false
       }
       usbDeviceRef.current = device
       usbEndpointRef.current = endpoint
@@ -1511,15 +1538,28 @@ export default function StaffPage() {
         setUsbConnected(false)
         showToast('USB ຕັດການເຊື່ອມ', 'orange')
       })
+      return true
     } catch (e) {
       // NotFoundError just means the picker was dismissed — not a fault.
       // Anything else (open() denied, driver wrong) needs to be readable
       // long enough to photograph, same reason as above.
-      if (e.name !== 'NotFoundError') {
+      if (!silent && e.name !== 'NotFoundError') {
         alert('ເຊື່ອມ USB ບໍ່ໄດ້ / USB connect failed\n\n' + e.name + ': ' + (e.message || ''))
       }
+      return false
     }
   }
+
+  // Reconnect to the printer by itself after a reload. Chrome remembers the
+  // permission, so there is no reason to make someone re-pick the printer out
+  // of a chooser in the middle of service.
+  useEffect(() => {
+    if (!hasUsb) return
+    let cancelled = false
+    const t = setTimeout(() => { if (!cancelled) connectUsbPrinter({ silent: true }) }, 800)
+    return () => { cancelled = true; clearTimeout(t) }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasUsb])
 
   async function usbPrint(o) {
     if (!usbDeviceRef.current || !usbEndpointRef.current) { printOrder(o); return }
@@ -2382,7 +2422,7 @@ export default function StaffPage() {
               </div>
             </div>
             <div className="flex gap-2">
-              <button onClick={connectUsbPrinter} className={`text-xs font-black px-3 py-2 rounded-lg border ${usbConnected ? 'border-green-400 text-green-300' : 'border-[rgba(253,246,238,0.35)] text-[#fdf6ee]'}`}>
+              <button onClick={() => connectUsbPrinter()} className={`text-xs font-black px-3 py-2 rounded-lg border ${usbConnected ? 'border-green-400 text-green-300' : 'border-[rgba(253,246,238,0.35)] text-[#fdf6ee]'}`}>
                 {usbConnected ? '🖨 USB ✓' : 'USB'}
               </button>
               <button onClick={connectPrinter} className={`text-xs font-black px-3 py-2 rounded-lg border ${btConnected ? 'border-green-400 text-green-300' : 'border-[rgba(253,246,238,0.35)] text-[#fdf6ee]'}`}>
