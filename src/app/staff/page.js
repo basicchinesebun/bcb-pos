@@ -1330,6 +1330,28 @@ export default function StaffPage() {
   const [usbConnected, setUsbConnected] = useState(false)
   const hasUsb = typeof navigator !== 'undefined' && 'usb' in navigator
 
+  // Hand the printer back when the page goes away. Chrome normally releases
+  // on unload, but a tab that is killed rather than closed can leave the
+  // interface claimed, and then every later attempt fails with "Unable to
+  // claim interface" until the printer is unplugged.
+  useEffect(() => {
+    if (!hasUsb) return
+    const release = () => {
+      const dev = usbDeviceRef.current
+      if (!dev) return
+      usbDeviceRef.current = null
+      usbEndpointRef.current = null
+      try {
+        for (const iface of dev.configuration?.interfaces || []) {
+          if (iface.claimed) dev.releaseInterface(iface.interfaceNumber)
+        }
+        dev.close()
+      } catch { }
+    }
+    window.addEventListener('pagehide', release)
+    return () => window.removeEventListener('pagehide', release)
+  }, [hasUsb])
+
   // ─── Serial Printer (Web Serial / ESC/POS) ───
   // For printers paired as "classic" Bluetooth (SPP → a virtual COM port in
   // Windows) rather than Bluetooth Low Energy — Web Bluetooth's GATT API
