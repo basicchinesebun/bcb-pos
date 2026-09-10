@@ -1387,21 +1387,45 @@ export default function StaffPage() {
       showToast('ກຳລັງເຊື່ອມ USB...', 'blue')
       const device = await navigator.usb.requestDevice({ filters: [] })
       await device.open()
-      if (device.configuration === null) await device.selectConfiguration(1)
-      let endpoint = null
-      for (const iface of device.configuration.interfaces) {
-        try {
-          await device.claimInterface(iface.interfaceNumber)
-          for (const ep of iface.alternate.endpoints) {
-            if (ep.direction === 'out' && ep.type === 'bulk') {
-              endpoint = ep
-              break
-            }
-          }
-          if (endpoint) break
-        } catch { continue }
+      if (device.configuration === null) {
+        // Don't assume the configuration is numbered 1 — ask the device.
+        const cfg = device.configurations?.[0]
+        await device.selectConfiguration(cfg ? cfg.configurationValue : 1)
       }
-      if (!endpoint) { showToast('❌ ບໍ່ພົບ USB endpoint', 'red'); await device.close(); return }
+
+      // Look through every alternate setting of every interface, not just the
+      // one that happens to be active. Printers commonly expose their bulk
+      // OUT endpoint in a non-default alternate, and only checking
+      // iface.alternate missed those entirely — "ບໍ່ພົບ USB endpoint" even
+      // though the printer was right there. Also release an interface we
+      // claimed but couldn't use, otherwise it stays claimed and every retry
+      // fails the same way until the app is restarted.
+      let endpoint = null
+      let seen = 0
+      for (const iface of device.configuration.interfaces) {
+        for (const alt of iface.alternates) {
+          seen += alt.endpoints.length
+          const ep = alt.endpoints.find(e => e.direction === 'out' && e.type === 'bulk')
+          if (!ep) continue
+          try {
+            await device.claimInterface(iface.interfaceNumber)
+            if (iface.alternate?.alternateSetting !== alt.alternateSetting) {
+              await device.selectAlternateInterface(iface.interfaceNumber, alt.alternateSetting)
+            }
+            endpoint = ep
+            break
+          } catch {
+            try { await device.releaseInterface(iface.interfaceNumber) } catch { }
+          }
+        }
+        if (endpoint) break
+      }
+      if (!endpoint) {
+        const n = device.configuration.interfaces.length
+        showToast(`❌ ບໍ່ພົບ USB endpoint (${n} interface, ${seen} endpoint)`, 'red')
+        try { await device.close() } catch { }
+        return
+      }
       usbDeviceRef.current = device
       usbEndpointRef.current = endpoint
       setUsbConnected(true)
