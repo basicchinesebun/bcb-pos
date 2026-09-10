@@ -56,8 +56,8 @@ export default function StaffPage() {
   const [qrImage, setQrImage] = useState(null)
   const [qrPreview, setQrPreview] = useState(null)
   const [logoPreview, setLogoPreview] = useState(null)
-  const [shopInfo, setShopInfo] = useState({ name: 'Basic Chinese Bun', address: '', phone: '', footer: 'ຂອບໃຈທີ່ໃຊ້ບໍລິການ', logo: '', printerWidth: 384 })
-  const [receiptDraft, setReceiptDraft] = useState({ name: 'Basic Chinese Bun', address: '', phone: '', footer: 'ຂອບໃຈທີ່ໃຊ້ບໍລິການ', logo: '', printerWidth: 384 })
+  const [shopInfo, setShopInfo] = useState({ name: 'Basic Chinese Bun', address: '', phone: '', footer: 'ຂອບໃຈທີ່ໃຊ້ບໍລິການ', logo: '', printerWidth: 384, printOffset: 0 })
+  const [receiptDraft, setReceiptDraft] = useState({ name: 'Basic Chinese Bun', address: '', phone: '', footer: 'ຂອບໃຈທີ່ໃຊ້ບໍລິການ', logo: '', printerWidth: 384, printOffset: 0 })
   const [receiptPreviewUrl, setReceiptPreviewUrl] = useState('')
   const [previewLoading, setPreviewLoading] = useState(false)
   const previewTimerRef = useRef(null)
@@ -717,7 +717,7 @@ export default function StaffPage() {
     if (cfg.shop_info) {
       const info = JSON.parse(cfg.shop_info)
       setShopInfo(prev => ({ ...prev, ...info }))
-      setReceiptDraft(prev => ({ ...prev, ...info, printerWidth: info.printerWidth || 384 }))
+      setReceiptDraft(prev => ({ ...prev, ...info, printerWidth: info.printerWidth || 384, printOffset: Number(info.printOffset) || 0 }))
     }
     // Fix stale closure: use functional update for settings
     if (cfg.settings) setSettings(prev => ({ ...prev, ...JSON.parse(cfg.settings) }))
@@ -2108,12 +2108,18 @@ export default function StaffPage() {
     const pixels = ctx.getImageData(0, 0, W, H).data
     const wb = Math.ceil(W / 8)
     const bitmap = new Uint8Array(wb * H)
+    // Nudge the whole image sideways. The shop's printer prints everything
+    // shifted right and wraps the overflow back onto the left edge, so the
+    // right-aligned price landed at the far left and the total box came out
+    // as two pieces — the raster we send is correct, verified by decoding the
+    // byte stream back to an image, so the compensation belongs here.
+    const shift = Math.round(Number(shopInfo.printOffset) || 0)
     for (let row = 0; row < H; row++) {
       for (let bx = 0; bx < wb; bx++) {
         let byte = 0
         for (let bit = 0; bit < 8; bit++) {
-          const x = bx * 8 + bit
-          if (x < W) {
+          const x = bx * 8 + bit - shift
+          if (x >= 0 && x < W) {
             const i = (row * W + x) * 4
             const gray = 0.299 * pixels[i] + 0.587 * pixels[i + 1] + 0.114 * pixels[i + 2]
             if (gray < 160) byte |= (1 << (7 - bit))  // threshold 160 for bolder text
@@ -2124,11 +2130,62 @@ export default function StaffPage() {
     }
     const xL = wb & 0xFF, xH = (wb >> 8) & 0xFF
     const yL = H & 0xFF, yH = (H >> 8) & 0xFF
-    const header = new Uint8Array([0x1B, 0x40, 0x1D, 0x76, 0x30, 0x00, xL, xH, yL, yH])
+    const pxW = wb * 8
+    const header = new Uint8Array([
+      0x1B, 0x40,                                     // ESC @   initialise
+      0x1B, 0x61, 0x00,                               // ESC a 0 align left
+      0x1D, 0x4C, 0x00, 0x00,                         // GS L    left margin = 0
+      0x1D, 0x57, pxW & 0xFF, (pxW >> 8) & 0xFF,      // GS W    print area = full width
+      0x1D, 0x76, 0x30, 0x00, xL, xH, yL, yH,         // GS v 0  raster
+    ])
+    // ESC @ is supposed to clear the left margin and print-area width, but
+    // clone firmware often keeps whatever was set before, and a stale margin
+    // is exactly what pushes the image sideways. Set both explicitly.
     const footer = new Uint8Array([0x0A, 0x0A, 0x0A, 0x0A, 0x1D, 0x56, 0x00])
     const out = new Uint8Array(header.length + bitmap.length + footer.length)
     out.set(header, 0); out.set(bitmap, header.length); out.set(footer, header.length + bitmap.length)
     return out
+  }
+
+  // Print a ruler so the horizontal offset can be measured instead of guessed
+  // at from a photo of a real receipt. Ticks sit every 48 dots and carry their
+  // own index, so whichever number lands at the left edge of the paper is the
+  // offset in 48-dot steps, and the border shows whether both edges are on the
+  // paper at all.
+  async function printAlignmentTest() {
+    const pw = shopInfo.printerWidth || 384
+    const step = 48
+    const canvas = document.createElement('canvas')
+    canvas.width = pw
+    canvas.height = 150
+    const ctx = canvas.getContext('2d')
+    ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, pw, 150)
+    ctx.fillStyle = '#000'; ctx.strokeStyle = '#000'
+    ctx.lineWidth = 3
+    ctx.strokeRect(2, 2, pw - 4, 146)
+    ctx.font = '700 20px Arial, sans-serif'
+    ctx.textAlign = 'left'
+    ctx.fillText('L', 8, 30)
+    ctx.textAlign = 'right'
+    ctx.fillText('R', pw - 8, 30)
+    ctx.textAlign = 'center'
+    for (let x = 0; x < pw; x += step) {
+      ctx.fillRect(x, 45, 3, 30)
+      ctx.fillText(String(x / step), Math.min(pw - 12, Math.max(12, x + 12)), 100)
+    }
+    ctx.font = '700 18px Arial, sans-serif'
+    ctx.fillText(`${pw} dots  offset ${Math.round(Number(shopInfo.printOffset) || 0)}`, pw / 2, 132)
+    const data = canvasToEscPos(canvas)
+    if (usbDeviceRef.current && usbEndpointRef.current) {
+      try {
+        for (let i = 0; i < data.length; i += 64) {
+          await usbDeviceRef.current.transferOut(usbEndpointRef.current.endpointNumber, data.slice(i, i + 64))
+        }
+        showToast('ພິມທົດສອບແລ້ວ ✅', 'green')
+      } catch (e) { showToast('❌ ' + (e?.message || 'error'), 'red') }
+      return
+    }
+    showToast('❌ ຕ້ອງເຊື່ອມ USB ກ່ອນ', 'red')
   }
 
   async function printOrder(o) {
@@ -2337,6 +2394,7 @@ export default function StaffPage() {
                 </button>
               )}
               <button onClick={kickDrawer} title="ເປີດລິ້ນຊັກ" className="text-xs font-black px-3 py-2 rounded-lg border border-[rgba(253,246,238,0.35)] text-[#fdf6ee]">🔓</button>
+              <button onClick={printAlignmentTest} title="ພິມໄມ້ບັນທັດທົດສອບຕຳແໜ່ງ" className="text-xs font-black px-3 py-2 rounded-lg border border-[rgba(253,246,238,0.35)] text-[#fdf6ee]">📐</button>
               <button onClick={() => alert('ຕ້ອງຊອກຫາ ↺ Reset ໃນລາຍການ')} className="text-xs font-black px-3 py-2 rounded-lg border border-red-400 text-red-300">↺</button>
               <button onClick={() => setHeaderCollapsed(true)} title="ເຊື່ອງແຖບເທິງ" className="text-xs font-black px-3 py-2 rounded-lg border border-[rgba(253,246,238,0.35)] text-[#fdf6ee]">▲</button>
             </div>
@@ -2819,6 +2877,43 @@ export default function StaffPage() {
                       ))}
                     </div>
                     <div className="text-xs mt-1" style={{ color: 'var(--gray3)' }}>ເຄື່ອງພິມທົ່ວໄປ 58mm · ຖ້າໃຊ້ 80mm ໃຫ້ເລືອກ 80mm</div>
+                  </div>
+
+                  {/* Horizontal print offset */}
+                  <div>
+                    <div className="text-xs font-black uppercase tracking-widest mb-2" style={{ color: 'var(--brown2)' }}>ຂະຫຍັບຕຳແໜ່ງພິມ · Print Offset</div>
+                    <div className="flex items-center gap-2">
+                      {[-48, -8].map(d => (
+                        <button key={d} onClick={() => setReceiptDraft(p => ({ ...p, printOffset: (Number(p.printOffset) || 0) + d }))}
+                          className="px-3 py-2.5 rounded-xl font-black text-sm border-2"
+                          style={{ borderColor: '#e8d5c0', background: 'var(--warm-white)', color: 'var(--brown)' }}>
+                          ◀ {Math.abs(d)}
+                        </button>
+                      ))}
+                      <div className="flex-1 text-center font-black text-lg" style={{ color: 'var(--brown)' }}>
+                        {Math.round(Number(receiptDraft.printOffset) || 0)}
+                      </div>
+                      {[8, 48].map(d => (
+                        <button key={d} onClick={() => setReceiptDraft(p => ({ ...p, printOffset: (Number(p.printOffset) || 0) + d }))}
+                          className="px-3 py-2.5 rounded-xl font-black text-sm border-2"
+                          style={{ borderColor: '#e8d5c0', background: 'var(--warm-white)', color: 'var(--brown)' }}>
+                          {d} ▶
+                        </button>
+                      ))}
+                      <button onClick={() => setReceiptDraft(p => ({ ...p, printOffset: 0 }))}
+                        className="px-3 py-2.5 rounded-xl font-black text-sm border-2"
+                        style={{ borderColor: '#e8d5c0', background: 'var(--warm-white)', color: 'var(--gray3)' }}>
+                        0
+                      </button>
+                    </div>
+                    <button onClick={printAlignmentTest}
+                      className="w-full mt-2 py-2.5 rounded-xl font-black text-sm border-2 border-[#3d1f0a]"
+                      style={{ color: 'var(--brown)', background: 'var(--warm-white)' }}>
+                      📐 ພິມໄມ້ບັນທັດທົດສອບ
+                    </button>
+                    <div className="text-xs mt-1 leading-relaxed" style={{ color: 'var(--gray3)' }}>
+                      ຖ້າໃບເສດພິມອອກຫຍັບໄປຂ້າງ: ກົດ 📐 ພິມໄມ້ບັນທັດ → ຊອກເລກ 0 ໃນໄມ້ບັນທັດ → ນັບຂີດທີ່ຢູ່ຊ້າຍຂອງເລກ 0 → ຕັ້ງຄ່າ = ຈຳນວນຂີດ × 48 ແຕ່ໃສ່ເປັນລົບ. ຕົວຢ່າງ: ມີ 2 ຂີດຢູ່ຊ້າຍຂອງເລກ 0 → ຕັ້ງ −96. ບັນທຶກແລ້ວພິມໄມ້ບັນທັດອີກຄັ້ງ — ຖ້າຖືກ ຈະເຫັນເລກ 0 ຢູ່ຂອບຊ້າຍ ແລະ ເສັ້ນຂອບຄົບທຸກດ້ານ.
+                    </div>
                   </div>
 
                   {/* Preview */}
