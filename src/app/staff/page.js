@@ -454,6 +454,7 @@ export default function StaffPage() {
       if (settings.autoprintOn) {
         const printObj = {
           qnum: qnumData, type: 'walkin', items, total,
+          created_at: new Date().toISOString(),
           bag_label: packingLabel || null, payment_method: paymentMethod,
           customer: qoName.trim() ? JSON.stringify({ name: qoName.trim() }) : null,
         }
@@ -1486,7 +1487,8 @@ export default function StaffPage() {
     line('=')
     write('QUEUE', { align: 1 })
     write(String(o.qnum).padStart(4, '0'), { align: 1, big: true, bold: true })
-    write(new Date(o.created_at).toLocaleString('lo-LA'), { align: 1 })
+    const escDate = new Date(o.created_at)
+    write((isNaN(escDate.getTime()) ? new Date() : escDate).toLocaleString('lo-LA'), { align: 1 })
     line()
     const items = typeof o.items === 'string' ? JSON.parse(o.items) : o.items || []
     items.forEach(it => {
@@ -1731,7 +1733,12 @@ export default function StaffPage() {
     const items = typeof o.items === 'string' ? JSON.parse(o.items) : o.items || []
     const nameOf = it => menus[it.menuIdx]?.lo || it.name || `Item ${(it.menuIdx||0)+1}`
     const custName = (() => { try { const c = typeof o.customer === 'string' ? JSON.parse(o.customer) : o.customer; return c?.name || '' } catch { return '' } })()
-    const dt = new Date(o.created_at)
+    // Fall back to now if the caller didn't pass created_at — an unsaved
+    // order built for an immediate print has no timestamp yet, and
+    // new Date(undefined) prints "NaN/NaN/NaN NaN:NaN" onto the customer's
+    // receipt rather than failing loudly.
+    const parsed = new Date(o.created_at)
+    const dt = isNaN(parsed.getTime()) ? new Date() : parsed
     const dateStr = `${dt.getDate()}/${dt.getMonth()+1}/${dt.getFullYear()} ${String(dt.getHours()).padStart(2,'0')}:${String(dt.getMinutes()).padStart(2,'0')}`
 
     await document.fonts.ready
@@ -1787,10 +1794,22 @@ export default function StaffPage() {
     push(() => { ctx.font = f(88, '900'); ctx.textAlign = 'center'; ctx.fillText(String(o.qnum).padStart(4, '0'), W/2, y += Math.round(96 * s)) })
     push(() => { ctx.font = f(18); ctx.textAlign = 'center'; ctx.fillStyle = '#000'; ctx.fillText(dateStr, W/2, y += Math.round(24 * s)) })
     push(() => { y += Math.round(8 * s); dash() })
+    // Item name was drawn from the left edge with no width limit while the
+    // price sat right-aligned, so a long menu name ran straight under the
+    // number and the row read as garbled. Wrap the name to the space the
+    // price leaves free; the price stays on the first line.
     items.forEach(it => push(() => {
-      ctx.font = f(20); ctx.textAlign = 'left'; ctx.fillStyle = '#000'
-      ctx.fillText(nameOf(it) + ' x' + it.qty, 10, y += Math.round(28 * s))
-      ctx.textAlign = 'right'; ctx.fillText((it.sub || 0).toLocaleString(), W - 10, y)
+      ctx.font = f(20); ctx.fillStyle = '#000'
+      const priceStr = (it.sub || 0).toLocaleString()
+      ctx.textAlign = 'right'
+      const priceW = ctx.measureText(priceStr).width
+      const maxNameW = Math.max(40, W - 20 - priceW - Math.round(14 * s))
+      const lines = wrapText(ctx, nameOf(it) + ' x' + it.qty, maxNameW)
+      lines.forEach((line, li) => {
+        ctx.textAlign = 'left'
+        ctx.fillText(line, 10, y += Math.round(28 * s))
+        if (li === 0) { ctx.textAlign = 'right'; ctx.fillText(priceStr, W - 10, y) }
+      })
     }))
     push(() => { y += Math.round(8 * s); dash() })
     push(() => {
@@ -1907,6 +1926,26 @@ export default function StaffPage() {
     }
     cx.putImageData(imgData, 0, 0)
     return c
+  }
+
+  // Greedy word wrap that falls back to breaking mid-token — Lao menu names
+  // are often one long token with no spaces to break on.
+  function wrapText(ctx, text, maxW) {
+    const lines = []
+    let line = ''
+    const flush = () => { if (line) { lines.push(line); line = '' } }
+    for (const word of String(text).split(' ')) {
+      const candidate = line ? line + ' ' + word : word
+      if (ctx.measureText(candidate).width <= maxW) { line = candidate; continue }
+      flush()
+      if (ctx.measureText(word).width <= maxW) { line = word; continue }
+      for (const ch of word) {
+        if (line && ctx.measureText(line + ch).width > maxW) flush()
+        line += ch
+      }
+    }
+    flush()
+    return lines.length ? lines : ['']
   }
 
   function downsampleCanvas(src, targetW) {
