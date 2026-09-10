@@ -30,7 +30,12 @@ export default function DisplayPage() {
     // This screen runs unattended all day, so it can't depend on the realtime
     // socket staying up — if it drops, the board silently freezes on whatever
     // it last received (a finished order's QR, for instance). Poll as a floor.
-    const poll = setInterval(refresh, 8000)
+    //
+    // 2s, not 8s: the customer is standing right there watching for their
+    // total and the QR, and whenever realtime is slow or dropped this interval
+    // is the delay they actually experience. It's one small select against a
+    // table with a handful of rows.
+    const poll = setInterval(refresh, 2000)
     const ch = supabase.channel('customer-display')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'shop_config' }, payload => {
         const key = payload.new?.key

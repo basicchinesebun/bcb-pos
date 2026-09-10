@@ -868,9 +868,11 @@ export default function StaffPage() {
     announce(o.qnum)
     showToast(`✅ ຄິວ ${String(o.qnum).padStart(4,'0')} Done`, 'green')
     logActivity('done_order', `#${String(o.qnum).padStart(4, '0')}`)
-    if (settings.autoprintOn) {
-      setTimeout(() => smartPrint(o), 300)
-    }
+    // No printing here. The receipt already came out when the order was paid
+    // for (markPaid / submitQuickOrder) or confirmed (confirmOrder), so
+    // printing again on Done handed the customer a second copy — and since
+    // printing also kicks the drawer, the drawer flew open a second time with
+    // a queue of people watching. Done means "handed over", nothing more.
   }
 
   async function confirmOrder(o) {
@@ -1849,7 +1851,22 @@ export default function StaffPage() {
     showToast('ພິມແລ້ວ ✅', 'green')
   }
 
-  function smartPrint(o) {
+  // Guard against the same receipt going out twice. A double tap on a busy
+  // till, or two code paths both deciding to print, costs paper and pops the
+  // drawer again in front of the customer.
+  const lastPrintRef = useRef(new Map())
+  function smartPrint(o, { force = false } = {}) {
+    const key = o.id || `q${o.qnum}`
+    const now = Date.now()
+    const prev = lastPrintRef.current.get(key)
+    // force: the staff pressed a reprint button and meant it.
+    if (!force && prev && now - prev < 20000) {
+      showToast('ໃບເສດນີ້ຫາກໍພິມໄປແລ້ວ', 'orange')
+      return
+    }
+    lastPrintRef.current.set(key, now)
+    if (lastPrintRef.current.size > 200) lastPrintRef.current.clear()
+
     const method = usbDeviceRef.current ? 'usb' : btCharRef.current ? 'bluetooth' : serialPortRef.current ? 'serial' : 'browser'
     logReceiptPrint(o, method)
     if (usbDeviceRef.current) usbPrint(o)
@@ -2892,7 +2909,7 @@ export default function StaffPage() {
                           <div style={{ color: 'var(--gray3)' }}>{p.printed_by || 'ບໍ່ລະບຸ'} · {new Date(p.created_at).toLocaleString('lo-LA')}</div>
                         </div>
                         {ord && (
-                          <button onClick={() => smartPrint(ord)} className="text-xs px-2.5 py-1.5 rounded-lg font-black flex-shrink-0" style={{ background: 'var(--cream2)', color: 'var(--brown2)', border: '1.5px solid var(--cream3)' }}>🖨 ພິມຄືນ</button>
+                          <button onClick={() => smartPrint(ord, { force: true })} className="text-xs px-2.5 py-1.5 rounded-lg font-black flex-shrink-0" style={{ background: 'var(--cream2)', color: 'var(--brown2)', border: '1.5px solid var(--cream3)' }}>🖨 ພິມຄືນ</button>
                         )}
                       </div>
                     )
@@ -3650,7 +3667,7 @@ export default function StaffPage() {
                             <>
                               <button onClick={() => doneOrder(o)} className="flex-[4] py-3 rounded-xl text-sm font-black" style={{ background: 'var(--brown)', color: 'var(--cream)' }}>✓ Done</button>
                               <button onClick={() => announce(o.qnum)} className="flex-[2] py-3 rounded-xl text-sm font-black" style={{ background: 'var(--brown2)', color: 'var(--cream)' }}>📢</button>
-                              <button onClick={() => smartPrint(o)} className="py-3 px-3 rounded-xl text-sm font-black bg-blue-50 text-blue-700">🖨</button>
+                              <button onClick={() => smartPrint(o, { force: true })} className="py-3 px-3 rounded-xl text-sm font-black bg-blue-50 text-blue-700">🖨</button>
                               <button
                                 onClick={() => showOnDisplay(o)}
                                 title={displayOrderId === o.id ? 'ເອົາອອກຈາກຈໍລູກຄ້າ' : 'ສະແດງໃສ່ຈໍລູກຄ້າ'}
@@ -3727,7 +3744,7 @@ export default function StaffPage() {
                                 <div className="flex gap-2 mt-1">
                                   {o.cancelled && <button onClick={() => undoOrder(o.id, 'cancelled')} className="text-xs py-1.5 px-3 rounded-lg border-2 border-[#e8d5c0] font-black" style={{ color: 'var(--gray3)' }}>↩ ຄືນ</button>}
                                   {o.done && <button onClick={() => undoOrder(o.id, 'done')} className="text-xs py-1.5 px-3 rounded-lg border-2 border-[#e8d5c0] font-black" style={{ color: 'var(--gray3)' }}>↩ ຍົກເລີກ Done</button>}
-                                  <button onClick={() => smartPrint(o)} className="text-xs py-1.5 px-3 rounded-lg bg-blue-50 text-blue-700 font-black">🖨</button>
+                                  <button onClick={() => smartPrint(o, { force: true })} className="text-xs py-1.5 px-3 rounded-lg bg-blue-50 text-blue-700 font-black">🖨</button>
                                 </div>
                               </div>
                             )}
