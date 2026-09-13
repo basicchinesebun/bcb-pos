@@ -15,6 +15,30 @@ async function nextWalkinQnum() {
 
 const EMOJIS = ['🥟','🍫','🍵','🧁','🍞','🥐','🍮','🍡','🧆','🫕']
 
+// Order cards showed a time and nothing else, so a preorder placed two days
+// ago looked exactly like one placed this morning. That is how #0827 and #0828
+// sat waiting unnoticed after the site was left open past closing. Name today
+// and yesterday rather than making someone decode a date at the counter.
+function startOfDay(d) {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime()
+}
+
+function orderStamp(iso) {
+  const d = new Date(iso)
+  if (isNaN(d.getTime())) return '—'
+  const time = d.toLocaleTimeString('lo-LA', { hour: '2-digit', minute: '2-digit' })
+  const days = Math.round((startOfDay(new Date()) - startOfDay(d)) / 86400000)
+  if (days === 0) return `ມື້ນີ້ ${time}`
+  if (days === 1) return `ມື້ວານ ${time}`
+  return `${d.getDate()}/${d.getMonth() + 1} ${time}`
+}
+
+function isFromEarlierDay(iso) {
+  const d = new Date(iso)
+  if (isNaN(d.getTime())) return false
+  return startOfDay(d) < startOfDay(new Date())
+}
+
 const STATUS_COLORS = {
   walkin: 'bg-blue-50 text-blue-700',
   online: 'bg-orange-50 text-orange-700',
@@ -3473,7 +3497,8 @@ export default function StaffPage() {
                     {customerSearchResults.map(o => {
                       const items = typeof o.items === 'string' ? JSON.parse(o.items) : o.items || []
                       const cust = o.customer ? (typeof o.customer === 'string' ? JSON.parse(o.customer) : o.customer) : null
-                      const time = new Date(o.created_at).toLocaleTimeString('lo-LA', { hour: '2-digit', minute: '2-digit' })
+                      const time = orderStamp(o.created_at)
+                      const stale = isFromEarlierDay(o.created_at) && !o.done && !o.cancelled
                       const borderColor = o.cancelled || o.status === 'rejected' ? '#fca5a5' : o.status === 'blocked' ? '#c4b5fd' : o.done ? '#e8d5c0' : '#3d1f0a'
                       return (
                         <div key={o.id} className="rounded-2xl overflow-hidden" style={{ border: `2px solid ${borderColor}`, background: 'var(--warm-white)' }}>
@@ -3485,7 +3510,7 @@ export default function StaffPage() {
                                 </div>
                               </div>
                               <div className="text-right">
-                                <div className="text-xs font-bold" style={{ color: 'var(--gray3)' }}>{time}</div>
+                                <div className="text-xs font-bold" style={{ color: stale ? '#c2410c' : 'var(--gray3)' }}>{stale ? '⚠️ ' : ''}{time}</div>
                                 <span className={`tag text-xs mt-1 ${o.type === 'online' ? 'bg-orange-50 text-orange-700' : 'bg-blue-50 text-blue-700'}`}>
                                   {o.type === 'online' ? '🌐 Online' : '🏪 Walk-in'}
                                 </span>
@@ -3523,7 +3548,8 @@ export default function StaffPage() {
                 {activeOrders.map(o => {
                   const items = typeof o.items === 'string' ? JSON.parse(o.items) : o.items || []
                   const cust = o.customer ? (typeof o.customer === 'string' ? JSON.parse(o.customer) : o.customer) : null
-                  const time = new Date(o.created_at).toLocaleTimeString('lo-LA', { hour: '2-digit', minute: '2-digit' })
+                  const time = orderStamp(o.created_at)
+                  const stale = isFromEarlierDay(o.created_at) && !o.done && !o.cancelled
                   const borderColor = o.cancelled || o.status === 'rejected' ? '#fca5a5' : o.status === 'blocked' ? '#c4b5fd' : o.done ? '#e8d5c0' : '#3d1f0a'
 
                   return (
@@ -3567,7 +3593,7 @@ export default function StaffPage() {
                             )}
                           </div>
                           <div className="text-right">
-                            <div className="text-xs font-bold" style={{ color: 'var(--gray3)' }}>{time}</div>
+                            <div className="text-xs font-bold" style={{ color: stale ? '#c2410c' : 'var(--gray3)' }}>{stale ? '⚠️ ' : ''}{time}</div>
                             <span className={`tag text-xs mt-1 ${o.type === 'online' ? 'bg-orange-50 text-orange-700' : 'bg-blue-50 text-blue-700'}`}>
                               {o.type === 'online' ? '🌐 Online' : '🏪 Walk-in'}
                             </span>
@@ -3787,7 +3813,7 @@ export default function StaffPage() {
                         const isExp = expandedArchive.has(o.id)
                         const items = typeof o.items === 'string' ? JSON.parse(o.items) : o.items || []
                         const cust = o.customer ? (typeof o.customer === 'string' ? JSON.parse(o.customer) : o.customer) : null
-                        const time = new Date(o.created_at).toLocaleTimeString('lo-LA', { hour: '2-digit', minute: '2-digit' })
+                        const time = orderStamp(o.created_at)
                         return (
                           <div key={o.id} className="rounded-xl overflow-hidden border border-[#e8d5c0]" style={{ background: 'var(--warm-white)' }}>
                             <div
