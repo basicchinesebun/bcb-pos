@@ -15,6 +15,12 @@ async function nextWalkinQnum() {
 
 const EMOJIS = ['🥟','🍫','🍵','🧁','🍞','🥐','🍮','🍡','🧆','🫕']
 
+// Menu names are typed by hand and pick up stray spaces; nothing that
+// compares them should care about those.
+function normName(s) {
+  return String(s ?? '').replace(/\s+/g, ' ').trim()
+}
+
 // Order cards showed a time and nothing else, so a preorder placed two days
 // ago looked exactly like one placed this morning. That is how #0827 and #0828
 // sat waiting unnoticed after the site was left open past closing. Name today
@@ -2524,7 +2530,10 @@ export default function StaffPage() {
     const items = typeof o.items === 'string' ? JSON.parse(o.items) : o.items || []
     items.forEach(it => {
       menuCount[it.name] = (menuCount[it.name] || 0) + it.qty
-      const idx = menus.findIndex(m => (m.lo || m) === it.name)
+      // Normalised, for the same reason as the kitchen: menu names carry stray
+      // spaces, and an exact match would silently drop that item's cost from
+      // the profit figure the moment a name was edited.
+      const idx = menus.findIndex(m => normName(m.lo || m) === normName(it.name))
       if (idx >= 0 && costs[idx]) totalCost += (costs[idx] || 0) * it.qty
     })
   })

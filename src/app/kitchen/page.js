@@ -178,6 +178,12 @@ export default function KitchenPage() {
 
 /* ─────────────────────────── helpers ─────────────────────────── */
 
+// Menu names are typed by hand and pick up stray spaces; nothing that
+// compares them should care about those.
+function normName(s) {
+  return String(s ?? '').replace(/\s+/g, ' ').trim()
+}
+
 function parseBagLabel(bagLabel) {
   if (!bagLabel) return []
   return bagLabel.split(' | ').map(part => {
@@ -206,7 +212,12 @@ function OrderCard({ o, onDone, onCancel, menus, images }) {
   const bags  = parseBagLabel(o.bag_label)
 
   function getItemImage(name) {
-    const idx = menus.findIndex(m => (m.lo || m) === name)
+    // Match on normalised whitespace. Several menu names carry a trailing
+    // space ("ໝັນໂຖ Matcha "), and the bag label is parsed with .trim(), so an
+    // exact comparison never matched and those items fell back to a generic
+    // icon on the packing screen while the same items showed their photo in
+    // the order list above.
+    const idx = menus.findIndex(m => normName(m.lo || m) === normName(name))
     if (idx >= 0 && images[idx]) return { img: images[idx], emoji: EMOJIS[idx] || '🍱' }
     return { img: null, emoji: '🍱' }
   }
