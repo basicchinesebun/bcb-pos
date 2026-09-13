@@ -494,7 +494,7 @@ export default function StaffPage() {
       // that the queue number exists, so the customer can see their number
       // alongside the total and the QR.
       writeDisplay({ items, total, method: paymentMethod, qnum: qnumData })
-      if (settings.autoprintOn) {
+      if (shouldAutoprint({ type: 'walkin' })) {
         const printObj = {
           qnum: qnumData, type: 'walkin', items, total,
           created_at: new Date().toISOString(),
@@ -518,7 +518,7 @@ export default function StaffPage() {
     showToast(`💰 #${String(o.qnum).padStart(4,'0')} ຮັບເງິນ + ສົ່ງຄົວແລ້ວ`, 'green')
     logActivity('mark_paid', `#${String(o.qnum).padStart(4, '0')} · ${method}`)
     if (method === 'cash') kickDrawer()
-    if (settings.autoprintOn) setTimeout(() => smartPrint({ ...o, ...patch }), 300)
+    if (shouldAutoprint(o)) setTimeout(() => smartPrint({ ...o, ...patch }), 300)
   }
 
   // After an edit changes the total, the money already in the drawer no
@@ -912,7 +912,7 @@ export default function StaffPage() {
     await supabase.from('orders').update({ status: 'confirmed' }).eq('id', o.id)
     showToast(`🍳 ສົ່ງຄົວ #${String(o.qnum).padStart(4,'0')}`, 'green')
     logActivity('confirm_order', `#${String(o.qnum).padStart(4, '0')}`)
-    if (settings.autoprintOn) setTimeout(() => smartPrint(o), 300)
+    if (shouldAutoprint(o)) setTimeout(() => smartPrint(o), 300)
   }
 
   async function confirmAllPending() {
@@ -928,7 +928,7 @@ export default function StaffPage() {
       ))
       await supabase.from('orders').update({ status: 'confirmed', done: true, done_at: doneAt }).in('id', ids)
       showToast(`✅ ຢືນຢັນ ${toConfirm.length} ໃບ`, 'green')
-      if (settings.autoprintOn) toConfirm.forEach((o, i) => setTimeout(() => smartPrint(o), 400 * i))
+      toConfirm.filter(shouldAutoprint).forEach((o, i) => setTimeout(() => smartPrint(o), 400 * i))
     })
   }
 
@@ -944,14 +944,14 @@ export default function StaffPage() {
     showToast(`✅ ຢືນຢັນ ${toConfirm.length} ໃບ`, 'green')
     setBatchSelected(new Set())
     setBatchOpen(false)
-    if (settings.autoprintOn) toConfirm.forEach((o, i) => setTimeout(() => smartPrint(o), 400 * i))
+    toConfirm.filter(shouldAutoprint).forEach((o, i) => setTimeout(() => smartPrint(o), 400 * i))
   }
 
   async function confirmWalkin(o) {
     setOrders(prev => prev.map(ord => ord.id === o.id ? { ...ord, status: 'confirmed' } : ord))
     await supabase.from('orders').update({ status: 'confirmed' }).eq('id', o.id)
     showToast(`🍳 ສົ່ງຄົວ #${String(o.qnum).padStart(4,'0')}`, 'green')
-    if (settings.autoprintOn) setTimeout(() => smartPrint(o), 300)
+    if (shouldAutoprint(o)) setTimeout(() => smartPrint(o), 300)
   }
 
   // Pushes an order that already exists (e.g. self-ordered via /order while
@@ -1945,6 +1945,14 @@ export default function StaffPage() {
   // till, or two code paths both deciding to print, costs paper and pops the
   // drawer again in front of the customer.
   const lastPrintRef = useRef(new Map())
+  // Autoprint is for the counter only. An online preorder is paid for and
+  // collected later, so printing its receipt the moment staff confirm it just
+  // spits paper at nobody — and confirming a batch fired one print per order.
+  // The 🖨 button still prints a preorder on demand.
+  function shouldAutoprint(o) {
+    return settings.autoprintOn && o?.type !== 'online'
+  }
+
   function smartPrint(o, { force = false } = {}) {
     const key = o.id || `q${o.qnum}`
     const now = Date.now()
@@ -2776,7 +2784,7 @@ export default function StaffPage() {
                     ['walkinOn', '🏪 ເປີດ Walk-in'],
                     ['onlineOn', '🌐 ເປີດ Online'],
                     ['aiOn', '🤖 AI ຕອບແຊັດ'],
-                    ['autoprintOn', '🖨 ພິມອັດຕະໂນມັດ'],
+                    ['autoprintOn', '🖨 ພິມອັດຕະໂນມັດ (Walk-in ເທົ່ານັ້ນ)'],
                     ['autoKickDrawer', '🔓 ເປີດລິ້ນຊັກອັດຕະໂນມັດຕອນພິມ'],
                   ].map(([k, l]) => (
                     <div key={k} className="flex justify-between items-center py-2 border-b border-[#e8d5c0]">
