@@ -14,7 +14,9 @@ export default function DisplayPage() {
 
   useEffect(() => {
     if (!supabase) return
-    async function refresh() {
+    // Everything except display_order — menus, prices, images, the QR — only
+    // changes when staff edit the shop, so it doesn't belong in the fast loop.
+    async function refreshAll() {
       const { data } = await supabase.from('shop_config').select('key,value')
       if (!data) return
       const cfg = Object.fromEntries(data.map(r => [r.key, r.value]))
@@ -26,16 +28,31 @@ export default function DisplayPage() {
       if (cfg.menu_images) try { setImages(JSON.parse(cfg.menu_images)) } catch (_) {}
       if (cfg.stock_shop) try { setStock(JSON.parse(cfg.stock_shop)) } catch (_) {}
     }
-    refresh()
+    // The one row the customer is actually waiting on.
+    async function refreshOrder() {
+      const { data } = await supabase.from('shop_config').select('value')
+        .in('key', ['display_order', 'stock_shop'])
+      if (!data) return
+      for (const row of data) {
+        try {
+          const v = JSON.parse(row.value)
+          if (Array.isArray(v)) setStock(v)
+          else setOrder(v)
+        } catch (_) {}
+      }
+    }
+    refreshAll()
     // This screen runs unattended all day, so it can't depend on the realtime
     // socket staying up — if it drops, the board silently freezes on whatever
     // it last received (a finished order's QR, for instance). Poll as a floor.
     //
-    // 2s, not 8s: the customer is standing right there watching for their
-    // total and the QR, and whenever realtime is slow or dropped this interval
-    // is the delay they actually experience. It's one small select against a
-    // table with a handful of rows.
-    const poll = setInterval(refresh, 2000)
+    // Split by how fast each thing has to move, because this interval runs
+    // every open hour of every day and the whole config is ~4.5 kB: fetching
+    // all of it every 2s is ~3 GB a month, most of a free tier's egress, to
+    // re-read menu names that change once a week. The order itself is a few
+    // hundred bytes, so that can be quick.
+    const fast = setInterval(refreshOrder, 2000)
+    const slow = setInterval(refreshAll, 60000)
     const ch = supabase.channel('customer-display')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'shop_config' }, payload => {
         const key = payload.new?.key
@@ -49,7 +66,7 @@ export default function DisplayPage() {
         else if (key === 'stock_shop') { try { setStock(JSON.parse(val)) } catch (_) {} }
       })
       .subscribe()
-    return () => { clearInterval(poll); supabase.removeChannel(ch) }
+    return () => { clearInterval(fast); clearInterval(slow); supabase.removeChannel(ch) }
   }, [])
 
   // This board faces the customer and nobody is meant to operate it, so take

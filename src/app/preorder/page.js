@@ -248,18 +248,28 @@ export default function PreOrderPage() {
   // which is what makes slip/menu image loading feel so slow. Re-encode to a
   // normal 8-bit JPEG capped at 1280px wide before upload; text stays legible
   // for verification but the file drops to a fraction of the size.
-  function compressSlipImage(file, maxW = 1280, quality = 0.85) {
+  // 1000px / q0.72 rather than 1280 / q0.85. Slips are 99% of the storage
+  // this project uses (673 MB of 682 MB) and were still averaging 672 kB each,
+  // which fills the 1 GB free tier in about two months. A slip only has to be
+  // legible enough to read the amount and reference — by eye and by the
+  // verifier — and these settings land around 150-200 kB.
+  function compressSlipImage(file, maxW = 1000, quality = 0.72) {
     return new Promise(resolve => {
       const img = new Image()
       const url = URL.createObjectURL(file)
       img.onload = () => {
         const scale = Math.min(1, maxW / img.width)
         const canvas = document.createElement('canvas')
-        canvas.width = img.width * scale
-        canvas.height = img.height * scale
-        canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height)
+        canvas.width = Math.round(img.width * scale)
+        canvas.height = Math.round(img.height * scale)
+        const ctx = canvas.getContext('2d')
+        // JPEG has no alpha, so a transparent PNG screenshot would otherwise
+        // flatten onto black and bury the text.
+        ctx.fillStyle = '#fff'
+        ctx.fillRect(0, 0, canvas.width, canvas.height)
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
         URL.revokeObjectURL(url)
-        canvas.toBlob(blob => resolve(blob || file), 'image/jpeg', quality)
+        canvas.toBlob(blob => resolve(blob && blob.size < file.size ? blob : file), 'image/jpeg', quality)
       }
       img.onerror = () => { URL.revokeObjectURL(url); resolve(file) }
       img.src = url
