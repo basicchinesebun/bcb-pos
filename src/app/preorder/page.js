@@ -325,8 +325,9 @@ export default function PreOrderPage() {
       }))
 
       const packingLabel = bagPacks
-        .map((b, i) => { const t = bagText(b); return t ? `ຖົງ ${i + 1}: ${t}` : null })
+        .map(bagText)
         .filter(Boolean)
+        .map((t, i) => `ຖົງ ${i + 1}: ${t}`)
         .join(' | ')
 
       const tz = Intl.DateTimeFormat().resolvedOptions().timeZone

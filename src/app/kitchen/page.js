@@ -190,6 +190,10 @@ function parseBagLabel(bagLabel) {
     }).filter(it => it.name)
     return { header, items: itemList }
   }).filter(b => b.items.length > 0)
+    // Renumber. Orders saved before the numbering bug was fixed carry headers
+    // like "ຖົງ 1 | ຖົງ 3", and on the packing screen that reads as a missing
+    // bag — someone goes looking for a bag 2 that was never packed.
+    .map((b, i) => ({ ...b, header: b.header.replace(/\d+/, String(i + 1)) }))
 }
 
 function OrderCard({ o, onDone, onCancel, menus, images }) {

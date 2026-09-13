@@ -462,10 +462,15 @@ export default function StaffPage() {
         ? qoBagPacks.reduce((acc, bag) => { Object.entries(bag).forEach(([idx, qty]) => { if (qty > 0) acc[idx] = (acc[idx] || 0) + qty }); return acc }, {})
         : qoSelected
       const items = Object.entries(effSel).map(([i, qty]) => ({ menuIdx: +i, name: menus[+i]?.lo || '', qty, price: prices[+i] || 0, sub: (prices[+i] || 0) * qty }))
-      const packingLabel = qoBagPacks.map((b, i) => {
-        const t = Object.entries(b).filter(([, q]) => q > 0).map(([idx, q]) => `${menus[+idx]?.lo || ''} ×${q}`).join(', ')
-        return t ? `ຖົງ ${i + 1}: ${t}` : null
-      }).filter(Boolean).join(' | ')
+      // Number the bags after dropping the empty ones. Numbering first and
+      // filtering after meant emptying a middle bag left the rest carrying
+      // their original numbers, so the kitchen saw "bag 1, bag 3" and went
+      // looking for a bag 2 that had never been packed.
+      const packingLabel = qoBagPacks
+        .map(b => Object.entries(b).filter(([, q]) => q > 0).map(([idx, q]) => `${menus[+idx]?.lo || ''} ×${q}`).join(', '))
+        .filter(Boolean)
+        .map((t, i) => `ຖົງ ${i + 1}: ${t}`)
+        .join(' | ')
       const total = Object.entries(effSel).reduce((s, [i, q]) => s + (prices[+i] || 0) * q, 0)
       const { error } = await supabase.from('orders').insert({
         qnum: qnumData, type: 'walkin', status: 'confirmed',
@@ -517,7 +522,7 @@ export default function StaffPage() {
     setPayingId(null)
     showToast(`💰 #${String(o.qnum).padStart(4,'0')} ຮັບເງິນ + ສົ່ງຄົວແລ້ວ`, 'green')
     logActivity('mark_paid', `#${String(o.qnum).padStart(4, '0')} · ${method}`)
-    if (method === 'cash') kickDrawer()
+    if (method === 'cash' && settings.autoKickDrawer !== false) kickDrawer()
     if (shouldAutoprint(o)) setTimeout(() => smartPrint({ ...o, ...patch }), 300)
   }
 
@@ -1971,7 +1976,10 @@ export default function StaffPage() {
     else if (btCharRef.current) btPrint(o)
     else if (serialPortRef.current) serialPrint(o)
     else printOrder(o)
-    if (settings.autoKickDrawer !== false) kickDrawer()
+    // No drawer kick here. Printing is the wrong trigger: it fired for
+    // transfers, where nothing goes in the till, and fired a second time on
+    // cash because taking the payment had already opened it. The drawer is
+    // opened where money actually changes hands instead.
   }
 
   // Cash-drawer kick. There is no single command every printer honours:
@@ -2785,7 +2793,7 @@ export default function StaffPage() {
                     ['onlineOn', '🌐 ເປີດ Online'],
                     ['aiOn', '🤖 AI ຕອບແຊັດ'],
                     ['autoprintOn', '🖨 ພິມອັດຕະໂນມັດ (Walk-in ເທົ່ານັ້ນ)'],
-                    ['autoKickDrawer', '🔓 ເປີດລິ້ນຊັກອັດຕະໂນມັດຕອນພິມ'],
+                    ['autoKickDrawer', '🔓 ເປີດລິ້ນຊັກອັດຕະໂນມັດ (ເງິນສົດ)'],
                   ].map(([k, l]) => (
                     <div key={k} className="flex justify-between items-center py-2 border-b border-[#e8d5c0]">
                       <span className="text-sm font-bold" style={{ color: 'var(--brown)' }}>{l}</span>
@@ -4910,7 +4918,7 @@ export default function StaffPage() {
                     setCashReceived('')
                     // Cash sale: staff needs the drawer open either way — to
                     // drop the note in, and to pull the change out.
-                    kickDrawer()
+                    if (settings.autoKickDrawer !== false) kickDrawer()
                     submitQuickOrder('cash')
                   }}
                   disabled={!enough || qoSubmitting}

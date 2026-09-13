@@ -206,8 +206,9 @@ export default function OrderPage() {
         sub: (prices[+i] || 0) * qty,
       }))
       const packingLabel = bagPacks
-        .map((b, i) => { const t = bagText(b); return t ? `ຖົງ ${i + 1}: ${t}` : null })
+        .map(bagText)
         .filter(Boolean)
+        .map((t, i) => `ຖົງ ${i + 1}: ${t}`)
         .join(' | ')
 
       const { error } = await supabase.from('orders').insert({
@@ -274,8 +275,9 @@ export default function OrderPage() {
   const totalPacked = bagPacks.reduce((s, bag) => s + Object.values(bag).reduce((ss, v) => ss + v, 0), 0)
 
   const bagLabel = bagPacks
-    .map((b, i) => { const t = bagText(b); return t ? `ຖົງ ${i + 1}: ${t}` : null })
+    .map(bagText)
     .filter(Boolean)
+    .map((t, i) => `ຖົງ ${i + 1}: ${t}`)
     .join(' / ')
   const selectedItems = Object.entries(effectiveSelected).map(([i, qty]) => ({
     name: menus[+i]?.lo || '',
