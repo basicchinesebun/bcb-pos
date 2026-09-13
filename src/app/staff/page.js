@@ -1027,6 +1027,71 @@ export default function StaffPage() {
     }
   }
 
+  // Payment slips are 99% of this project's file storage and were on course to
+  // fill the 1 GB allowance in about two months. They're only needed while the
+  // preorder they belong to is still live, so keep two weeks and drop the rest.
+  const SLIP_KEEP_DAYS = 14
+
+  async function pruneOldSlips({ silent = false } = {}) {
+    if (!supabase) return 0
+    const cutoff = Date.now() - SLIP_KEEP_DAYS * 86400000
+    try {
+      // Page through the folder rather than trusting one list() call to hold
+      // every slip — it quietly caps out and the tail would never be pruned.
+      const stale = []
+      for (let offset = 0; ; offset += 500) {
+        const { data, error } = await supabase.storage.from('bcb - upload')
+          .list('slips', { limit: 500, offset, sortBy: { column: 'created_at', order: 'asc' } })
+        if (error) throw error
+        if (!data?.length) break
+        for (const f of data) {
+          const t = f.created_at ? new Date(f.created_at).getTime() : NaN
+          if (!isNaN(t) && t < cutoff) stale.push('slips/' + f.name)
+        }
+        if (data.length < 500) break
+      }
+      if (!stale.length) {
+        if (!silent) showToast('ບໍ່ມີສລິບເກົ່າທີ່ຕ້ອງລ້າງ', 'blue')
+        return 0
+      }
+      for (let i = 0; i < stale.length; i += 100) {
+        const { error } = await supabase.storage.from('bcb - upload').remove(stale.slice(i, i + 100))
+        if (error) throw error
+      }
+      // Clear the links that now point at nothing, or staff get broken images
+      // in the slip gallery for every order we just cleaned up.
+      await supabase.from('orders').update({ slip_url: null })
+        .lt('created_at', new Date(cutoff).toISOString())
+        .not('slip_url', 'is', null)
+      setOrders(prev => prev.map(o =>
+        o.slip_url && new Date(o.created_at).getTime() < cutoff ? { ...o, slip_url: null } : o
+      ))
+      if (!silent) showToast(`🧹 ລ້າງສລິບເກົ່າ ${stale.length} ໃບແລ້ວ`, 'green')
+      logActivity('prune_slips', `${stale.length} ໃບ`)
+      return stale.length
+    } catch (e) {
+      if (!silent) showToast('❌ ລ້າງສລິບບໍ່ສຳເລັດ: ' + (e?.message || 'error'), 'red')
+      return 0
+    }
+  }
+
+  // Run it by itself, once a day. Leaving this to a button means it only
+  // happens when someone remembers, which is never during service.
+  useEffect(() => {
+    if (!supabase) return
+    const KEY = 'bcb_slip_prune_at'
+    let last = 0
+    try { last = parseInt(localStorage.getItem(KEY) || '0') || 0 } catch { }
+    if (Date.now() - last < 86400000) return
+    const t = setTimeout(async () => {
+      const n = await pruneOldSlips({ silent: true })
+      try { localStorage.setItem(KEY, String(Date.now())) } catch { }
+      if (n > 0) showToast(`🧹 ລ້າງສລິບເກົ່າອັດຕະໂນມັດ ${n} ໃບ`, 'blue')
+    }, 20000)
+    return () => clearTimeout(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   async function deleteSelectedSlips() {
     if (selectedSlipIds.size === 0) return
     setDeletingSlips(true)
@@ -2717,6 +2782,24 @@ export default function StaffPage() {
                           onChange={e => { const s = { ...settings, pickupTimeEnd: e.target.value }; setSettings(s); saveConfig('settings', s) }}
                           className="input-field text-sm py-2" />
                       </div>
+                    </div>
+                  </div>
+                  {/* Slip storage cleanup */}
+                  <div className="border-t border-[#e8d5c0] pt-3 mt-1 flex flex-col gap-2">
+                    <div className="text-xs font-black uppercase tracking-widest" style={{ color: 'var(--brown3)' }}>🧹 ພື້ນທີ່ເກັບຂໍ້ມູນ</div>
+                    <div className="flex items-center justify-between py-1 gap-2">
+                      <div className="min-w-0">
+                        <div className="text-sm font-bold" style={{ color: 'var(--brown)' }}>ລ້າງສລິບເກົ່າ</div>
+                        <div className="text-xs font-bold mt-0.5 leading-relaxed" style={{ color: 'var(--gray3)' }}>
+                          ລຶບສລິບທີ່ເກົ່າກວ່າ {SLIP_KEEP_DAYS} ວັນ · ເຮັດໃຫ້ອັດຕະໂນມັດວັນລະຄັ້ງແລ້ວ
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => showConfirm(`ລຶບສລິບທີ່ເກົ່າກວ່າ ${SLIP_KEEP_DAYS} ວັນ ແທ້ບໍ? (ກູ້ຄືນບໍ່ໄດ້)`, () => pruneOldSlips())}
+                        className="text-xs px-3 py-2 rounded-xl font-black flex-shrink-0"
+                        style={{ background: '#fef2f2', color: '#dc2626', border: '1.5px solid #fca5a5' }}>
+                        ລ້າງ
+                      </button>
                     </div>
                   </div>
                   {/* Queue reset */}
