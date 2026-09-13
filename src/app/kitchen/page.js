@@ -277,10 +277,15 @@ function OrderCard({ o, onDone, onCancel, menus, images }) {
           {bags.length > 0 && (
             <div className="flex flex-col gap-2 pt-2 border-t" style={{ borderColor: 'var(--cream3)' }}>
               <div className="text-xs font-black tracking-widest uppercase" style={{ color: 'var(--brown3)' }}>🛍 ແຍກຖົງ</div>
-              {bags.map((bag, bi) => (
-                <div key={bi} className="rounded-xl overflow-hidden" style={{ border: '2px solid var(--cream3)' }}>
-                  <div className="px-3 py-2 font-black text-sm" style={{ background: 'var(--brown)', color: 'var(--cream)' }}>
-                    🛍 {bag.header}
+              {bags.map((bag, bi) => {
+                // The "not bagged yet" group is items that were ordered but
+                // never assigned to a bag. It has to look different from a
+                // real bag, or it gets packed as one and the count is wrong.
+                const unbagged = !/\d/.test(bag.header)
+                return (
+                <div key={bi} className="rounded-xl overflow-hidden" style={{ border: `2px solid ${unbagged ? '#f59e0b' : 'var(--cream3)'}` }}>
+                  <div className="px-3 py-2 font-black text-sm" style={{ background: unbagged ? '#b45309' : 'var(--brown)', color: 'var(--cream)' }}>
+                    {unbagged ? '' : '🛍 '}{bag.header}
                   </div>
                   <div className="p-2 flex flex-col gap-2">
                     {bag.items.map((it, ii) => {
@@ -303,7 +308,8 @@ function OrderCard({ o, onDone, onCancel, menus, images }) {
                     })}
                   </div>
                 </div>
-              ))}
+                )
+              })}
             </div>
           )}
 

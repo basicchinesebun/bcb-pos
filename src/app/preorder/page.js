@@ -324,11 +324,20 @@ export default function PreOrderPage() {
         sub: (prices[+i] || 0) * qty,
       }))
 
-      const packingLabel = bagPacks
-        .map(bagText)
-        .filter(Boolean)
-        .map((t, i) => `ຖົງ ${i + 1}: ${t}`)
-        .join(' | ')
+      // Anything ordered but never put in a bag would otherwise appear on no
+      // packing list at all, so the kitchen packs short. Show the remainder.
+      const bagged = bagPacks.reduce((acc, bag) => {
+        Object.entries(bag).forEach(([idx, qty]) => { if (qty > 0) acc[idx] = (acc[idx] || 0) + qty })
+        return acc
+      }, {})
+      const leftover = Object.entries(selected)
+        .map(([i, q]) => [i, q - (bagged[i] || 0)])
+        .filter(([, short]) => short > 0)
+        .map(([i, short]) => `${menus[+i]?.lo || ''} ×${short}`)
+        .join(', ')
+      const groups = bagPacks.map(bagText).filter(Boolean).map((t, i) => `ຖົງ ${i + 1}: ${t}`)
+      if (leftover) groups.push(`⚠️ ຍັງບໍ່ໄດ້ແຍກຖົງ: ${leftover}`)
+      const packingLabel = groups.join(' | ')
 
       const tz = Intl.DateTimeFormat().resolvedOptions().timeZone
       const lang = navigator.language

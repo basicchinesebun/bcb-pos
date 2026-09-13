@@ -466,11 +466,26 @@ export default function StaffPage() {
       // filtering after meant emptying a middle bag left the rest carrying
       // their original numbers, so the kitchen saw "bag 1, bag 3" and went
       // looking for a bag 2 that had never been packed.
-      const packingLabel = qoBagPacks
+      const bagTexts = qoBagPacks
         .map(b => Object.entries(b).filter(([, q]) => q > 0).map(([idx, q]) => `${menus[+idx]?.lo || ''} ×${q}`).join(', '))
         .filter(Boolean)
-        .map((t, i) => `ຖົງ ${i + 1}: ${t}`)
-        .join(' | ')
+      // Outside bag mode the order is what was selected, while the label is
+      // built from what was packed — and those can disagree. Order #0027 was
+      // charged for 7 items with only 5 in bags, so two of them appeared on no
+      // packing list at all and the customer would have gone home short. Show
+      // the remainder rather than letting it vanish.
+      const bagged = qoBagPacks.reduce((acc, bag) => {
+        Object.entries(bag).forEach(([idx, qty]) => { if (qty > 0) acc[idx] = (acc[idx] || 0) + qty })
+        return acc
+      }, {})
+      const leftover = Object.entries(effSel)
+        .map(([i, q]) => [i, q - (bagged[i] || 0)])
+        .filter(([, short]) => short > 0)
+        .map(([i, short]) => `${menus[+i]?.lo || ''} ×${short}`)
+        .join(', ')
+      const groups = bagTexts.map((t, i) => `ຖົງ ${i + 1}: ${t}`)
+      if (leftover) groups.push(`⚠️ ຍັງບໍ່ໄດ້ແຍກຖົງ: ${leftover}`)
+      const packingLabel = groups.join(' | ')
       const total = Object.entries(effSel).reduce((s, [i, q]) => s + (prices[+i] || 0) * q, 0)
       const { error } = await supabase.from('orders').insert({
         qnum: qnumData, type: 'walkin', status: 'confirmed',
