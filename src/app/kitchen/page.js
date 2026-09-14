@@ -21,8 +21,19 @@ export default function KitchenPage() {
       .channel('kitchen-realtime')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, () => loadOrders())
       .subscribe(status => setLiveStatus(status === 'SUBSCRIBED' ? 'live' : 'connecting'))
-    const fallback = setInterval(loadOrders, 60000)
-    return () => { supabase.removeChannel(channel); clearInterval(fallback) }
+    // The socket is the fast path, but when it drops the board went a full
+    // minute before noticing a new order. Poll often enough that nobody is
+    // left waiting on it, and refetch whenever the screen is looked at again.
+    const fallback = setInterval(loadOrders, 10000)
+    const onVisible = () => { if (document.visibilityState === 'visible') loadOrders() }
+    document.addEventListener('visibilitychange', onVisible)
+    window.addEventListener('focus', onVisible)
+    return () => {
+      supabase.removeChannel(channel)
+      clearInterval(fallback)
+      document.removeEventListener('visibilitychange', onVisible)
+      window.removeEventListener('focus', onVisible)
+    }
   }, [])
 
   async function loadOrders() {
@@ -42,14 +53,21 @@ export default function KitchenPage() {
     if (cfg.menu_images) setImages(JSON.parse(cfg.menu_images))
   }
 
+  // Take the card off the board first, then tell the server. Waiting for the
+  // round trip left the card sitting there looking unresponsive, so it got
+  // tapped again — and by then the list had shifted, so the second tap landed
+  // on the next order and marked someone else's food done.
   async function markDone(o) {
-    await supabase.from('orders').update({ done: true, done_at: new Date().toISOString() }).eq('id', o.id)
     setOrders(prev => prev.filter(x => x.id !== o.id))
+    const { error } = await supabase.from('orders')
+      .update({ done: true, done_at: new Date().toISOString() }).eq('id', o.id)
+    if (error) { await loadOrders(); alert('ບັນທຶກບໍ່ສຳເລັດ: ' + error.message) }
   }
 
   async function markCancel(o) {
-    await supabase.from('orders').update({ cancelled: true }).eq('id', o.id)
     setOrders(prev => prev.filter(x => x.id !== o.id))
+    const { error } = await supabase.from('orders').update({ cancelled: true }).eq('id', o.id)
+    if (error) { await loadOrders(); alert('ບັນທຶກບໍ່ສຳເລັດ: ' + error.message) }
   }
 
   function applyFilter(list) {
@@ -132,12 +150,17 @@ export default function KitchenPage() {
           </div>
         ) : (
           <div className="h-full flex gap-3 px-3 py-3"
-            style={{ overflowX: 'auto', overflowY: 'hidden', scrollSnapType: 'x mandatory', WebkitOverflowScrolling: 'touch' }}>
+            // pan-x here and pan-y on each column tells the browser which
+            // gesture belongs to which container. Without that the mandatory
+            // snap grabbed vertical drags too, so scrolling down a card jumped
+            // sideways to another order instead. Proximity snapping also lets
+            // a drag settle where it was put rather than being yanked on.
+            style={{ overflowX: 'auto', overflowY: 'hidden', scrollSnapType: 'x proximity', WebkitOverflowScrolling: 'touch', touchAction: 'pan-x' }}>
 
             {/* ── Pending section ── */}
             {pending.map((o, i) => (
               <div key={o.id} className="flex-shrink-0 flex flex-col"
-                style={{ width: CARD_W, scrollSnapAlign: 'start', overflowY: 'auto', height: '100%' }}>
+                style={{ width: CARD_W, scrollSnapAlign: 'start', overflowY: 'auto', height: '100%', touchAction: 'pan-y', overscrollBehavior: 'contain' }}>
                 {i === 0 && (
                   <div className="text-xs font-black tracking-widest uppercase mb-2 flex-shrink-0" style={{ color: '#92400e' }}>
                     ⏳ ລໍຖ້າຢືນຢັນ
@@ -157,7 +180,7 @@ export default function KitchenPage() {
             {/* ── Confirmed section ── */}
             {confirmed.map((o, i) => (
               <div key={o.id} className="flex-shrink-0 flex flex-col"
-                style={{ width: CARD_W, scrollSnapAlign: 'start', overflowY: 'auto', height: '100%' }}>
+                style={{ width: CARD_W, scrollSnapAlign: 'start', overflowY: 'auto', height: '100%', touchAction: 'pan-y', overscrollBehavior: 'contain' }}>
                 {i === 0 && (
                   <div className="text-xs font-black tracking-widest uppercase mb-2 flex-shrink-0" style={{ color: '#16a34a' }}>
                     🔥 ກຳລັງເຮັດ
@@ -204,6 +227,9 @@ function parseBagLabel(bagLabel) {
 
 function OrderCard({ o, onDone, onCancel, menus, images }) {
   const [slipOpen, setSlipOpen] = useState(false)
+  // A second tap landing before React has removed the card would fire the
+  // action twice. Latch on the first one.
+  const [busy, setBusy] = useState(false)
   const items = typeof o.items === 'string' ? JSON.parse(o.items) : o.items || []
   const cust  = o.customer ? (typeof o.customer === 'string' ? JSON.parse(o.customer) : o.customer) : null
   const time  = new Date(o.created_at).toLocaleTimeString('lo-LA', { hour: '2-digit', minute: '2-digit' })
@@ -334,11 +360,19 @@ function OrderCard({ o, onDone, onCancel, menus, images }) {
 
         {/* Buttons */}
         <div className="grid grid-cols-2 gap-2 p-3 border-t flex-shrink-0" style={{ borderColor: 'var(--cream3)' }}>
-          <button onClick={() => onCancel(o)} className="py-3 rounded-xl text-sm font-black bg-red-50 text-red-600" style={{ border: '1.5px solid #fca5a5' }}>
+          <button
+            onClick={() => { if (busy) return; setBusy(true); onCancel(o) }}
+            disabled={busy}
+            className="py-4 rounded-xl text-sm font-black bg-red-50 text-red-600 disabled:opacity-40"
+            style={{ border: '1.5px solid #fca5a5', touchAction: 'manipulation' }}>
             ✕ ຍົກເລີກ
           </button>
-          <button onClick={() => onDone(o)} className="py-3 rounded-xl text-sm font-black bg-green-50 text-green-700" style={{ border: '1.5px solid #86efac' }}>
-            ✓ ສຳເລັດ
+          <button
+            onClick={() => { if (busy) return; setBusy(true); onDone(o) }}
+            disabled={busy}
+            className="py-4 rounded-xl text-sm font-black bg-green-50 text-green-700 disabled:opacity-40"
+            style={{ border: '1.5px solid #86efac', touchAction: 'manipulation' }}>
+            {busy ? '...' : '✓ ສຳເລັດ'}
           </button>
         </div>
       </div>
