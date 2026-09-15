@@ -61,7 +61,12 @@ export default function KitchenPage() {
     setOrders(prev => prev.filter(x => x.id !== o.id))
     const { error } = await supabase.from('orders')
       .update({ done: true, done_at: new Date().toISOString() }).eq('id', o.id)
-    if (error) { await loadOrders(); alert('ບັນທຶກບໍ່ສຳເລັດ: ' + error.message) }
+    if (error) { await loadOrders(); alert('ບັນທຶກບໍ່ສຳເລັດ: ' + error.message); return }
+    // Publish the number for the /queue board customers look at. Only the
+    // staff page did this, so with the kitchen screen doing the finishing the
+    // board never advanced — current_queue had never once been written.
+    await supabase.from('shop_config')
+      .upsert({ key: 'current_queue', value: String(o.qnum) }, { onConflict: 'key' })
   }
 
   async function markCancel(o) {
