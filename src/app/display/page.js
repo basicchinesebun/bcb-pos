@@ -141,12 +141,34 @@ export default function DisplayPage() {
               {pageMenus.map(({ m, i }) => {
                 const isOut = (stock[i] || 0) <= 0
                 return (
-                    <div key={i} className="rounded-xl overflow-hidden flex flex-col h-full" style={{ background: 'var(--warm-white)', opacity: isOut ? 0.45 : 1 }}>
+                    // Sold-out used to be signalled by fading the whole card to
+                    // 45%, which on a board read from across the room just made
+                    // it hard to see rather than obviously sold out. Mark it the
+                    // way /order and /preorder do instead: a dark wash over the
+                    // photo with ໝົດ across the middle, and leave the card at
+                    // full strength so the label itself stays legible.
+                    <div key={i} className="rounded-xl overflow-hidden flex flex-col h-full" style={{ background: 'var(--warm-white)' }}>
                       <div className="relative flex-1 min-h-0 w-full overflow-hidden flex items-center justify-center" style={{ background: 'var(--cream2)' }}>
                         {images[i] ? (
-                          <img src={images[i]} alt={m.lo} className="w-full h-full object-cover" loading="lazy" />
+                          <img src={images[i]} alt={m.lo} className="w-full h-full object-cover" loading="lazy" style={{ filter: isOut ? 'grayscale(1)' : 'none' }} />
                         ) : (
                           <span className="text-3xl">🥟</span>
+                        )}
+                        {isOut && (
+                          <div className="absolute inset-0 flex items-center justify-center" style={{ background: 'rgba(61,31,10,0.6)' }}>
+                            <span
+                              className="font-black rounded-lg"
+                              style={{
+                                background: 'rgba(185,28,28,0.95)',
+                                color: '#fff',
+                                fontSize: 'clamp(16px,2.2vw,34px)',
+                                padding: '0.18em 0.6em',
+                                letterSpacing: '0.04em',
+                              }}
+                            >
+                              ໝົດ
+                            </span>
+                          </div>
                         )}
                       </div>
                       <div className="px-2.5 py-1.5 flex-shrink-0 min-w-0">
