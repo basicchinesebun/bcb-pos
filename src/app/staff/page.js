@@ -186,13 +186,16 @@ export default function StaffPage() {
 
   // Ordering 80 of something meant 80 taps on "+". Holding a menu card opens
   // a keypad to type the quantity straight in instead.
-  function startQtyLongPress(i, isOut, bagIdx = null) {
+  // target says which screen opened it: 'qo' for Quick Order, 'edit' for the
+  // edit screen. Both grids behave the same way now, so the keypad has to
+  // write to whichever list is on screen.
+  function startQtyLongPress(i, isOut, bagIdx = null, target = 'qo') {
     if (isOut) return
     longPressFiredRef.current = false
     clearTimeout(longPressRef.current)
     longPressRef.current = setTimeout(() => {
       longPressFiredRef.current = true
-      setQtyModal({ idx: i, bag: bagIdx })
+      setQtyModal({ idx: i, bag: bagIdx, target })
       setQtyInput('')
     }, 450)
   }
@@ -427,6 +430,16 @@ export default function StaffPage() {
     setEditBagPacks(prev => {
       const a = prev.map(b => ({ ...b }))
       a[bagIdx] = { ...a[bagIdx], [menuIdx]: (a[bagIdx][menuIdx] || 0) + 1 }
+      return a
+    })
+  }
+
+  function editAddManyToBag(bagIdx, menuIdx, n) {
+    const add = Math.min(n, editBagRemaining(menuIdx))
+    if (add <= 0) return
+    setEditBagPacks(prev => {
+      const a = prev.map(b => ({ ...b }))
+      a[bagIdx] = { ...a[bagIdx], [menuIdx]: (a[bagIdx][menuIdx] || 0) + add }
       return a
     })
   }
@@ -4716,7 +4729,18 @@ export default function StaffPage() {
                 const left = stockArr[i] || 0
                 const img = images[i]
                 return (
-                  <div key={i} className={`rounded-2xl overflow-hidden border-2 transition-all ${qty > 0 ? 'border-[#3d1f0a]' : 'border-[#e8d5c0]'}`} style={{ background: 'var(--warm-white)' }}>
+                  <div key={i}
+                    onPointerDown={() => startQtyLongPress(i, isOut, null, 'edit')}
+                    onPointerUp={cancelQtyLongPress}
+                    onPointerLeave={cancelQtyLongPress}
+                    onPointerCancel={cancelQtyLongPress}
+                    onContextMenu={e => e.preventDefault()}
+                    onClick={() => {
+                      if (longPressFiredRef.current) { longPressFiredRef.current = false; return }
+                      if (!isOut && qty === 0) setEditItems(prev => ({ ...prev, [i]: 1 }))
+                    }}
+                    className={`rounded-2xl overflow-hidden border-2 transition-all cursor-pointer ${isOut ? 'opacity-50 border-[#e8d5c0]' : qty > 0 ? 'border-[#3d1f0a]' : 'border-[#e8d5c0]'}`}
+                    style={{ background: 'var(--warm-white)' }}>
                     <div className="aspect-square relative overflow-hidden" style={{ background: 'var(--cream2)' }}>
                       {img ? <img src={img} alt={m.lo} className="w-full h-full object-cover" loading="lazy" />
                         : <div className="absolute inset-0 flex items-center justify-center text-4xl">{EMOJIS[i] || '🍱'}</div>}
@@ -4728,7 +4752,9 @@ export default function StaffPage() {
                       <div className="text-xs font-bold mt-0.5" style={{ color: 'var(--gray3)' }}>{(prices[i] || 0).toLocaleString()} ກີບ</div>
                       {!isOut && <div className="text-xs font-bold mt-0.5" style={{ color: left <= 5 ? '#dc2626' : 'var(--gray3)' }}>ເຫຼືອ {left}{left <= 5 ? ' ⚠' : ''}</div>}
                     </div>
-                    <div className="flex items-center justify-between px-2 py-2 border-t border-[#e8d5c0]" style={{ background: 'var(--cream2)' }}>
+                    <div className="flex items-center justify-between px-2 py-2 border-t border-[#e8d5c0]" style={{ background: 'var(--cream2)' }}
+                      onPointerDown={e => e.stopPropagation()}
+                      onClick={e => e.stopPropagation()}>
                       <button
                         onClick={() => setEditItems(prev => { const n = { ...prev }; const next = Math.max(0, (n[i] || 0) - 1); if (next === 0) delete n[i]; else n[i] = next; return n })}
                         disabled={qty === 0}
@@ -4808,7 +4834,17 @@ export default function StaffPage() {
                       ))}
                       <div className="flex flex-wrap gap-1.5 pt-1">
                         {Object.keys(editItems).map(Number).filter(i => editBagRemaining(i) > 0).map(i => (
-                          <button key={i} onClick={() => editAddToBag(n, i)}
+                          <button key={i}
+                            onPointerDown={() => startQtyLongPress(i, false, n, 'edit')}
+                            onPointerUp={cancelQtyLongPress}
+                            onPointerLeave={cancelQtyLongPress}
+                            onPointerCancel={cancelQtyLongPress}
+                            onContextMenu={e => e.preventDefault()}
+                            onClick={() => {
+                              if (longPressFiredRef.current) { longPressFiredRef.current = false; return }
+                              editAddToBag(n, i)
+                            }}
+                            title="ແຕະໃສ່ 1 · ກົດຄ້າງເພື່ອພິມຈຳນວນ"
                             className="text-xs font-black px-2.5 py-1.5 rounded-lg border-2"
                             style={{ borderColor: 'var(--cream3)', background: 'var(--cream2)', color: 'var(--brown)' }}>
                             ＋ {menus[i]?.lo}
@@ -4969,13 +5005,30 @@ export default function StaffPage() {
         const intoBag = qtyModal.bag != null
         // Packing a bag adds to whatever is already in it, capped by what's
         // left to pack; on the menu grid it sets the line quantity outright.
-        const max = intoBag ? qoBagRemaining(i) : (stockShop[i] || 0)
+        const fromEdit = qtyModal.target === 'edit'
+        const editAvail = (() => {
+          if (!fromEdit || !editOrder) return 0
+          const arr = editOrder.type === 'online' ? stockOnline : stockShop
+          const old = typeof editOrder.items === 'string' ? JSON.parse(editOrder.items) : editOrder.items || []
+          return (arr[i] || 0) + (old.find(it => it.menuIdx === i)?.qty || 0)
+        })()
+        const max = intoBag
+          ? (fromEdit ? editBagRemaining(i) : qoBagRemaining(i))
+          : (fromEdit ? editAvail : (stockShop[i] || 0))
         const typed = Number(qtyInput) || 0
         const tooMany = typed > max
         const close = () => { setQtyModal(null); setQtyInput('') }
         const apply = () => {
           if (intoBag) {
-            qoAddManyToBag(qtyModal.bag, i, typed)
+            if (fromEdit) editAddManyToBag(qtyModal.bag, i, typed)
+            else qoAddManyToBag(qtyModal.bag, i, typed)
+          } else if (fromEdit) {
+            setEditItems(prev => {
+              const n = { ...prev }
+              if (typed <= 0) delete n[i]
+              else n[i] = Math.min(typed, max)
+              return n
+            })
           } else {
             setQoSelected(prev => {
               const n = { ...prev }
