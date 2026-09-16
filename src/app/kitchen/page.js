@@ -155,17 +155,12 @@ export default function KitchenPage() {
           </div>
         ) : (
           <div className="h-full flex gap-3 px-3 py-3"
-            // pan-x here and pan-y on each column tells the browser which
-            // gesture belongs to which container. Without that the mandatory
-            // snap grabbed vertical drags too, so scrolling down a card jumped
-            // sideways to another order instead. Proximity snapping also lets
-            // a drag settle where it was put rather than being yanked on.
-            style={{ overflowX: 'auto', overflowY: 'hidden', scrollSnapType: 'x proximity', WebkitOverflowScrolling: 'touch', touchAction: 'pan-x' }}>
+            style={{ overflowX: 'auto', overflowY: 'hidden', scrollSnapType: 'x mandatory', WebkitOverflowScrolling: 'touch' }}>
 
             {/* ── Pending section ── */}
             {pending.map((o, i) => (
               <div key={o.id} className="flex-shrink-0 flex flex-col"
-                style={{ width: CARD_W, scrollSnapAlign: 'start', overflowY: 'auto', height: '100%', touchAction: 'pan-y', overscrollBehavior: 'contain' }}>
+                style={{ width: CARD_W, scrollSnapAlign: 'start', overflowY: 'auto', height: '100%' }}>
                 {i === 0 && (
                   <div className="text-xs font-black tracking-widest uppercase mb-2 flex-shrink-0" style={{ color: '#92400e' }}>
                     ⏳ ລໍຖ້າຢືນຢັນ
@@ -185,7 +180,7 @@ export default function KitchenPage() {
             {/* ── Confirmed section ── */}
             {confirmed.map((o, i) => (
               <div key={o.id} className="flex-shrink-0 flex flex-col"
-                style={{ width: CARD_W, scrollSnapAlign: 'start', overflowY: 'auto', height: '100%', touchAction: 'pan-y', overscrollBehavior: 'contain' }}>
+                style={{ width: CARD_W, scrollSnapAlign: 'start', overflowY: 'auto', height: '100%' }}>
                 {i === 0 && (
                   <div className="text-xs font-black tracking-widest uppercase mb-2 flex-shrink-0" style={{ color: '#16a34a' }}>
                     🔥 ກຳລັງເຮັດ
