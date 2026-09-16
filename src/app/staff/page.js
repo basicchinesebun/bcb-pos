@@ -4689,7 +4689,10 @@ export default function StaffPage() {
             </div>
           </div>
           <div className="flex-1 overflow-y-auto p-4">
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+            {/* Same grid as Quick Order. At md:grid-cols-3 a 1920-wide till
+                showed three enormous cards and nothing else, so finding an
+                item meant scrolling past pictures the size of a hand. */}
+            <div className="grid grid-cols-2 md:grid-cols-5 xl:grid-cols-8 gap-3">
               {menus.map((m, i) => {
                 const qty = editItems[i] || 0
                 const stockArr = editOrder.type === 'online' ? stockOnline : stockShop
@@ -4805,6 +4808,7 @@ export default function StaffPage() {
             </div>
           </div>
           <div className="p-4 border-t-2 border-[#e8d5c0] flex-shrink-0" style={{ background: 'var(--warm-white)' }}>
+            <div className="max-w-2xl mx-auto w-full">
             <div className="flex justify-between mb-3 px-1">
               <span className="font-black" style={{ color: 'var(--brown)' }}>
                 {Object.values(editItems).reduce((s, q) => s + q, 0)} ກ້ອນ
@@ -4842,6 +4846,7 @@ export default function StaffPage() {
               {editSaving ? '...' : '✅ ບັນທຶກການແກ້ໄຂ'}
             </button>
             <button onClick={() => setEditOrder(null)} className="btn-outline mt-2 w-full py-3 text-sm">ຍົກເລີກ</button>
+            </div>
           </div>
         </div>
       )}
