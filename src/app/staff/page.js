@@ -4693,24 +4693,40 @@ export default function StaffPage() {
                 showed three enormous cards and nothing else, so finding an
                 item meant scrolling past pictures the size of a hand. */}
             <div className="grid grid-cols-2 md:grid-cols-5 xl:grid-cols-8 gap-3">
-              {menus.map((m, i) => {
-                const qty = editItems[i] || 0
+              {(() => {
                 const stockArr = editOrder.type === 'online' ? stockOnline : stockShop
                 const oldItems = typeof editOrder.items === 'string' ? JSON.parse(editOrder.items) : editOrder.items || []
-                const oldQty = oldItems.find(it => it.menuIdx === i)?.qty || 0
-                const available = (stockArr[i] || 0) + oldQty
+                const oldQtyOf = i => oldItems.find(it => it.menuIdx === i)?.qty || 0
+                const availOf = i => (stockArr[i] || 0) + oldQtyOf(i)
+                // Only what's actually on sale. The shop doesn't carry every
+                // menu every day, and an item with no stock can't be added
+                // here anyway — showing it just makes the list longer to read
+                // past. Anything already on this order stays, whatever its
+                // stock, so an edit can never hide what the customer ordered.
+                return menus
+                  .map((_, i) => i)
+                  .filter(i => availOf(i) > 0 || (editItems[i] || 0) > 0)
+                  .sort((a, b) => (availOf(a) === 0 ? 1 : 0) - (availOf(b) === 0 ? 1 : 0))
+                  .map(i => {
+                const m = menus[i]
+                const qty = editItems[i] || 0
+                const oldQty = oldQtyOf(i)
+                const available = availOf(i)
                 const isOut = available === 0
+                const left = stockArr[i] || 0
                 const img = images[i]
                 return (
                   <div key={i} className={`rounded-2xl overflow-hidden border-2 transition-all ${qty > 0 ? 'border-[#3d1f0a]' : 'border-[#e8d5c0]'}`} style={{ background: 'var(--warm-white)' }}>
                     <div className="aspect-square relative overflow-hidden" style={{ background: 'var(--cream2)' }}>
                       {img ? <img src={img} alt={m.lo} className="w-full h-full object-cover" loading="lazy" />
                         : <div className="absolute inset-0 flex items-center justify-center text-4xl">{EMOJIS[i] || '🍱'}</div>}
+                      {isOut && <div className="absolute inset-0 flex items-center justify-center" style={{ background: 'rgba(61,31,10,0.55)' }}><span className="text-white font-black text-sm px-2 py-1 rounded-lg" style={{ background: 'rgba(185,28,28,0.9)' }}>ໝົດ</span></div>}
                       {qty > 0 && <div className="absolute top-2 right-2 w-6 h-6 rounded-full flex items-center justify-center text-xs font-black" style={{ background: 'var(--brown)', color: 'var(--cream)' }}>{qty}</div>}
                     </div>
                     <div className="p-2">
                       <div className="text-sm font-black leading-tight" style={{ color: 'var(--brown)' }}>{m.lo}</div>
                       <div className="text-xs font-bold mt-0.5" style={{ color: 'var(--gray3)' }}>{(prices[i] || 0).toLocaleString()} ກີບ</div>
+                      {!isOut && <div className="text-xs font-bold mt-0.5" style={{ color: left <= 5 ? '#dc2626' : 'var(--gray3)' }}>ເຫຼືອ {left}{left <= 5 ? ' ⚠' : ''}</div>}
                     </div>
                     <div className="flex items-center justify-between px-2 py-2 border-t border-[#e8d5c0]" style={{ background: 'var(--cream2)' }}>
                       <button
@@ -4727,7 +4743,8 @@ export default function StaffPage() {
                     </div>
                   </div>
                 )
-              })}
+              })
+              })()}
             </div>
 
             {/* Bag packing. A customer often asks for the order to be split
