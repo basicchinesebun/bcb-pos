@@ -124,7 +124,20 @@ export default function DisplayPage() {
         {shopInfo.name}
       </div>
 
-      {!hasOrder ? (
+      {order.qrOnly && qrImage ? (
+        /* QR-only mode: staff put the payment code up on its own, with no
+           order attached, so someone can scan and pay without anything being
+           rung up first. Fills the screen — it is meant to be scanned from
+           across a counter. */
+        <div className="flex-1 flex flex-col items-center justify-center gap-5 min-h-0">
+          <div className="font-black tracking-widest uppercase flex-shrink-0"
+            style={{ fontSize: 'clamp(13px,1.6vw,20px)', letterSpacing: '0.2em', color: 'rgba(253,246,238,0.55)' }}>
+            ສະແກນເພື່ອຈ່າຍເງິນ · SCAN TO PAY
+          </div>
+          <img src={qrImage} alt="QR ຊຳລະເງິນ" className="rounded-2xl flex-shrink min-h-0"
+            style={{ height: 'min(62vh, 62vw)', width: 'auto', maxWidth: '90vw', objectFit: 'contain', background: '#fff', padding: 18 }} />
+        </div>
+      ) : !hasOrder ? (
         <div className="flex-1 overflow-hidden flex flex-col min-h-0">
           <div className="text-center font-black mb-2 flex-shrink-0" style={{ fontSize: 'clamp(13px,1.4vw,18px)', letterSpacing: '0.08em', textTransform: 'uppercase', color: 'rgba(253,246,238,0.55)' }}>
             ເມນູມື້ນີ້ · Today's Menu

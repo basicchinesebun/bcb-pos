@@ -29,6 +29,33 @@ function startOfDay(d) {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime()
 }
 
+// Turn a saved bag_label back into {menuIdx: qty} packs. Editing an order that
+// already had bags used to lose them entirely, because the label is only ever
+// written, never read back.
+function parseBagLabelToPacks(label, menus) {
+  if (!label) return [{}]
+  const packs = []
+  for (const part of String(label).split(' | ')) {
+    const colon = part.indexOf(': ')
+    if (colon < 0) continue
+    // Skip the "not bagged yet" group — those items are the remainder, and
+    // seeding them into a bag would silently mark them as packed.
+    if (!/\d/.test(part.slice(0, colon))) continue
+    const pack = {}
+    for (const entry of part.slice(colon + 2).split(', ')) {
+      const m = entry.match(/^(.+)\s×(\d+)$/)
+      if (!m) continue
+      const name = normName(m[1])
+      // x?.lo — a null or missing menu entry would otherwise throw and take
+      // the whole edit screen down.
+      const idx = menus.findIndex(x => normName(x?.lo || x) === name)
+      if (idx >= 0) pack[idx] = (pack[idx] || 0) + parseInt(m[2])
+    }
+    if (Object.keys(pack).length) packs.push(pack)
+  }
+  return packs.length ? packs : [{}]
+}
+
 function orderStamp(iso) {
   const d = new Date(iso)
   if (isNaN(d.getTime())) return '—'
@@ -133,6 +160,8 @@ export default function StaffPage() {
   const [labelFilter, setLabelFilter] = useState(null)
   const [payingId, setPayingId] = useState(null)
   const [editOrder, setEditOrder] = useState(null)
+  const [editBagPacks, setEditBagPacks] = useState([{}])
+  const [qrOnlyOn, setQrOnlyOn] = useState(false)
   const [editItems, setEditItems] = useState({})
   const [editSaving, setEditSaving] = useState(false)
   const [qoOpen, setQoOpen] = useState(false)
@@ -383,7 +412,33 @@ export default function StaffPage() {
     const itemMap = {}
     items.forEach(it => { if (it.qty > 0) itemMap[it.menuIdx] = it.qty })
     setEditItems(itemMap)
+    setEditBagPacks(parseBagLabelToPacks(o.bag_label, menus))
     setEditOrder(o)
+  }
+
+  // How many of this item are still unbagged, against what the order now says.
+  function editBagRemaining(menuIdx) {
+    const packed = editBagPacks.reduce((s, b) => s + (b[menuIdx] || 0), 0)
+    return Math.max(0, (editItems[menuIdx] || 0) - packed)
+  }
+
+  function editAddToBag(bagIdx, menuIdx) {
+    if (editBagRemaining(menuIdx) <= 0) return
+    setEditBagPacks(prev => {
+      const a = prev.map(b => ({ ...b }))
+      a[bagIdx] = { ...a[bagIdx], [menuIdx]: (a[bagIdx][menuIdx] || 0) + 1 }
+      return a
+    })
+  }
+
+  function editRemoveFromBag(bagIdx, menuIdx) {
+    setEditBagPacks(prev => {
+      const a = prev.map(b => ({ ...b }))
+      const cur = a[bagIdx][menuIdx] || 0
+      if (cur <= 1) delete a[bagIdx][menuIdx]
+      else a[bagIdx][menuIdx] = cur - 1
+      return a
+    })
   }
 
   async function saveEditOrder() {
@@ -404,9 +459,34 @@ export default function StaffPage() {
         const diff = (editItems[idx] || 0) - (oldMap[idx] || 0)
         stockArr[idx] = Math.max(0, (stockArr[idx] || 0) - diff)
       })
-      await supabase.from('orders').update({ items: JSON.stringify(newItems), total: newTotal }).eq('id', editOrder.id)
+      // Rebuild the packing label from the bags as edited, same rules as a new
+      // order: number after dropping the empties, and surface anything still
+      // unbagged rather than letting it vanish off the kitchen's list.
+      const bagTexts = editBagPacks
+        .map(b => Object.entries(b)
+          .filter(([idx, q]) => q > 0 && (editItems[idx] || 0) > 0)
+          .map(([idx, q]) => `${menus[+idx]?.lo || ''} ×${Math.min(q, editItems[idx])}`)
+          .join(', '))
+        .filter(Boolean)
+      const baggedCount = editBagPacks.reduce((acc, b) => {
+        Object.entries(b).forEach(([idx, q]) => { if (q > 0) acc[idx] = (acc[idx] || 0) + q })
+        return acc
+      }, {})
+      const leftover = Object.entries(editItems)
+        .map(([i, q]) => [i, q - (baggedCount[i] || 0)])
+        .filter(([, short]) => short > 0)
+        .map(([i, short]) => `${menus[+i]?.lo || ''} ×${short}`)
+        .join(', ')
+      const groups = bagTexts.map((t, i) => `ຖົງ ${i + 1}: ${t}`)
+      if (bagTexts.length && leftover) groups.push(`⚠️ ຍັງບໍ່ໄດ້ແຍກຖົງ: ${leftover}`)
+      const newBagLabel = groups.join(' | ') || null
+
+      await supabase.from('orders')
+        .update({ items: JSON.stringify(newItems), total: newTotal, bag_label: newBagLabel })
+        .eq('id', editOrder.id)
       await saveConfig(stockKey, stockArr)
-      setOrders(prev => prev.map(o => o.id === editOrder.id ? { ...o, items: JSON.stringify(newItems), total: newTotal } : o))
+      setOrders(prev => prev.map(o => o.id === editOrder.id
+        ? { ...o, items: JSON.stringify(newItems), total: newTotal, bag_label: newBagLabel } : o))
       logActivity('edit_order', `#${String(editOrder.qnum).padStart(4, '0')} → ${newTotal.toLocaleString()}`)
       setEditOrder(null)
       showToast(`✏️ #${String(editOrder.qnum).padStart(4, '0')} ແກ້ໄຂແລ້ວ`, 'green')
@@ -820,6 +900,9 @@ export default function StaffPage() {
   // a finished order.
   const displaySaveChainRef = useRef(Promise.resolve())
   function writeDisplay(payload) {
+    // Anything that puts a real order on the screen takes it out of QR-only
+    // mode, so the button can't sit lit while showing something else.
+    if (!payload?.qrOnly) setQrOnlyOn(false)
     displaySaveChainRef.current = displaySaveChainRef.current
       .then(() => saveConfig('display_order', { ...payload, updatedAt: Date.now() }))
       .catch(() => {})
@@ -2713,6 +2796,20 @@ export default function StaffPage() {
               )}
               <button onClick={kickDrawer} title="ເປີດລິ້ນຊັກ" className="text-xs font-black px-3 py-2 rounded-lg border border-[rgba(253,246,238,0.35)] text-[#fdf6ee]">🔓</button>
               <button onClick={printAlignmentTest} title="ພິມໄມ້ບັນທັດທົດສອບຕຳແໜ່ງ" className="text-xs font-black px-3 py-2 rounded-lg border border-[rgba(253,246,238,0.35)] text-[#fdf6ee]">📐</button>
+              {/* Put the payment QR up on its own. Until now the QR only
+                  appeared attached to an order, so there was no way to let
+                  someone scan and pay without ringing something up first. */}
+              <button
+                onClick={() => {
+                  if (qrOnlyOn) { clearDisplay(); setQrOnlyOn(false); showToast('ປິດ QR ແລ້ວ', 'orange'); return }
+                  writeDisplay({ items: [], total: 0, qrOnly: true })
+                  setQrOnlyOn(true)
+                  showToast('📱 ສະແດງ QR ຈ່າຍເງິນ', 'green')
+                }}
+                title="ສະແດງ QR ຈ່າຍເງິນຢ່າງດຽວຢູ່ຈໍລູກຄ້າ"
+                className={`text-xs font-black px-3 py-2 rounded-lg border ${qrOnlyOn ? 'border-green-400 text-green-300' : 'border-[rgba(253,246,238,0.35)] text-[#fdf6ee]'}`}>
+                {qrOnlyOn ? '📱 QR ✓' : '📱 QR'}
+              </button>
               <button
                 onClick={async () => {
                   // Deliberately does NOT forget the device. Forgetting drops
@@ -4628,6 +4725,83 @@ export default function StaffPage() {
                   </div>
                 )
               })}
+            </div>
+
+            {/* Bag packing. A customer often asks for the order to be split
+                into bags after it has already been rung up, and until now the
+                edit screen had no way to do it — the only route was cancelling
+                and re-entering the whole order. */}
+            <div className="mt-5">
+              <div className="flex items-center justify-between mb-2">
+                <div className="text-xs font-black uppercase tracking-widest" style={{ color: 'var(--brown3)' }}>🛍 ແຍກຖົງ</div>
+                <button
+                  onClick={() => setEditBagPacks(prev => [...prev, {}])}
+                  className="text-xs font-black px-3 py-1.5 rounded-lg border-2"
+                  style={{ borderColor: 'var(--brown)', color: 'var(--brown)', background: 'var(--warm-white)' }}>
+                  ＋ ເພີ່ມຖົງ
+                </button>
+              </div>
+
+              {(() => {
+                const unbagged = Object.keys(editItems)
+                  .map(Number)
+                  .filter(i => editBagRemaining(i) > 0)
+                return unbagged.length > 0 && (
+                  <div className="rounded-xl p-2.5 mb-2" style={{ background: '#fef3c7', border: '2px solid #f59e0b' }}>
+                    <div className="text-xs font-black mb-1" style={{ color: '#92400e' }}>ຍັງບໍ່ໄດ້ແຍກຖົງ — ແຕະເພື່ອໃສ່ຖົງລຸ່ມນີ້</div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {unbagged.map(i => (
+                        <span key={i} className="text-xs font-black px-2 py-1 rounded-lg"
+                          style={{ background: 'var(--warm-white)', color: 'var(--brown)', border: '1.5px solid #f59e0b' }}>
+                          {menus[i]?.lo} ×{editBagRemaining(i)}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )
+              })()}
+
+              <div className="flex flex-col gap-2">
+                {editBagPacks.map((bag, n) => (
+                  <div key={n} className="rounded-xl overflow-hidden flex-shrink-0" style={{ border: '2px solid var(--cream3)', background: 'var(--warm-white)' }}>
+                    <div className="flex items-center justify-between px-3 py-2" style={{ background: 'var(--brown)' }}>
+                      <span className="font-black text-sm" style={{ color: 'var(--cream)' }}>🛍 ຖົງ {n + 1}</span>
+                      {editBagPacks.length > 1 && (
+                        <button
+                          onClick={() => setEditBagPacks(prev => prev.filter((_, k) => k !== n))}
+                          className="text-xs font-black px-2 py-1 rounded"
+                          style={{ color: '#fca5a5' }}>✕ ລຶບຖົງ</button>
+                      )}
+                    </div>
+                    <div className="p-2 flex flex-col gap-1.5">
+                      {Object.entries(bag).filter(([, q]) => q > 0).map(([idx, q]) => (
+                        <div key={idx} className="flex items-center gap-2">
+                          <span className="flex-1 text-sm font-bold min-w-0" style={{ color: 'var(--brown)' }}>{menus[+idx]?.lo}</span>
+                          <button onClick={() => editRemoveFromBag(n, +idx)}
+                            className="w-8 h-8 rounded-full border-2 font-black"
+                            style={{ borderColor: 'var(--brown)', color: 'var(--brown)' }}>−</button>
+                          <span className="font-black w-6 text-center" style={{ color: 'var(--brown)' }}>{q}</span>
+                          <button onClick={() => editAddToBag(n, +idx)} disabled={editBagRemaining(+idx) <= 0}
+                            className="w-8 h-8 rounded-full border-2 font-black disabled:opacity-30"
+                            style={{ borderColor: 'var(--brown)', color: 'var(--brown)' }}>＋</button>
+                        </div>
+                      ))}
+                      <div className="flex flex-wrap gap-1.5 pt-1">
+                        {Object.keys(editItems).map(Number).filter(i => editBagRemaining(i) > 0).map(i => (
+                          <button key={i} onClick={() => editAddToBag(n, i)}
+                            className="text-xs font-black px-2.5 py-1.5 rounded-lg border-2"
+                            style={{ borderColor: 'var(--cream3)', background: 'var(--cream2)', color: 'var(--brown)' }}>
+                            ＋ {menus[i]?.lo}
+                          </button>
+                        ))}
+                      </div>
+                      {!Object.keys(bag).length && (
+                        <div className="text-xs font-bold text-center py-1" style={{ color: 'var(--gray3)' }}>ຖົງຫວ່າງ</div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
           <div className="p-4 border-t-2 border-[#e8d5c0] flex-shrink-0" style={{ background: 'var(--warm-white)' }}>
