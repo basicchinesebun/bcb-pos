@@ -548,6 +548,24 @@ export default function StaffPage() {
     })
   }
 
+  // The edit screen's version of the Quick Order shortcuts. Splitting a
+  // 20-piece order one piece per bag by hand is 20 taps; this is one.
+  function editHandleQuickBag(id) {
+    const sel = Object.entries(editItems).filter(([, q]) => q > 0)
+    if (!sel.length) { setEditBagPacks([{}]); return }
+    if (id === 'single') {
+      const bag = {}
+      sel.forEach(([idx, qty]) => { bag[idx] = qty })
+      setEditBagPacks([bag])
+    } else if (id === 'bytype') {
+      setEditBagPacks(sel.map(([idx, qty]) => ({ [idx]: qty })))
+    } else {
+      const packs = []
+      sel.forEach(([idx, qty]) => { for (let k = 0; k < qty; k++) packs.push({ [idx]: 1 }) })
+      setEditBagPacks(packs.length ? packs : [{}])
+    }
+  }
+
   function qoHandleQuickBag(id) {
     if (id === 'single') {
       const bag = {}; Object.entries(qoSelected).forEach(([idx, qty]) => { bag[idx] = qty }); setQoBagPacks([bag])
@@ -4860,6 +4878,23 @@ export default function StaffPage() {
                   style={{ borderColor: 'var(--brown)', color: 'var(--brown)', background: 'var(--warm-white)' }}>
                   ＋ ເພີ່ມຖົງ
                 </button>
+              </div>
+
+              {/* Shortcuts, same three as Quick Order. Splitting by hand is one
+                  tap per piece, which is the whole problem when someone asks
+                  for twenty buns in twenty bags. */}
+              <div className="flex gap-2 mb-2">
+                {[{ id: 'single', icon: '🛍', label: 'ຖົງດຽວ' },
+                  { id: 'bytype', icon: '🛍🛍', label: 'ແຍກເມນູ' },
+                  { id: 'each', icon: '🛍🛍🛍', label: 'ແຍກທຸກກ້ອນ' }].map(opt => (
+                  <button key={opt.id}
+                    onClick={() => editHandleQuickBag(opt.id)}
+                    className="flex-1 py-2 rounded-xl border-2 font-black text-xs"
+                    style={{ borderColor: 'var(--cream3)', background: 'var(--warm-white)', color: 'var(--brown)' }}>
+                    <div className="text-sm leading-none mb-0.5">{opt.icon}</div>
+                    {opt.label}
+                  </button>
+                ))}
               </div>
 
               {(() => {
