@@ -170,6 +170,10 @@ export default function StaffPage() {
   const [qoBagPacks, setQoBagPacks] = useState([{}])
   const [qoStep, setQoStep] = useState(1)
   const [qoQnum, setQoQnum] = useState(null)
+  // What the ticket screen shows after a sale: the lines, the total, and for
+  // a cash sale how much was handed over and what to give back.
+  const [qoTicket, setQoTicket] = useState(null)
+  const qoCashReceivedRef = useRef(0)
   const [qoSubmitting, setQoSubmitting] = useState(false)
   const [qoPackToast, setQoPackToast] = useState(null)
   const [qoName, setQoName] = useState('')
@@ -405,6 +409,7 @@ export default function StaffPage() {
 
   function resetQo() {
     setQoBagMode('items'); setQoSelected({}); setQoBagPacks([{}]); setQoStep(1); setQoQnum(null); setQoName('')
+    setQoTicket(null); qoCashReceivedRef.current = 0
     // Moving on to the next customer is what takes the finished order off the
     // customer screen — not the moment the sale was saved.
     clearDisplay()
@@ -604,6 +609,11 @@ export default function StaffPage() {
       })
       if (stockErr) showToast('⚠️ ຫັກສະຕັອກບໍ່ສຳເລັດ', 'orange')
       else if (newStock) setStockShop(newStock)
+      const received = paymentMethod === 'cash' ? qoCashReceivedRef.current : 0
+      setQoTicket({
+        items, total, method: paymentMethod,
+        received, change: received > 0 ? received - total : 0,
+      })
       setQoQnum(qnumData); setQoStep(3)
       showToast(`✅ ຄິວ ${String(qnumData).padStart(4, '0')} · ${paymentMethod === 'cash' ? '💵 ສດ' : '📱 ໂອນ'}`, 'green')
       // Deliberately NOT clearing the customer screen here. Saving the order
@@ -4322,6 +4332,26 @@ export default function StaffPage() {
           <div className="flex items-center gap-3 px-4 py-3 flex-shrink-0" style={{ background: 'var(--brown)' }}>
             <button onClick={() => { setQoOpen(false); resetQo() }} className="text-xl font-black w-8" style={{ color: 'var(--cream)' }}>✕</button>
             <div className="flex-1 font-serif font-black text-lg" style={{ color: 'var(--cream)' }}>🛒 ສັ່ງດ່ວນ</div>
+            {/* Quick Order covers the whole screen, so the header buttons are
+                out of reach while taking an order — the two that get wanted
+                mid-sale go here too. */}
+            <button
+              onClick={() => {
+                if (qrOnlyOn) { clearDisplay(); setQrOnlyOn(false); showToast('ປິດ QR ແລ້ວ', 'orange'); return }
+                writeDisplay({ items: [], total: 0, qrOnly: true })
+                setQrOnlyOn(true)
+                showToast('📱 ສະແດງ QR ຈ່າຍເງິນ', 'green')
+              }}
+              title="ສະແດງ QR ຈ່າຍເງິນຢູ່ຈໍລູກຄ້າ"
+              className={`text-xs font-black px-3 py-2 rounded-lg border flex-shrink-0 ${qrOnlyOn ? 'border-green-400 text-green-300' : 'border-[rgba(253,246,238,0.35)] text-[#fdf6ee]'}`}>
+              {qrOnlyOn ? '📱 QR ✓' : '📱 QR'}
+            </button>
+            <button
+              onClick={kickDrawer}
+              title="ເປີດລິ້ນຊັກ"
+              className="text-xs font-black px-3 py-2 rounded-lg border border-[rgba(253,246,238,0.35)] text-[#fdf6ee] flex-shrink-0">
+              🔓
+            </button>
             {qoStep < 3 && (
               <div className="flex gap-1 p-1 rounded-xl" style={{ background: 'rgba(253,246,238,0.15)' }}>
                 {[{ id: 'items', label: 'ເລືອກ' }, { id: 'bags', label: 'ຈັດຖົງ' }].map(m => (
@@ -4563,25 +4593,69 @@ export default function StaffPage() {
 
           {/* Step 3 — done */}
           {qoStep === 3 && qoQnum && (
-            <div className="flex-1 flex flex-col items-center justify-center p-6">
-              <div className="w-full max-w-sm rounded-2xl overflow-hidden border-2 border-[#3d1f0a] shadow-xl text-center">
-                <div className="py-5" style={{ background: 'var(--brown)' }}>
+            <div className="flex-1 overflow-y-auto flex flex-col items-center p-6">
+              <div className="w-full max-w-sm rounded-2xl overflow-hidden border-2 border-[#3d1f0a] shadow-xl">
+                <div className="py-3 text-center" style={{ background: 'var(--brown)' }}>
                   <div className="font-serif text-xl font-black" style={{ color: 'var(--cream)' }}>ສຳເລັດ ✅</div>
                 </div>
-                <div className="py-8 px-4" style={{ background: 'var(--warm-white)' }}>
+
+                {/* Change first and biggest. It's the one number that has to be
+                    right while the customer is still standing there, and it was
+                    only ever shown in the cash dialog that had already closed. */}
+                {qoTicket?.method === 'cash' && qoTicket.received > 0 && (
+                  <div className="px-4 py-4 text-center" style={{ background: '#dcfce7', borderBottom: '2px solid #86efac' }}>
+                    <div className="text-xs font-black tracking-widest uppercase" style={{ color: '#166534' }}>ເງິນທອນ · CHANGE</div>
+                    <div className="font-serif font-black leading-none mt-1" style={{ fontSize: 56, color: '#15803d' }}>
+                      {(qoTicket.change || 0).toLocaleString()}
+                    </div>
+                    <div className="text-xs font-bold mt-1" style={{ color: '#166534' }}>
+                      ຮັບມາ {qoTicket.received.toLocaleString()} · ຍອດ {qoTicket.total.toLocaleString()} ກີບ
+                    </div>
+                  </div>
+                )}
+
+                <div className="py-4 px-4 text-center" style={{ background: 'var(--warm-white)' }}>
                   <div className="text-xs font-black tracking-widest uppercase mb-1" style={{ color: 'var(--gray3)' }}>ເລກຄິວ · QUEUE</div>
-                  <div className="font-serif font-black leading-none" style={{ fontSize: 96, color: 'var(--brown)' }}>
+                  <div className="font-serif font-black leading-none" style={{ fontSize: 60, color: 'var(--brown)' }}>
                     {String(qoQnum).padStart(4, '0')}
                   </div>
                 </div>
+
+                {/* What they actually bought, so it can be read back at handover. */}
+                {qoTicket?.items?.length > 0 && (
+                  <div className="px-4 py-3" style={{ background: 'var(--cream2)', borderTop: '2px solid var(--cream3)' }}>
+                    {qoTicket.items.map((it, k) => (
+                      <div key={k} className="flex justify-between gap-2 py-1 text-sm">
+                        <span className="font-bold min-w-0" style={{ color: 'var(--brown)' }}>{it.name} ×{it.qty}</span>
+                        <span className="font-black flex-shrink-0" style={{ color: 'var(--brown2)' }}>{(it.sub || 0).toLocaleString()}</span>
+                      </div>
+                    ))}
+                    <div className="flex justify-between pt-2 mt-1 border-t-2 border-[#e8d5c0]">
+                      <span className="font-black text-sm" style={{ color: 'var(--brown)' }}>
+                        ລວມ · {qoTicket.method === 'cash' ? '💵 ສົດ' : '📱 ໂອນ'}
+                      </span>
+                      <span className="font-black text-sm" style={{ color: 'var(--brown)' }}>{qoTicket.total.toLocaleString()} ກີບ</span>
+                    </div>
+                  </div>
+                )}
               </div>
+
+              {/* A customer who said they'd transfer sometimes pays cash at the
+                  last moment, and by then the drawer has not been opened. */}
               <button
-                className="mt-6 w-full max-w-sm py-5 rounded-2xl font-black text-xl text-white active:scale-95 transition-all"
+                onClick={kickDrawer}
+                className="mt-3 w-full max-w-sm py-2.5 rounded-xl font-black text-sm border-2"
+                style={{ borderColor: 'var(--brown)', color: 'var(--brown)', background: 'var(--warm-white)' }}>
+                🔓 ເປີດລິ້ນຊັກ
+              </button>
+
+              <button
+                className="mt-3 w-full max-w-sm py-5 rounded-2xl font-black text-xl text-white active:scale-95 transition-all flex-shrink-0"
                 style={{ background: 'var(--brown)' }}
                 onClick={resetQo}>
                 🛒 ລູກຄ້າຕໍ່ໄປ
               </button>
-              <button className="btn-outline mt-2 w-full max-w-sm py-3" onClick={() => { setQoOpen(false); resetQo() }}>ປິດ</button>
+              <button className="btn-outline mt-2 w-full max-w-sm py-3 flex-shrink-0" onClick={() => { setQoOpen(false); resetQo() }}>ປິດ</button>
             </div>
           )}
         </div>
@@ -5187,6 +5261,9 @@ export default function StaffPage() {
                 </button>
                 <button
                   onClick={() => {
+                    // Keep the amount handed over — the ticket screen needs it
+                    // to show the change, and setCashReceived('') is next.
+                    qoCashReceivedRef.current = received
                     setCashModalOpen(false)
                     setCashReceived('')
                     // Cash sale: staff needs the drawer open either way — to
