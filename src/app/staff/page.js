@@ -162,6 +162,19 @@ export default function StaffPage() {
   const [editOrder, setEditOrder] = useState(null)
   const [editBagPacks, setEditBagPacks] = useState([{}])
   const [qrOnlyOn, setQrOnlyOn] = useState(false)
+  // Which till this browser is. Deliberately localStorage and not shop_config:
+  // shop_config is shared, so storing it there would make every device switch
+  // at once — the opposite of the point. 'main' drives the customer screen and
+  // the cash drawer; 'tablet' is a second person taking orders on an iPad with
+  // its own printer, and must not touch either.
+  const [stationMode, setStationMode] = useState('main')
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('bcb_station_mode')
+      if (saved === 'tablet' || saved === 'main') setStationMode(saved)
+    } catch { }
+  }, [])
+  const isTablet = stationMode === 'tablet'
   const [editItems, setEditItems] = useState({})
   const [editSaving, setEditSaving] = useState(false)
   const [qoOpen, setQoOpen] = useState(false)
@@ -664,7 +677,7 @@ export default function StaffPage() {
     setPayingId(null)
     showToast(`💰 #${String(o.qnum).padStart(4,'0')} ຮັບເງິນ + ສົ່ງຄົວແລ້ວ`, 'green')
     logActivity('mark_paid', `#${String(o.qnum).padStart(4, '0')} · ${method}`)
-    if (method === 'cash' && settings.autoKickDrawer !== false) kickDrawer()
+    if (method === 'cash' && settings.autoKickDrawer !== false) kickDrawer({ auto: true })
     if (shouldAutoprint(o)) setTimeout(() => smartPrint({ ...o, ...patch }), 300)
   }
 
@@ -941,6 +954,10 @@ export default function StaffPage() {
   // a finished order.
   const displaySaveChainRef = useRef(Promise.resolve())
   function writeDisplay(payload) {
+    // There is one customer screen and it is wired to the main till. If the
+    // tablet wrote to it as well the two would overwrite each other's carts
+    // mid-sale and the customer would watch someone else's order appear.
+    if (isTablet) return Promise.resolve()
     // Anything that puts a real order on the screen takes it out of QR-only
     // mode, so the button can't sit lit while showing something else.
     if (!payload?.qrOnly) setQrOnlyOn(false)
@@ -2143,7 +2160,12 @@ export default function StaffPage() {
     new Uint8Array([0x10, 0x14, 0x01, 0x01, 0x02]), // DLE DC4 real-time, pin 5
   ]
 
-  async function kickDrawer() {
+  async function kickDrawer({ auto = false } = {}) {
+    // The drawer is plugged into the main till's printer. Firing it
+    // automatically from the tablet would pop a drawer the tablet operator
+    // isn't standing at; pressing 🔓 by hand still works, in case a drawer
+    // gets attached to this station later.
+    if (auto && isTablet) return
     const send = async (write) => {
       for (const pulse of DRAWER_PULSES) {
         await write(pulse)
@@ -2824,6 +2846,26 @@ export default function StaffPage() {
               </div>
             </div>
             <div className="flex gap-2">
+              {/* Which till this device is. A second person takes orders on an
+                  iPad with its own printer, and that station must not drive the
+                  customer screen or the cash drawer — both live at the main
+                  till. Stored per device, so switching here changes only this
+                  browser and never the other station. */}
+              <button
+                onClick={() => {
+                  const next = isTablet ? 'main' : 'tablet'
+                  setStationMode(next)
+                  try { localStorage.setItem('bcb_station_mode', next) } catch { }
+                  showToast(next === 'tablet'
+                    ? '📱 ໂໝດແທັບເລັດ · ບໍ່ຄວບຄຸມຈໍລູກຄ້າ ແລະ ລິ້ນຊັກ'
+                    : '🖥 ໂໝດເຄື່ອງຫຼັກ · ຄວບຄຸມຈໍລູກຄ້າ + ລິ້ນຊັກ', 'blue')
+                }}
+                title={isTablet
+                  ? 'ສະຖານີທີ 2 (ແທັບເລັດ) — ພິມໃບເສດຢ່າງດຽວ'
+                  : 'ເຄື່ອງຫຼັກ — ຄວບຄຸມຈໍລູກຄ້າ ແລະ ລິ້ນຊັກ'}
+                className={`text-xs font-black px-3 py-2 rounded-lg border ${isTablet ? 'border-amber-400 text-amber-300' : 'border-[rgba(253,246,238,0.35)] text-[#fdf6ee]'}`}>
+                {isTablet ? '📱 Tablet' : '🖥 ຫຼັກ'}
+              </button>
               <button onClick={() => connectUsbPrinter()} className={`text-xs font-black px-3 py-2 rounded-lg border ${usbConnected ? 'border-green-400 text-green-300' : 'border-[rgba(253,246,238,0.35)] text-[#fdf6ee]'}`}>
                 {usbConnected ? '🖨 USB ✓' : 'USB'}
               </button>
@@ -2835,12 +2877,13 @@ export default function StaffPage() {
                   {serialConnected ? '🖨 COM ✓' : 'COM'}
                 </button>
               )}
-              <button onClick={kickDrawer} title="ເປີດລິ້ນຊັກ" className="text-xs font-black px-3 py-2 rounded-lg border border-[rgba(253,246,238,0.35)] text-[#fdf6ee]">🔓</button>
+              <button onClick={() => kickDrawer()} title="ເປີດລິ້ນຊັກ" className="text-xs font-black px-3 py-2 rounded-lg border border-[rgba(253,246,238,0.35)] text-[#fdf6ee]">🔓</button>
               <button onClick={printAlignmentTest} title="ພິມໄມ້ບັນທັດທົດສອບຕຳແໜ່ງ" className="text-xs font-black px-3 py-2 rounded-lg border border-[rgba(253,246,238,0.35)] text-[#fdf6ee]">📐</button>
               {/* Put the payment QR up on its own. Until now the QR only
                   appeared attached to an order, so there was no way to let
-                  someone scan and pay without ringing something up first. */}
-              <button
+                  someone scan and pay without ringing something up first.
+                  Hidden on the tablet, which doesn't drive that screen. */}
+              {!isTablet && <button
                 onClick={() => {
                   if (qrOnlyOn) { clearDisplay(); setQrOnlyOn(false); showToast('ປິດ QR ແລ້ວ', 'orange'); return }
                   writeDisplay({ items: [], total: 0, qrOnly: true })
@@ -2850,7 +2893,7 @@ export default function StaffPage() {
                 title="ສະແດງ QR ຈ່າຍເງິນຢ່າງດຽວຢູ່ຈໍລູກຄ້າ"
                 className={`text-xs font-black px-3 py-2 rounded-lg border ${qrOnlyOn ? 'border-green-400 text-green-300' : 'border-[rgba(253,246,238,0.35)] text-[#fdf6ee]'}`}>
                 {qrOnlyOn ? '📱 QR ✓' : '📱 QR'}
-              </button>
+              </button>}
               <button
                 onClick={async () => {
                   // Deliberately does NOT forget the device. Forgetting drops
@@ -4352,8 +4395,8 @@ export default function StaffPage() {
             <div className="flex-1 font-serif font-black text-lg" style={{ color: 'var(--cream)' }}>🛒 ສັ່ງດ່ວນ</div>
             {/* Quick Order covers the whole screen, so the header buttons are
                 out of reach while taking an order — the two that get wanted
-                mid-sale go here too. */}
-            <button
+                mid-sale go here too. The QR one is main-till only. */}
+            {!isTablet && <button
               onClick={() => {
                 if (qrOnlyOn) { clearDisplay(); setQrOnlyOn(false); showToast('ປິດ QR ແລ້ວ', 'orange'); return }
                 writeDisplay({ items: [], total: 0, qrOnly: true })
@@ -4363,9 +4406,9 @@ export default function StaffPage() {
               title="ສະແດງ QR ຈ່າຍເງິນຢູ່ຈໍລູກຄ້າ"
               className={`text-xs font-black px-3 py-2 rounded-lg border flex-shrink-0 ${qrOnlyOn ? 'border-green-400 text-green-300' : 'border-[rgba(253,246,238,0.35)] text-[#fdf6ee]'}`}>
               {qrOnlyOn ? '📱 QR ✓' : '📱 QR'}
-            </button>
+            </button>}
             <button
-              onClick={kickDrawer}
+              onClick={() => kickDrawer()}
               title="ເປີດລິ້ນຊັກ"
               className="text-xs font-black px-3 py-2 rounded-lg border border-[rgba(253,246,238,0.35)] text-[#fdf6ee] flex-shrink-0">
               🔓
@@ -4661,7 +4704,7 @@ export default function StaffPage() {
               {/* A customer who said they'd transfer sometimes pays cash at the
                   last moment, and by then the drawer has not been opened. */}
               <button
-                onClick={kickDrawer}
+                onClick={() => kickDrawer()}
                 className="mt-3 w-full max-w-sm py-2.5 rounded-xl font-black text-sm border-2"
                 style={{ borderColor: 'var(--brown)', color: 'var(--brown)', background: 'var(--warm-white)' }}>
                 🔓 ເປີດລິ້ນຊັກ
@@ -5303,7 +5346,7 @@ export default function StaffPage() {
                     setCashReceived('')
                     // Cash sale: staff needs the drawer open either way — to
                     // drop the note in, and to pull the change out.
-                    if (settings.autoKickDrawer !== false) kickDrawer()
+                    if (settings.autoKickDrawer !== false) kickDrawer({ auto: true })
                     submitQuickOrder('cash')
                   }}
                   disabled={!enough || qoSubmitting}
