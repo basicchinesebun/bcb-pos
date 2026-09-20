@@ -2947,7 +2947,6 @@ export default function StaffPage() {
                 </button>
               )}
               <button onClick={() => kickDrawer()} title="ເປີດລິ້ນຊັກ" className="text-xs font-black px-3 py-2 rounded-lg border border-[rgba(253,246,238,0.35)] text-[#fdf6ee]">🔓</button>
-              <button onClick={printAlignmentTest} title="ພິມໄມ້ບັນທັດທົດສອບຕຳແໜ່ງ" className="text-xs font-black px-3 py-2 rounded-lg border border-[rgba(253,246,238,0.35)] text-[#fdf6ee]">📐</button>
               {/* Put the payment QR up on its own. Until now the QR only
                   appeared attached to an order, so there was no way to let
                   someone scan and pay without ringing something up first.
