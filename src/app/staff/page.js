@@ -1615,6 +1615,20 @@ export default function StaffPage() {
   const usbDeviceRef = useRef(null)
   const [usbConnected, setUsbConnected] = useState(false)
   const hasUsb = typeof navigator !== 'undefined' && 'usb' in navigator
+  // /staff is prerendered at build time, where there is no navigator at all.
+  // Deciding what to *render* from that check hid the USB and BT buttons in
+  // the shipped HTML — including on the main till, which then had no way to
+  // connect its printer. Start by assuming both work, which is what the page
+  // always did, and only take them away once the browser has actually said it
+  // can't do them.
+  const [caps, setCaps] = useState({ usb: true, bt: true, ready: false })
+  useEffect(() => {
+    setCaps({
+      usb: typeof navigator !== 'undefined' && 'usb' in navigator,
+      bt: typeof navigator !== 'undefined' && 'bluetooth' in navigator,
+      ready: true,
+    })
+  }, [])
 
   // Belt and braces on top of claiming only while sending: if the page is
   // hidden mid-print, hand the interface straight back.
@@ -2924,17 +2938,17 @@ export default function StaffPage() {
                   silently does nothing is what cost days on the main till's
                   printer; better that it isn't there, with a line saying where
                   receipts will come out instead. */}
-              {hasUsb && (
+              {caps.usb && (
                 <button onClick={() => connectUsbPrinter()} className={`text-xs font-black px-3 py-2 rounded-lg border ${usbConnected ? 'border-green-400 text-green-300' : 'border-[rgba(253,246,238,0.35)] text-[#fdf6ee]'}`}>
                   {usbConnected ? '🖨 USB ✓' : 'USB'}
                 </button>
               )}
-              {hasBluetooth && (
+              {caps.bt && (
                 <button onClick={connectPrinter} className={`text-xs font-black px-3 py-2 rounded-lg border ${btConnected ? 'border-green-400 text-green-300' : 'border-[rgba(253,246,238,0.35)] text-[#fdf6ee]'}`}>
                   {btConnected ? '🖨 BT ✓' : 'BT'}
                 </button>
               )}
-              {!hasUsb && !hasBluetooth && (
+              {caps.ready && !caps.usb && !caps.bt && (
                 <span
                   title="ເບຣົາເຊີນີ້ຕໍ່ເຄື່ອງພິມໂດຍກົງບໍ່ໄດ້ (iPad/iPhone) — ກົດພິມຈະເປີດໜ້າຕ່າງພິມຂອງເບຣົາເຊີແທນ"
                   className="text-xs font-black px-3 py-2 rounded-lg border border-[rgba(253,246,238,0.25)] text-[rgba(253,246,238,0.6)]">
@@ -2965,7 +2979,7 @@ export default function StaffPage() {
               {/* Recovers a stuck USB printer, so it belongs with the USB
                   button — on a device with no WebUSB there is nothing for it
                   to recover. Missed when USB and BT were gated. */}
-              {hasUsb && <button
+              {caps.usb && <button
                 onClick={async () => {
                   // Deliberately does NOT forget the device. Forgetting drops
                   // the permission, which forces Chrome's chooser to open —
