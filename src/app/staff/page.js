@@ -2880,12 +2880,30 @@ export default function StaffPage() {
                 className={`text-xs font-black px-3 py-2 rounded-lg border ${isTablet ? 'border-amber-400 text-amber-300' : 'border-[rgba(253,246,238,0.35)] text-[#fdf6ee]'}`}>
                 {isTablet ? '📱 Tablet' : '🖥 ຫຼັກ'}
               </button>
-              <button onClick={() => connectUsbPrinter()} className={`text-xs font-black px-3 py-2 rounded-lg border ${usbConnected ? 'border-green-400 text-green-300' : 'border-[rgba(253,246,238,0.35)] text-[#fdf6ee]'}`}>
-                {usbConnected ? '🖨 USB ✓' : 'USB'}
-              </button>
-              <button onClick={connectPrinter} className={`text-xs font-black px-3 py-2 rounded-lg border ${btConnected ? 'border-green-400 text-green-300' : 'border-[rgba(253,246,238,0.35)] text-[#fdf6ee]'}`}>
-                {btConnected ? '🖨 BT ✓' : 'BT'}
-              </button>
+              {/* Only offer the connections this browser can actually make.
+                  On an iPad neither exists — Safari has no WebUSB or Web
+                  Bluetooth, and every browser there is Safari underneath — so
+                  these buttons did nothing at all when pressed. A button that
+                  silently does nothing is what cost days on the main till's
+                  printer; better that it isn't there, with a line saying where
+                  receipts will come out instead. */}
+              {hasUsb && (
+                <button onClick={() => connectUsbPrinter()} className={`text-xs font-black px-3 py-2 rounded-lg border ${usbConnected ? 'border-green-400 text-green-300' : 'border-[rgba(253,246,238,0.35)] text-[#fdf6ee]'}`}>
+                  {usbConnected ? '🖨 USB ✓' : 'USB'}
+                </button>
+              )}
+              {hasBluetooth && (
+                <button onClick={connectPrinter} className={`text-xs font-black px-3 py-2 rounded-lg border ${btConnected ? 'border-green-400 text-green-300' : 'border-[rgba(253,246,238,0.35)] text-[#fdf6ee]'}`}>
+                  {btConnected ? '🖨 BT ✓' : 'BT'}
+                </button>
+              )}
+              {!hasUsb && !hasBluetooth && (
+                <span
+                  title="ເບຣົາເຊີນີ້ຕໍ່ເຄື່ອງພິມໂດຍກົງບໍ່ໄດ້ (iPad/iPhone) — ກົດພິມຈະເປີດໜ້າຕ່າງພິມຂອງເບຣົາເຊີແທນ"
+                  className="text-xs font-black px-3 py-2 rounded-lg border border-[rgba(253,246,238,0.25)] text-[rgba(253,246,238,0.6)]">
+                  🖨 ຜ່ານເບຣົາເຊີ
+                </span>
+              )}
               {hasSerial && (
                 <button onClick={connectSerialPrinter} title="ສຳລັບເຄື່ອງພິມທີ່ pair ແບບ Bluetooth ທຳມະດາ (COM port)" className={`text-xs font-black px-3 py-2 rounded-lg border ${serialConnected ? 'border-green-400 text-green-300' : 'border-[rgba(253,246,238,0.35)] text-[#fdf6ee]'}`}>
                   {serialConnected ? '🖨 COM ✓' : 'COM'}
