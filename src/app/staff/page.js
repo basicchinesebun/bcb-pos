@@ -2962,7 +2962,10 @@ export default function StaffPage() {
                 className={`text-xs font-black px-3 py-2 rounded-lg border ${qrOnlyOn ? 'border-green-400 text-green-300' : 'border-[rgba(253,246,238,0.35)] text-[#fdf6ee]'}`}>
                 {qrOnlyOn ? '📱 QR ✓' : '📱 QR'}
               </button>}
-              <button
+              {/* Recovers a stuck USB printer, so it belongs with the USB
+                  button — on a device with no WebUSB there is nothing for it
+                  to recover. Missed when USB and BT were gated. */}
+              {hasUsb && <button
                 onClick={async () => {
                   // Deliberately does NOT forget the device. Forgetting drops
                   // the permission, which forces Chrome's chooser to open —
@@ -2982,7 +2985,7 @@ export default function StaffPage() {
                   }
                 }}
                 title="ລ້າງ USB ທີ່ຄ້າງ ແລ້ວເຊື່ອມໃໝ່"
-                className="text-xs font-black px-3 py-2 rounded-lg border border-[rgba(253,246,238,0.35)] text-[#fdf6ee]">🔄USB</button>
+                className="text-xs font-black px-3 py-2 rounded-lg border border-[rgba(253,246,238,0.35)] text-[#fdf6ee]">🔄USB</button>}
               <button onClick={() => alert('ຕ້ອງຊອກຫາ ↺ Reset ໃນລາຍການ')} className="text-xs font-black px-3 py-2 rounded-lg border border-red-400 text-red-300">↺</button>
               <button onClick={() => setHeaderCollapsed(true)} title="ເຊື່ອງແຖບເທິງ" className="text-xs font-black px-3 py-2 rounded-lg border border-[rgba(253,246,238,0.35)] text-[#fdf6ee]">▲</button>
             </div>
