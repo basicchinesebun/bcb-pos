@@ -169,6 +169,20 @@ export default function StaffPage() {
   // its own printer, and must not touch either.
   const [stationMode, setStationMode] = useState('main')
   useEffect(() => {
+    // ?tablet=1 wins over whatever is stored, so the iPad can be given a
+    // bookmark that always lands in tablet mode — nobody has to remember to
+    // press the button, and the setting sticks for plain visits afterwards.
+    let fromUrl = null
+    try {
+      const q = new URLSearchParams(window.location.search).get('tablet')
+      if (q === '1' || q === 'true') fromUrl = 'tablet'
+      else if (q === '0' || q === 'false') fromUrl = 'main'
+    } catch { }
+    if (fromUrl) {
+      setStationMode(fromUrl)
+      try { localStorage.setItem('bcb_station_mode', fromUrl) } catch { }
+      return
+    }
     try {
       const saved = localStorage.getItem('bcb_station_mode')
       if (saved === 'tablet' || saved === 'main') setStationMode(saved)
