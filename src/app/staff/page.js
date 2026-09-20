@@ -498,11 +498,17 @@ export default function StaffPage() {
       if (newItems.length === 0) { alert('ຕ້ອງມີສິນຄ້າຢ່າງໜ້ອຍ 1 ລາຍການ'); setEditSaving(false); return }
       const newTotal = newItems.reduce((s, it) => s + it.sub, 0)
       const stockKey = editOrder.type === 'online' ? 'stock_online' : 'stock_shop'
-      const stockArr = editOrder.type === 'online' ? [...stockOnline] : [...stockShop]
-      const allIdxes = new Set([...Object.keys(oldMap), ...Object.keys(editItems)].map(Number))
-      allIdxes.forEach(idx => {
+      // Send only what changed, and let the database do the arithmetic. This
+      // used to copy the whole stock array out of local state, apply the
+      // deltas and write the array back — which silently threw away anything
+      // another till had sold since this page last loaded. With a second
+      // station that stops being theoretical. deduct_stock takes a row lock
+      // and applies the deltas; a negative one hands stock back, which is what
+      // removing an item from an order should do.
+      const stockDeltas = {}
+      new Set([...Object.keys(oldMap), ...Object.keys(editItems)].map(Number)).forEach(idx => {
         const diff = (editItems[idx] || 0) - (oldMap[idx] || 0)
-        stockArr[idx] = Math.max(0, (stockArr[idx] || 0) - diff)
+        if (diff !== 0) stockDeltas[idx] = diff
       })
       // Rebuild the packing label from the bags as edited, same rules as a new
       // order: number after dropping the empties, and surface anything still
@@ -529,7 +535,15 @@ export default function StaffPage() {
       await supabase.from('orders')
         .update({ items: JSON.stringify(newItems), total: newTotal, bag_label: newBagLabel })
         .eq('id', editOrder.id)
-      await saveConfig(stockKey, stockArr)
+      if (Object.keys(stockDeltas).length) {
+        const { data: newStock, error: stockErr } = await supabase.rpc('deduct_stock', {
+          p_key: stockKey, p_deltas: stockDeltas,
+        })
+        if (stockErr) showToast('⚠️ ຫັກສະຕັອກບໍ່ສຳເລັດ', 'orange')
+        else if (newStock) {
+          if (editOrder.type === 'online') setStockOnline(newStock); else setStockShop(newStock)
+        }
+      }
       setOrders(prev => prev.map(o => o.id === editOrder.id
         ? { ...o, items: JSON.stringify(newItems), total: newTotal, bag_label: newBagLabel } : o))
       logActivity('edit_order', `#${String(editOrder.qnum).padStart(4, '0')} → ${newTotal.toLocaleString()}`)
