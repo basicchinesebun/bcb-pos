@@ -2243,19 +2243,42 @@ export default function StaffPage() {
   }
 
   // ─── Stock ───
+  // Remember which boxes were actually typed into. Saving used to write all
+  // three arrays back wholesale from this device's copy, so two people with the
+  // stock panel open would have the second save overwrite the first — and any
+  // sale that landed in between was undone along with it.
+  const stockDirtyRef = useRef({ total: new Set(), shop: new Set(), online: new Set() })
+
   function updateStock(type, i, val) {
     const n = Math.max(0, parseInt(val) || 0)
+    stockDirtyRef.current[type].add(i)
     if (type === 'total') setStockTotal(prev => { const arr = [...prev]; arr[i] = n; return arr })
     else if (type === 'shop') setStockShop(prev => { const arr = [...prev]; arr[i] = n; return arr })
     else setStockOnline(prev => { const arr = [...prev]; arr[i] = n; return arr })
   }
 
   async function saveStock() {
-    await Promise.all([
-      saveConfig('stock_total', stockTotal),
-      saveConfig('stock_shop', stockShop),
-      saveConfig('stock_online', stockOnline),
-    ])
+    const dirty = stockDirtyRef.current
+    const plan = [
+      ['stock_total', dirty.total, stockTotal, setStockTotal],
+      ['stock_shop', dirty.shop, stockShop, setStockShop],
+      ['stock_online', dirty.online, stockOnline, setStockOnline],
+    ].filter(([, set]) => set.size > 0)
+
+    if (!plan.length) { showToast('ບໍ່ມີການປ່ຽນແປງ', 'blue'); return }
+
+    let failed = false
+    for (const [key, set, arr, setter] of plan) {
+      const values = {}
+      set.forEach(i => { values[i] = arr[i] || 0 })
+      const { data, error } = await supabase.rpc('set_stock', { p_key: key, p_values: values })
+      if (error) { failed = true; continue }
+      // Take back what the database actually holds now, so the boxes show the
+      // other till's sales rather than this device's stale copy.
+      if (data) setter(data)
+    }
+    if (failed) { showToast('⚠️ ບັນທຶກສະຕ໋ອກບໍ່ສຳເລັດ', 'red'); return }
+    stockDirtyRef.current = { total: new Set(), shop: new Set(), online: new Set() }
     logActivity('save_stock', '')
     showToast('ບັນທຶກສະຕ໋ອກ ✅', 'green')
   }
