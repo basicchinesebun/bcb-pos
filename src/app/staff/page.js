@@ -4502,7 +4502,15 @@ export default function StaffPage() {
               <div className="flex gap-1 p-1 rounded-xl" style={{ background: 'rgba(253,246,238,0.15)' }}>
                 {[{ id: 'items', label: 'ເລືອກ' }, { id: 'bags', label: 'ຈັດຖົງ' }].map(m => (
                   <button key={m.id}
-                    onClick={() => { setQoBagMode(m.id); if (m.id === 'bags') { setQoSelected({}); setQoBagPacks([{}]) } setQoStep(1) }}
+                    onClick={() => {
+                      setQoBagMode(m.id)
+                      if (m.id === 'bags') { setQoSelected({}); setQoBagPacks([{}]) }
+                      // Straight into packing. Choosing ຈັດຖົງ landed on a page
+                      // that only explained what the mode was and offered a
+                      // button to continue, so the mode read as missing — you
+                      // tapped it and got an empty screen instead of a bag.
+                      setQoStep(m.id === 'bags' ? 2 : 1)
+                    }}
                     className="px-3 py-1 rounded-lg text-xs font-black transition-all"
                     style={{ background: qoBagMode === m.id ? 'var(--cream)' : 'transparent', color: qoBagMode === m.id ? 'var(--brown)' : 'rgba(253,246,238,0.6)' }}>
                     {m.label}
