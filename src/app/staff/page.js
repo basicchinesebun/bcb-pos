@@ -243,6 +243,10 @@ export default function StaffPage() {
   const [doneBatchSelected, setDoneBatchSelected] = useState(new Set())
   const [doneRangeFrom, setDoneRangeFrom] = useState('')
   const [doneRangeTo, setDoneRangeTo] = useState('')
+  // Walk-in and preorder finish off the same trays, so they share one screen —
+  // but marking a preorder done that hasn't been made yet is a real mistake to
+  // make, so the list can be narrowed to one kind before selecting.
+  const [doneBatchKind, setDoneBatchKind] = useState('all')
   const [selectedSlipIds, setSelectedSlipIds] = useState(new Set())
   const [deletingSlips, setDeletingSlips] = useState(false)
   const [blockedIps, setBlockedIps] = useState([])
@@ -3768,7 +3772,7 @@ export default function StaffPage() {
                     ).length
                     return openCount > 0 ? (
                       <button
-                        onClick={() => { setDoneBatchOpen(true); setDoneBatchSelected(new Set()); setDoneRangeFrom(''); setDoneRangeTo('') }}
+                        onClick={() => { setDoneBatchOpen(true); setDoneBatchSelected(new Set()); setDoneRangeFrom(''); setDoneRangeTo(''); setDoneBatchKind('all') }}
                         className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-black active:scale-95 transition-all"
                         style={{ background: 'var(--brown)', color: 'var(--cream)' }}
                       >
@@ -4865,6 +4869,7 @@ export default function StaffPage() {
       {doneBatchOpen && (() => {
         const open = orders
           .filter(o => !o.done && !o.cancelled && o.status === 'confirmed')
+          .filter(o => doneBatchKind === 'all' || o.type === doneBatchKind)
           .sort((a, b) => (a.qnum || 0) - (b.qnum || 0))
         const allSelected = open.length > 0 && open.every(o => doneBatchSelected.has(o.id))
         const applyRange = () => {
@@ -4892,6 +4897,18 @@ export default function StaffPage() {
             {/* Pick a run of queue numbers — the usual case is "everything up
                 to the number we just finished". */}
             <div className="px-4 py-3 flex-shrink-0 border-b-2 border-[#e8d5c0]" style={{ background: 'var(--warm-white)' }}>
+              <div className="flex gap-2 mb-3">
+                {[['all', 'ທັງໝົດ'], ['walkin', '🏪 Walk-in'], ['online', '🌐 Online']].map(([k, l]) => {
+                  const n = orders.filter(o => !o.done && !o.cancelled && o.status === 'confirmed' && (k === 'all' || o.type === k)).length
+                  return (
+                    <button key={k}
+                      onClick={() => { setDoneBatchKind(k); setDoneBatchSelected(new Set()) }}
+                      className={`flex-1 py-2 rounded-xl text-xs font-black border-2 ${doneBatchKind === k ? 'bg-[#3d1f0a] text-[#fdf6ee] border-[#3d1f0a]' : 'border-[#e8d5c0] text-[#8a6a55]'}`}>
+                      {l} ({n})
+                    </button>
+                  )
+                })}
+              </div>
               <div className="text-xs font-black uppercase tracking-widest mb-2" style={{ color: 'var(--brown3)' }}>ເລືອກຕາມຊ່ວງຄິວ</div>
               <div className="flex items-center gap-2">
                 <input type="text" inputMode="numeric" value={doneRangeFrom}
