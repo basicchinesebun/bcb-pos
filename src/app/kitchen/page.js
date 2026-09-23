@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../../lib/supabase'
 
 const EMOJIS = ['🥟','🍫','🍵','🧁','🍞','🥐','🍮']
@@ -25,12 +25,25 @@ export default function KitchenPage() {
     // minute before noticing a new order. Poll often enough that nobody is
     // left waiting on it, and refetch whenever the screen is looked at again.
     const fallback = setInterval(loadOrders, 10000)
-    const onVisible = () => { if (document.visibilityState === 'visible') loadOrders() }
+    // Keep retrying the menu until it lands, then just keep it fresh. It is a
+    // handful of rows, so the cost of asking again is nothing next to a
+    // kitchen packing from a board with no pictures on it.
+    const configRetry = setInterval(() => {
+      if (!configOkRef.current) loadConfig()
+    }, 5000)
+    const configRefresh = setInterval(loadConfig, 300000)
+    const onVisible = () => {
+      if (document.visibilityState !== 'visible') return
+      loadOrders()
+      if (!configOkRef.current) loadConfig()
+    }
     document.addEventListener('visibilitychange', onVisible)
     window.addEventListener('focus', onVisible)
     return () => {
       supabase.removeChannel(channel)
       clearInterval(fallback)
+      clearInterval(configRetry)
+      clearInterval(configRefresh)
       document.removeEventListener('visibilitychange', onVisible)
       window.removeEventListener('focus', onVisible)
     }
@@ -43,14 +56,21 @@ export default function KitchenPage() {
     if (data) setOrders(data)
   }
 
+  // Menu names and photos were fetched once, at mount, and never again. When
+  // that single call failed — the database paused, the wifi dropped — the
+  // board ran all day with no photos: orders kept arriving, because those are
+  // polled, so nothing looked broken enough for anyone to reload it.
+  const configOkRef = useRef(false)
   async function loadConfig() {
-    const { data } = await supabase.from('shop_config').select('*')
-    if (!data) return
+    const { data, error } = await supabase.from('shop_config').select('*')
+    if (error || !data) return
     const cfg = {}
     data.forEach(r => { cfg[r.key] = r.value })
-    if (cfg.shop_info) setShopInfo(JSON.parse(cfg.shop_info))
-    if (cfg.menus) setMenus(JSON.parse(cfg.menus))
-    if (cfg.menu_images) setImages(JSON.parse(cfg.menu_images))
+    if (cfg.shop_info) try { setShopInfo(JSON.parse(cfg.shop_info)) } catch { }
+    let menuCount = 0
+    if (cfg.menus) try { const m = JSON.parse(cfg.menus); setMenus(m); menuCount = m.length } catch { }
+    if (cfg.menu_images) try { setImages(JSON.parse(cfg.menu_images)) } catch { }
+    configOkRef.current = menuCount > 0
   }
 
   // Take the card off the board first, then tell the server. Waiting for the
