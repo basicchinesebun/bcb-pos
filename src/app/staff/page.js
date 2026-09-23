@@ -237,6 +237,12 @@ export default function StaffPage() {
   const [mainSearchCollapsed, setMainSearchCollapsed] = useState(true)
   const [batchOpen, setBatchOpen] = useState(false)
   const [batchSelected, setBatchSelected] = useState(new Set())
+  // Finishing a tray means a run of queue numbers comes off the board at once.
+  // Tapping ✓ on each card is fine for one order and hopeless for twenty.
+  const [doneBatchOpen, setDoneBatchOpen] = useState(false)
+  const [doneBatchSelected, setDoneBatchSelected] = useState(new Set())
+  const [doneRangeFrom, setDoneRangeFrom] = useState('')
+  const [doneRangeTo, setDoneRangeTo] = useState('')
   const [selectedSlipIds, setSelectedSlipIds] = useState(new Set())
   const [deletingSlips, setDeletingSlips] = useState(false)
   const [blockedIps, setBlockedIps] = useState([])
@@ -1140,6 +1146,27 @@ export default function StaffPage() {
     setBatchSelected(new Set())
     setBatchOpen(false)
     toConfirm.filter(shouldAutoprint).forEach((o, i) => setTimeout(() => smartPrint(o), 400 * i))
+  }
+
+  async function doneBatch() {
+    const list = orders.filter(o => doneBatchSelected.has(o.id))
+    if (!list.length) { showToast('ກະລຸນາເລືອກລາຍການ', 'orange'); return }
+    const doneAt = new Date().toISOString()
+    const ids = list.map(o => o.id)
+    // Off the board first, same as the kitchen's single ✓ — waiting on the
+    // round trip is what got the wrong order marked done there.
+    setOrders(prev => prev.map(o => ids.includes(o.id) ? { ...o, done: true, done_at: doneAt } : o))
+    setDoneBatchSelected(new Set())
+    setDoneBatchOpen(false)
+    const { error } = await supabase.from('orders').update({ done: true, done_at: doneAt }).in('id', ids)
+    if (error) { await loadOrders(); alert('ບັນທຶກບໍ່ສຳເລັດ: ' + error.message); return }
+    // One announcement for the batch, not twenty. The board shows the highest
+    // number finished, which is what a customer holding a lower one needs.
+    const maxQ = Math.max(...list.map(o => o.qnum || 0))
+    if (maxQ > 0) await saveConfig('current_queue', String(maxQ))
+    if (list.some(o => o.id === displayOrderId)) { clearDisplay(); setDisplayOrderId(null) }
+    logActivity('done_batch', `${list.length} ໃບ · ເຖິງຄິວ ${maxQ}`)
+    showToast(`✅ ສຳເລັດ ${list.length} ໃບ`, 'green')
   }
 
   async function confirmWalkin(o) {
@@ -3732,6 +3759,24 @@ export default function StaffPage() {
                       </button>
                     ) : null
                   })()}
+                  {(() => {
+                    // Everything the kitchen is actually working on, walk-in
+                    // and confirmed preorder alike — those all finish the same
+                    // way, off the same trays.
+                    const openCount = orders.filter(o =>
+                      !o.done && !o.cancelled && o.status === 'confirmed'
+                    ).length
+                    return openCount > 0 ? (
+                      <button
+                        onClick={() => { setDoneBatchOpen(true); setDoneBatchSelected(new Set()); setDoneRangeFrom(''); setDoneRangeTo('') }}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-black active:scale-95 transition-all"
+                        style={{ background: 'var(--brown)', color: 'var(--cream)' }}
+                      >
+                        ✓ ສຳເລັດຫຼາຍໃບ
+                        <span className="px-1.5 py-0.5 rounded-full text-xs font-black" style={{ background: 'rgba(255,255,255,0.25)' }}>{openCount}</span>
+                      </button>
+                    ) : null
+                  })()}
                   {[['all','ທັງໝົດ'],['walkin','🏪'],['online','🌐']].map(([f,l]) => (
                     <button key={f} onClick={() => setFilter(f)} className={`px-3 py-1 rounded-lg text-xs font-black border ${filter===f ? 'bg-[#3d1f0a] text-[#fdf6ee] border-[#3d1f0a]' : 'border-[#e8d5c0] text-[#8a6a55]'}`}>{l}</button>
                   ))}
@@ -4816,6 +4861,109 @@ export default function StaffPage() {
       )}
 
       {/* Batch Confirm Modal */}
+      {/* Finish a run of orders at once */}
+      {doneBatchOpen && (() => {
+        const open = orders
+          .filter(o => !o.done && !o.cancelled && o.status === 'confirmed')
+          .sort((a, b) => (a.qnum || 0) - (b.qnum || 0))
+        const allSelected = open.length > 0 && open.every(o => doneBatchSelected.has(o.id))
+        const applyRange = () => {
+          const from = parseInt(doneRangeFrom), to = parseInt(doneRangeTo)
+          if (isNaN(from) && isNaN(to)) { showToast('ໃສ່ເລກຄິວກ່ອນ', 'orange'); return }
+          const lo = isNaN(from) ? -Infinity : from
+          const hi = isNaN(to) ? Infinity : to
+          const picked = open.filter(o => (o.qnum || 0) >= lo && (o.qnum || 0) <= hi)
+          if (!picked.length) { showToast('ບໍ່ມີຄິວໃນຊ່ວງນີ້', 'orange'); return }
+          setDoneBatchSelected(new Set(picked.map(o => o.id)))
+          showToast(`ເລືອກ ${picked.length} ໃບ`, 'blue')
+        }
+        return (
+          <div className="fixed inset-0 z-50 flex flex-col" style={{ background: 'var(--cream)' }}>
+            <div className="flex items-center gap-3 px-4 py-3 flex-shrink-0" style={{ background: 'var(--brown)' }}>
+              <button onClick={() => setDoneBatchOpen(false)} className="text-xl font-black w-8" style={{ color: 'var(--cream)' }}>✕</button>
+              <div className="flex-1 font-serif font-black text-lg" style={{ color: 'var(--cream)' }}>✓ ສຳເລັດຫຼາຍໃບ</div>
+              <button
+                onClick={() => setDoneBatchSelected(allSelected ? new Set() : new Set(open.map(o => o.id)))}
+                className="text-xs font-black px-3 py-2 rounded-lg border border-[rgba(253,246,238,0.35)] text-[#fdf6ee]">
+                {allSelected ? 'ເອົາອອກໝົດ' : 'ເລືອກທັງໝົດ'}
+              </button>
+            </div>
+
+            {/* Pick a run of queue numbers — the usual case is "everything up
+                to the number we just finished". */}
+            <div className="px-4 py-3 flex-shrink-0 border-b-2 border-[#e8d5c0]" style={{ background: 'var(--warm-white)' }}>
+              <div className="text-xs font-black uppercase tracking-widest mb-2" style={{ color: 'var(--brown3)' }}>ເລືອກຕາມຊ່ວງຄິວ</div>
+              <div className="flex items-center gap-2">
+                <input type="text" inputMode="numeric" value={doneRangeFrom}
+                  onChange={e => setDoneRangeFrom(e.target.value.replace(/\D/g, ''))}
+                  placeholder="ຈາກຄິວ"
+                  className="flex-1 min-w-0 px-3 py-2.5 rounded-xl border-2 border-[#e8d5c0] text-center font-black outline-none"
+                  style={{ background: 'var(--cream)', color: 'var(--brown)' }} />
+                <span className="font-black flex-shrink-0" style={{ color: 'var(--gray3)' }}>→</span>
+                <input type="text" inputMode="numeric" value={doneRangeTo}
+                  onChange={e => setDoneRangeTo(e.target.value.replace(/\D/g, ''))}
+                  placeholder="ເຖິງຄິວ"
+                  className="flex-1 min-w-0 px-3 py-2.5 rounded-xl border-2 border-[#e8d5c0] text-center font-black outline-none"
+                  style={{ background: 'var(--cream)', color: 'var(--brown)' }} />
+                <button onClick={applyRange}
+                  className="px-4 py-2.5 rounded-xl font-black text-sm flex-shrink-0"
+                  style={{ background: 'var(--brown)', color: 'var(--cream)' }}>ເລືອກ</button>
+              </div>
+              <div className="text-xs font-bold mt-1.5" style={{ color: 'var(--gray3)' }}>
+                ໃສ່ແຕ່ຊ່ອງດຽວກໍ່ໄດ້ — ໃສ່ "ເຖິງຄິວ" ຢ່າງດຽວ = ເລືອກທຸກໃບຮອດຄິວນັ້ນ
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-2">
+              {open.length === 0 && (
+                <div className="text-center py-10 font-black" style={{ color: 'var(--gray3)' }}>ບໍ່ມີອໍເດີທີ່ຍັງເຮັດຢູ່</div>
+              )}
+              {open.map(o => {
+                const items = typeof o.items === 'string' ? JSON.parse(o.items) : o.items || []
+                const sel = doneBatchSelected.has(o.id)
+                return (
+                  <button key={o.id}
+                    onClick={() => setDoneBatchSelected(prev => {
+                      const n = new Set(prev)
+                      if (n.has(o.id)) n.delete(o.id); else n.add(o.id)
+                      return n
+                    })}
+                    className="w-full text-left rounded-2xl border-2 p-3 flex items-center gap-3 transition-all"
+                    style={{ borderColor: sel ? '#15803d' : '#e8d5c0', background: sel ? '#f0fdf4' : 'var(--warm-white)' }}>
+                    <div className="w-7 h-7 rounded-lg flex items-center justify-center font-black flex-shrink-0"
+                      style={{ background: sel ? '#15803d' : 'var(--cream2)', color: sel ? '#fff' : 'var(--gray3)' }}>
+                      {sel ? '✓' : ''}
+                    </div>
+                    <div className="font-serif font-black text-xl flex-shrink-0" style={{ color: 'var(--brown)' }}>
+                      #{String(o.qnum).padStart(4, '0')}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-xs font-bold truncate" style={{ color: 'var(--gray3)' }}>
+                        {o.type === 'online' ? '🌐' : '🏪'} {items.map(it => `${it.name} ×${it.qty}`).join(', ')}
+                      </div>
+                    </div>
+                    <div className="font-black text-sm flex-shrink-0" style={{ color: 'var(--brown)' }}>
+                      {(o.total || 0).toLocaleString()}
+                    </div>
+                  </button>
+                )
+              })}
+            </div>
+
+            <div className="p-4 border-t-2 border-[#e8d5c0] flex-shrink-0" style={{ background: 'var(--warm-white)' }}>
+              <div className="max-w-2xl mx-auto w-full">
+                <button onClick={doneBatch} disabled={doneBatchSelected.size === 0}
+                  className="w-full py-4 rounded-2xl font-black text-white text-lg disabled:opacity-40"
+                  style={{ background: doneBatchSelected.size > 0 ? '#15803d' : '#a3a3a3' }}>
+                  ✓ ສຳເລັດ {doneBatchSelected.size > 0 ? `${doneBatchSelected.size} ໃບ` : ''}
+                </button>
+                <button onClick={() => setDoneBatchOpen(false)} className="btn-outline mt-2 w-full py-3 text-sm">ຍົກເລີກ</button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
+
       {batchOpen && (() => {
         const pendingOnline = orders.filter(o =>
           o.type === 'online' && o.status === 'pending' && !o.done && !o.cancelled
