@@ -129,6 +129,9 @@ export default function StaffPage() {
     { id: 'houayhong', name: 'ສາຂາຫວຍຫົງ', nameEn: 'Houay Hong Branch', visible: true, schedule: 'ຄ · ສກ · ອ (Tue / Thu / Sat)', mapUrl: '', facebookUrl: '', tiktokUrl: '', phone1: '', phone2: '', whatsapp: '' },
   ])
   const [filter, setFilter] = useState('all')
+  // Takings shown next to the filter buttons. Today is what matters during
+  // service; all-time is one tap away for when the question is the other one.
+  const [moneyScope, setMoneyScope] = useState('today')
   const [search, setSearch] = useState('')
   const [customerSearch, setCustomerSearch] = useState('')
   const [toast, setToast] = useState([])
@@ -1048,11 +1051,16 @@ export default function StaffPage() {
   // the same tap that narrows the list answers "and how much is that". Rejected,
   // blocked and cancelled orders are left out — no money ever came in for them,
   // so counting them would overstate the takings.
-  const filterMoney = filteredOrders.reduce(
-    (s, o) => (o.cancelled || o.status === 'rejected' || o.status === 'blocked') ? s : s + (o.total || 0),
-    0
-  )
-  const filterMoneyLabel = filter === 'walkin' ? '🏪 ໜ້າຮ້ານ' : filter === 'online' ? '🌐 ອອນລາຍ' : 'ທັງໝົດ'
+  const todayStamp = new Date().toDateString()
+  const filterMoney = filteredOrders.reduce((s, o) => {
+    if (o.cancelled || o.status === 'rejected' || o.status === 'blocked') return s
+    // Local time on purpose: the till stands in the shop, so "today" is the
+    // shop's day, not UTC's — otherwise the figure would roll over at 07:00.
+    if (moneyScope === 'today' && new Date(o.created_at).toDateString() !== todayStamp) return s
+    return s + (o.total || 0)
+  }, 0)
+  const filterMoneyIcon = filter === 'walkin' ? ' 🏪' : filter === 'online' ? ' 🌐' : ''
+  const filterMoneyLabel = (moneyScope === 'today' ? 'ມື້ນີ້' : 'ທັງໝົດ') + filterMoneyIcon
 
   // ─── Customer Search ───
   const customerSearchResults = customerSearch.trim()
@@ -3759,10 +3767,11 @@ export default function StaffPage() {
                 <span className="text-xs font-black tracking-widest uppercase" style={{ color: 'var(--gray3)' }}>ລາຍການ</span>
                 {/* Takings for the current filter, sitting in the gap the filter
                     buttons already left empty. */}
-                <div
-                  className="flex items-baseline gap-1.5 px-2.5 py-1 rounded-lg flex-shrink min-w-0"
+                <button
+                  onClick={() => setMoneyScope(v => v === 'today' ? 'all' : 'today')}
+                  className="flex items-baseline gap-1.5 px-2.5 py-1 rounded-lg flex-shrink min-w-0 active:scale-95 transition-all"
                   style={{ background: 'var(--cream2)', border: '1.5px solid var(--cream3)' }}
-                  title="ຍອດເງິນຂອງລາຍການທີ່ສະແດງຢູ່ (ບໍ່ນັບທີ່ຍົກເລີກ/ປະຕິເສດ)"
+                  title="ຍອດເງິນຂອງລາຍການທີ່ສະແດງຢູ່ (ບໍ່ນັບທີ່ຍົກເລີກ/ປະຕິເສດ) — ກົດເພື່ອສະຫຼັບ ມື້ນີ້ / ທັງໝົດ"
                 >
                   <span className="text-xs font-black flex-shrink-0" style={{ color: 'var(--gray3)' }}>
                     {filterMoneyLabel}
@@ -3774,7 +3783,7 @@ export default function StaffPage() {
                     {filterMoney.toLocaleString()}
                   </span>
                   <span className="text-xs font-bold flex-shrink-0" style={{ color: 'var(--gray3)' }}>ກີບ</span>
-                </div>
+                </button>
                 <div className="flex gap-1 ml-auto items-center">
                   {(() => {
                     const pendingOnline = orders.filter(o =>
