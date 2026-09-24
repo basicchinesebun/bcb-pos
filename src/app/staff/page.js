@@ -2800,6 +2800,32 @@ export default function StaffPage() {
   const salesProfit = salesTotal - totalCost
   const hasCosts = costs.some(c => c > 0)
 
+  // Sales counts only orders that have been marked ສຳເລັດ, so for most of a
+  // shift it reads 0 while the day's money is sitting in orders still being
+  // worked on. Summarise what is still open beside it, on the same date range,
+  // so the takings are visible before anything is closed off.
+  const localDay = iso => {
+    const d = new Date(iso)
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  }
+  const openSalesOrders = orders.filter(o => {
+    if (o.done || o.cancelled || o.status === 'rejected' || o.status === 'blocked') return false
+    const d = localDay(o.created_at)
+    return d >= salesDateFrom && d <= salesDateTo
+  })
+  const sumTotals = list => list.reduce((s, o) => s + (o.total || 0), 0)
+  const countPieces = list => list.reduce((s, o) => {
+    const items = typeof o.items === 'string' ? JSON.parse(o.items) : o.items || []
+    return s + items.reduce((ss, it) => ss + (it.qty || 0), 0)
+  }, 0)
+  const openTotal = sumTotals(openSalesOrders)
+  const openWalkin = sumTotals(openSalesOrders.filter(o => o.type === 'walkin'))
+  const openOnline = sumTotals(openSalesOrders.filter(o => o.type === 'online'))
+  // Waiting on staff to accept it vs. accepted and being made — two different
+  // jobs, and only the first one can still turn into no sale at all.
+  const openUnconfirmed = openSalesOrders.filter(o => o.status === 'pending')
+  const openInProgress = openSalesOrders.filter(o => o.status !== 'pending')
+
   function setSalesRangePreset(preset) {
     const today = new Date()
     const toStr = d => d.toISOString().split('T')[0]
@@ -4308,6 +4334,14 @@ export default function StaffPage() {
               {!hasCosts && (
                 <div className="mt-2 text-xs" style={{ color: 'rgba(253,246,238,0.4)' }}>ຕັ້ງຕົ້ນທຶນໃນ ⚙ ຕັ້ງຄ່າ ເພື່ອເບິ່ງກຳໄລ</div>
               )}
+              {/* Reading 0 with a full board of orders looks like a fault. Say
+                  what the figure counts, but only when there is something open
+                  to explain it. */}
+              {openSalesOrders.length > 0 && (
+                <div className="mt-2 text-xs" style={{ color: 'rgba(253,246,238,0.55)' }}>
+                  ນັບສະເພາະອໍເດີທີ່ກົດ ✓ ສຳເລັດ ແລ້ວ · ຍັງຄ້າງ {openSalesOrders.length} ອໍເດີ (ເບິ່ງລຸ່ມ)
+                </div>
+              )}
               {hasCosts && profitPin && !profitUnlocked && (
                 <button onClick={() => { setPinMode('profit'); setPinInput(''); setPinError('') }}
                   className="mt-2 w-full py-2 rounded-xl text-xs font-black"
@@ -4339,6 +4373,67 @@ export default function StaffPage() {
                 </div>
               ))}
             </div>
+
+            {/* Still open: money taken or promised that sales cannot see yet. */}
+            {openSalesOrders.length > 0 && (
+              <>
+                <div className="text-xs font-black tracking-widest uppercase mb-2" style={{ color: 'var(--gray3)' }}>
+                  ຍັງບໍ່ທັນສຳເລັດ
+                </div>
+                <div className="rounded-2xl p-4 mb-3" style={{ background: '#fef3c7', border: '2px solid #fcd34d' }}>
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm font-bold" style={{ color: '#92400e' }}>ຍອດຄ້າງລວມ</span>
+                    <span className="font-serif text-2xl font-black" style={{ color: '#92400e' }}>
+                      {openTotal.toLocaleString()} ກີບ
+                    </span>
+                  </div>
+                  <div className="mt-2 pt-2 flex flex-col gap-1.5" style={{ borderTop: '1.5px solid #fcd34d' }}>
+                    <div className="flex justify-between text-sm font-bold" style={{ color: '#92400e' }}>
+                      <span>⏳ ລໍຖ້າຢືນຢັນ · {openUnconfirmed.length} ອໍເດີ</span>
+                      <span>{sumTotals(openUnconfirmed).toLocaleString()} ກີບ</span>
+                    </div>
+                    <div className="flex justify-between text-sm font-bold" style={{ color: '#92400e' }}>
+                      <span>🍳 ຢືນຢັນແລ້ວ ກຳລັງເຮັດ · {openInProgress.length} ອໍເດີ</span>
+                      <span>{sumTotals(openInProgress).toLocaleString()} ກີບ</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3 mb-3">
+                  <div className="card text-center">
+                    <div className="text-xl font-black text-blue-700">{openWalkin.toLocaleString()}</div>
+                    <div className="text-xs font-bold mt-1" style={{ color: 'var(--gray3)' }}>🏪 Walk-in ຄ້າງ</div>
+                  </div>
+                  <div className="card text-center">
+                    <div className="text-xl font-black text-orange-600">{openOnline.toLocaleString()}</div>
+                    <div className="text-xs font-bold mt-1" style={{ color: 'var(--gray3)' }}>🌐 Online ຄ້າງ</div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-3 gap-2 mb-3">
+                  {[
+                    ['ອໍເດີ', openSalesOrders.length],
+                    ['ກ້ອນ', countPieces(openSalesOrders)],
+                    ['ເຊ່ຍ', openSalesOrders.length ? Math.round(openTotal / openSalesOrders.length).toLocaleString() : 0],
+                  ].map(([l, n]) => (
+                    <div key={l} className="card text-center">
+                      <div className="text-xl font-black" style={{ color: 'var(--brown)' }}>{n}</div>
+                      <div className="text-xs font-bold mt-1" style={{ color: 'var(--gray3)' }}>{l}</div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Finished plus still open — the day's real takings, which is
+                    the figure to compare against the cash drawer. */}
+                <div className="rounded-2xl p-4 mb-4 flex justify-between items-center"
+                  style={{ background: 'var(--cream2)', border: '2px solid var(--cream3)' }}>
+                  <span className="text-sm font-bold" style={{ color: 'var(--brown2)' }}>ລວມທັງໝົດ (ສຳເລັດ + ຄ້າງ)</span>
+                  <span className="font-serif text-xl font-black" style={{ color: 'var(--brown)' }}>
+                    {(salesTotal + openTotal).toLocaleString()} ກີບ
+                  </span>
+                </div>
+              </>
+            )}
 
             <div className="text-xs font-black tracking-widest uppercase mb-3" style={{ color: 'var(--gray3)' }}>ເມນູຂາຍດີ</div>
             <div className="card">
