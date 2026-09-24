@@ -1044,6 +1044,16 @@ export default function StaffPage() {
   const activeOrders = filteredOrders.filter(o => !o.done && !o.cancelled && o.status !== 'rejected' && o.status !== 'blocked')
   const archivedOrders = filteredOrders.filter(o => o.done || o.cancelled || o.status === 'rejected' || o.status === 'blocked')
 
+  // Money for whatever the ທັງໝົດ / 🏪 / 🌐 buttons are currently showing, so
+  // the same tap that narrows the list answers "and how much is that". Rejected,
+  // blocked and cancelled orders are left out — no money ever came in for them,
+  // so counting them would overstate the takings.
+  const filterMoney = filteredOrders.reduce(
+    (s, o) => (o.cancelled || o.status === 'rejected' || o.status === 'blocked') ? s : s + (o.total || 0),
+    0
+  )
+  const filterMoneyLabel = filter === 'walkin' ? '🏪 ໜ້າຮ້ານ' : filter === 'online' ? '🌐 ອອນລາຍ' : 'ທັງໝົດ'
+
   // ─── Customer Search ───
   const customerSearchResults = customerSearch.trim()
     ? orders.filter(o => {
@@ -3747,6 +3757,24 @@ export default function StaffPage() {
                   ☰
                 </button>
                 <span className="text-xs font-black tracking-widest uppercase" style={{ color: 'var(--gray3)' }}>ລາຍການ</span>
+                {/* Takings for the current filter, sitting in the gap the filter
+                    buttons already left empty. */}
+                <div
+                  className="flex items-baseline gap-1.5 px-2.5 py-1 rounded-lg flex-shrink min-w-0"
+                  style={{ background: 'var(--cream2)', border: '1.5px solid var(--cream3)' }}
+                  title="ຍອດເງິນຂອງລາຍການທີ່ສະແດງຢູ່ (ບໍ່ນັບທີ່ຍົກເລີກ/ປະຕິເສດ)"
+                >
+                  <span className="text-xs font-black flex-shrink-0" style={{ color: 'var(--gray3)' }}>
+                    {filterMoneyLabel}
+                  </span>
+                  <span
+                    className="text-sm font-black truncate"
+                    style={{ color: 'var(--brown)', fontVariantNumeric: 'tabular-nums' }}
+                  >
+                    {filterMoney.toLocaleString()}
+                  </span>
+                  <span className="text-xs font-bold flex-shrink-0" style={{ color: 'var(--gray3)' }}>ກີບ</span>
+                </div>
                 <div className="flex gap-1 ml-auto items-center">
                   {(() => {
                     const pendingOnline = orders.filter(o =>
