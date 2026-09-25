@@ -108,7 +108,6 @@ export default function StaffPage() {
   const [menus, setMenus] = useState([])
   const [prices, setPrices] = useState([])
   const [costs, setCosts] = useState([])
-  const [stockTotal, setStockTotal] = useState([])
   const [stockShop, setStockShop] = useState([])
   const [stockOnline, setStockOnline] = useState([])
   const [images, setImages] = useState({})
@@ -319,7 +318,6 @@ export default function StaffPage() {
         const val = payload.new?.value
         if (key === 'stock_shop') { try { setStockShop(JSON.parse(val)) } catch { loadConfig() } }
         else if (key === 'stock_online') { try { setStockOnline(JSON.parse(val)) } catch { loadConfig() } }
-        else if (key === 'stock_total') { try { setStockTotal(JSON.parse(val)) } catch { loadConfig() } }
         else if (key === 'settings') { try { setSettings(prev => ({ ...prev, ...JSON.parse(val) })) } catch { loadConfig() } }
         else loadConfig()
       })
@@ -926,7 +924,6 @@ export default function StaffPage() {
     const loadedMenus = cfg.menus ? JSON.parse(cfg.menus) : DEFAULT_MENUS
     const loadedPrices = cfg.prices ? JSON.parse(cfg.prices) : new Array(loadedMenus.length).fill(15000)
     const loadedCosts = cfg.costs ? JSON.parse(cfg.costs) : new Array(loadedMenus.length).fill(0)
-    const loadedStockTotal = cfg.stock_total ? JSON.parse(cfg.stock_total) : new Array(loadedMenus.length).fill(0)
     const loadedStockShop = cfg.stock_shop ? JSON.parse(cfg.stock_shop) : new Array(loadedMenus.length).fill(0)
     const loadedStockOnline = cfg.stock_online ? JSON.parse(cfg.stock_online) : new Array(loadedMenus.length).fill(0)
 
@@ -960,7 +957,6 @@ export default function StaffPage() {
       await supabase.from('shop_config').upsert([
         { key: 'menus', value: JSON.stringify(DEFAULT_MENUS) },
         { key: 'prices', value: JSON.stringify(loadedPrices) },
-        { key: 'stock_total', value: JSON.stringify(loadedStockTotal) },
         { key: 'stock_shop', value: JSON.stringify(loadedStockShop) },
         { key: 'stock_online', value: JSON.stringify(loadedStockOnline) },
         { key: 'next_queue', value: '0' },
@@ -1430,12 +1426,10 @@ export default function StaffPage() {
     const newPrices = [...p, 0]
     const newCosts = [...c, 0]
     setMenus(newMenus); setPrices(newPrices); setCosts(newCosts)
-    setStockTotal(prev => [...prev, 0])
     setStockShop(prev => [...prev, 0])
     setStockOnline(prev => [...prev, 0])
     await Promise.all([
       saveConfig('menus', newMenus), saveConfig('prices', newPrices), saveConfig('costs', newCosts),
-      saveConfig('stock_total', [...stockTotal, 0]),
       saveConfig('stock_shop', [...stockShop, 0]),
       saveConfig('stock_online', [...stockOnline, 0]),
     ])
@@ -1448,18 +1442,17 @@ export default function StaffPage() {
     const newMenus = m.filter((_, i) => i !== idx)
     const newPrices = p.filter((_, i) => i !== idx)
     const newCosts = c.filter((_, i) => i !== idx)
-    const newST = stockTotal.filter((_, i) => i !== idx)
     const newSS = stockShop.filter((_, i) => i !== idx)
     const newSO = stockOnline.filter((_, i) => i !== idx)
     setMenus(newMenus); setPrices(newPrices); setCosts(newCosts)
-    setStockTotal(newST); setStockShop(newSS); setStockOnline(newSO)
+setStockShop(newSS); setStockOnline(newSO)
     const newImgs = { ...images }; delete newImgs[idx]
     const reindexed = {}
     Object.entries(newImgs).forEach(([k, v]) => { const ki = +k; reindexed[ki > idx ? ki - 1 : ki] = v })
     setImages(reindexed)
     await Promise.all([
       saveConfig('menus', newMenus), saveConfig('prices', newPrices), saveConfig('costs', newCosts),
-      saveConfig('stock_total', newST), saveConfig('stock_shop', newSS), saveConfig('stock_online', newSO),
+      saveConfig('stock_shop', newSS), saveConfig('stock_online', newSO),
       saveConfig('menu_images', reindexed),
     ])
     showToast('ລຶບເມນູ ✅', 'green')
@@ -2325,20 +2318,18 @@ export default function StaffPage() {
   // three arrays back wholesale from this device's copy, so two people with the
   // stock panel open would have the second save overwrite the first — and any
   // sale that landed in between was undone along with it.
-  const stockDirtyRef = useRef({ total: new Set(), shop: new Set(), online: new Set() })
+  const stockDirtyRef = useRef({ shop: new Set(), online: new Set() })
 
   function updateStock(type, i, val) {
     const n = Math.max(0, parseInt(val) || 0)
     stockDirtyRef.current[type].add(i)
-    if (type === 'total') setStockTotal(prev => { const arr = [...prev]; arr[i] = n; return arr })
-    else if (type === 'shop') setStockShop(prev => { const arr = [...prev]; arr[i] = n; return arr })
+    if (type === 'shop') setStockShop(prev => { const arr = [...prev]; arr[i] = n; return arr })
     else setStockOnline(prev => { const arr = [...prev]; arr[i] = n; return arr })
   }
 
   async function saveStock() {
     const dirty = stockDirtyRef.current
     const plan = [
-      ['stock_total', dirty.total, stockTotal, setStockTotal],
       ['stock_shop', dirty.shop, stockShop, setStockShop],
       ['stock_online', dirty.online, stockOnline, setStockOnline],
     ].filter(([, set]) => set.size > 0)
@@ -2356,7 +2347,7 @@ export default function StaffPage() {
       if (data) setter(data)
     }
     if (failed) { showToast('⚠️ ບັນທຶກສະຕ໋ອກບໍ່ສຳເລັດ', 'red'); return }
-    stockDirtyRef.current = { total: new Set(), shop: new Set(), online: new Set() }
+    stockDirtyRef.current = { shop: new Set(), online: new Set() }
     logActivity('save_stock', '')
     showToast('ບັນທຶກສະຕ໋ອກ ✅', 'green')
   }
@@ -3485,9 +3476,13 @@ export default function StaffPage() {
                           {sh>0&&sh<=5 && <span className="ml-1 text-xs bg-orange-50 text-orange-600 rounded px-1">ໃກ້</span>}
                         </span>
                         <div className="flex gap-2">
-                          {['total','shop','online'].map((type, ti) => {
-                            const val = [stockTotal[i]||0, sh, on][ti]
-                            const label = ['ລວມ','ຮ້ານ','Online'][ti]
+                          {/* Two shelves, two numbers. There used to be a third
+                              box, ລວມ, that nothing sold from and nothing kept
+                              in step with the other two, so it only ever
+                              disagreed with them. */}
+                          {['shop','online'].map((type, ti) => {
+                            const val = [sh, on][ti]
+                            const label = ['🏪 ຮ້ານ','🌐 Online'][ti]
                             return (
                               <label key={type} className="flex-1 flex flex-col items-center gap-0.5">
                                 <span className="text-[10px] font-black" style={{ color: 'var(--gray3)' }}>{label}</span>
@@ -4883,8 +4878,7 @@ export default function StaffPage() {
                               </button>
                             )
                           } else {
-                            const sTotal = stockTotal[i] || 0
-                            if (s === 0 && sTotal === 0) return null
+                            if (s === 0) return null
                             return (
                               <button key={i}
                                 onPointerDown={() => startQtyLongPress(i, false, n)}
