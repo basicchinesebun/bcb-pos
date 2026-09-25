@@ -220,6 +220,27 @@ export default function OrderPage() {
       if (leftover) groups.push(`⚠️ ຍັງບໍ່ໄດ້ແຍກຖົງ: ${leftover}`)
       const packingLabel = groups.join(' | ')
 
+      // Take the buns off the shelf before writing the order, and let the
+      // database decide. The stock this page is showing was read when it
+      // loaded; with a queue at the counter it is out of date by the time
+      // anyone taps, so several people could each be told the last three were
+      // still there. take_stock checks under a row lock and refuses the whole
+      // order rather than handing out buns that are already gone.
+      const { data: taken, error: takeErr } = await supabase.rpc('take_stock', {
+        p_key: 'stock_shop', p_deltas: effectiveSelected,
+      })
+      if (takeErr) throw takeErr
+      if (!taken?.ok) {
+        if (Array.isArray(taken?.stock)) setStock(taken.stock)
+        const soldOut = Object.entries(taken?.short || {})
+          .map(([i, left]) => `${menus[+i]?.lo || ''} (ເຫຼືອ ${left})`)
+          .join('\n')
+        alert(`ຂໍອະໄພ ເມນູນີ້ຫາກໍ່ໝົດພໍດີ:\n${soldOut}\n\nກະລຸນາເລືອກໃໝ່`)
+        setStep(2)
+        return
+      }
+      if (Array.isArray(taken.stock)) setStock(taken.stock)
+
       const { error } = await supabase.from('orders').insert({
         qnum: nextQ,
         type: 'walkin',
@@ -231,12 +252,14 @@ export default function OrderPage() {
         done: false,
         cancelled: false,
       })
-      if (error) throw error
-
-      // Subtract inside the database — see deduct_stock. Doing the arithmetic
-      // here against a copy of the stock read earlier loses a deduction
-      // whenever two orders land at once.
-      await supabase.rpc('deduct_stock', { p_key: 'stock_shop', p_deltas: effectiveSelected })
+      // The buns are already off the shelf, so put them back rather than
+      // leaving stock short for an order that was never written.
+      if (error) {
+        const giveBack = {}
+        Object.entries(effectiveSelected).forEach(([i, q]) => { giveBack[i] = -q })
+        await supabase.rpc('deduct_stock', { p_key: 'stock_shop', p_deltas: giveBack })
+        throw error
+      }
 
       setQnum(nextQ)
       setStep(4)

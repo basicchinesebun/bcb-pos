@@ -386,6 +386,29 @@ export default function PreOrderPage() {
       const isBlocked = detectedCountry === 'QA' || form.name.trim().toLowerCase() === 'bong'
       const orderStatus = isBlocked ? 'blocked' : 'pending'
 
+      // Claim the stock before writing the order, and let the database decide.
+      // The counts on this page were read when it loaded; online they go stale
+      // fastest of all, because everyone opens the link at once when a batch
+      // goes up. take_stock checks under a row lock and refuses the whole order
+      // rather than taking payment for buns that are already spoken for.
+      // Shadow-banned orders take nothing, as before.
+      if (!isBlocked) {
+        const { data: taken, error: takeErr } = await supabase.rpc('take_stock', {
+          p_key: 'stock_online', p_deltas: selected,
+        })
+        if (takeErr) throw takeErr
+        if (!taken?.ok) {
+          if (Array.isArray(taken?.stock)) setStock(taken.stock)
+          const soldOut = Object.entries(taken?.short || {})
+            .map(([i, left]) => `${menus[+i]?.lo || ''} (ເຫຼືອ ${left})`)
+            .join('\n')
+          alert(`ຂໍອະໄພ ເມນູນີ້ຫາກໍ່ໝົດພໍດີ:\n${soldOut}\n\nກະລຸນາເລືອກໃໝ່ — ຍັງບໍ່ໄດ້ສັ່ງເທື່ອ`)
+          setStep(2)
+          return
+        }
+        if (Array.isArray(taken.stock)) setStock(taken.stock)
+      }
+
       const { data: order, error: orderErr } = await supabase.from('orders').insert({
         qnum: qnumData,
         type: 'online',
@@ -398,14 +421,15 @@ export default function PreOrderPage() {
         done: false,
         cancelled: false,
       }).select().single()
-      if (orderErr) throw orderErr
-
-      // Only decrement stock for real orders, not shadow-banned ones
-      if (!isBlocked) {
-        // Subtract inside the database — see deduct_stock. Read-modify-write
-        // from here loses a deduction whenever two people check out at once,
-        // which online is the normal case rather than the rare one.
-        await supabase.rpc('deduct_stock', { p_key: 'stock_online', p_deltas: selected })
+      // Stock is already claimed at this point, so hand it back rather than
+      // holding it against an order that was never written.
+      if (orderErr) {
+        if (!isBlocked) {
+          const giveBack = {}
+          Object.entries(selected).forEach(([i, q]) => { giveBack[i] = -q })
+          await supabase.rpc('deduct_stock', { p_key: 'stock_online', p_deltas: giveBack })
+        }
+        throw orderErr
       }
 
       setCurrentOrder(order)

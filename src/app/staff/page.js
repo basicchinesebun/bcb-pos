@@ -543,17 +543,38 @@ export default function StaffPage() {
       if (bagTexts.length && leftover) groups.push(`⚠️ ຍັງບໍ່ໄດ້ແຍກຖົງ: ${leftover}`)
       const newBagLabel = groups.join(' | ') || null
 
-      await supabase.from('orders')
-        .update({ items: JSON.stringify(newItems), total: newTotal, bag_label: newBagLabel })
-        .eq('id', editOrder.id)
+      // Adding to an order takes more off the shelf, so it has to pass the
+      // same check a new order does. Lines the edit removes come back as
+      // negative deltas in the same call, which take_stock allows.
       if (Object.keys(stockDeltas).length) {
-        const { data: newStock, error: stockErr } = await supabase.rpc('deduct_stock', {
+        const { data: taken, error: takeErr } = await supabase.rpc('take_stock', {
           p_key: stockKey, p_deltas: stockDeltas,
         })
-        if (stockErr) showToast('⚠️ ຫັກສະຕັອກບໍ່ສຳເລັດ', 'orange')
-        else if (newStock) {
-          if (editOrder.type === 'online') setStockOnline(newStock); else setStockShop(newStock)
+        if (takeErr) throw takeErr
+        if (!taken?.ok) {
+          if (Array.isArray(taken?.stock)) {
+            if (editOrder.type === 'online') setStockOnline(taken.stock); else setStockShop(taken.stock)
+          }
+          const soldOut = Object.entries(taken?.short || {})
+            .map(([i, left]) => `${menus[+i]?.lo || ''} (ເຫຼືອ ${left})`)
+            .join('\n')
+          alert(`ສະຕັອກບໍ່ພໍ:\n${soldOut}\n\nຍັງບໍ່ໄດ້ແກ້ໄຂອໍເດີ`)
+          setEditSaving(false)
+          return
         }
+        if (Array.isArray(taken.stock)) {
+          if (editOrder.type === 'online') setStockOnline(taken.stock); else setStockShop(taken.stock)
+        }
+      }
+
+      const { error: updErr } = await supabase.from('orders')
+        .update({ items: JSON.stringify(newItems), total: newTotal, bag_label: newBagLabel })
+        .eq('id', editOrder.id)
+      if (updErr) {
+        const giveBack = {}
+        Object.entries(stockDeltas).forEach(([i, d]) => { giveBack[i] = -d })
+        if (Object.keys(giveBack).length) await supabase.rpc('deduct_stock', { p_key: stockKey, p_deltas: giveBack })
+        throw updErr
       }
       setOrders(prev => prev.map(o => o.id === editOrder.id
         ? { ...o, items: JSON.stringify(newItems), total: newTotal, bag_label: newBagLabel } : o))
@@ -661,6 +682,23 @@ export default function StaffPage() {
       if (leftover) groups.push(`⚠️ ຍັງບໍ່ໄດ້ແຍກຖົງ: ${leftover}`)
       const packingLabel = groups.join(' | ')
       const total = Object.entries(effSel).reduce((s, [i, q]) => s + (prices[+i] || 0) * q, 0)
+      // Take the stock first and let the database decide. The second station
+      // and the customers' own phones are selling off the same shelf, so this
+      // device's copy of the counts is out of date the moment it is read.
+      const { data: taken, error: takeErr } = await supabase.rpc('take_stock', {
+        p_key: 'stock_shop', p_deltas: effSel,
+      })
+      if (takeErr) throw takeErr
+      if (!taken?.ok) {
+        if (Array.isArray(taken?.stock)) setStockShop(taken.stock)
+        const soldOut = Object.entries(taken?.short || {})
+          .map(([i, left]) => `${menus[+i]?.lo || ''} (ເຫຼືອ ${left})`)
+          .join('\n')
+        alert(`ສະຕັອກບໍ່ພໍ:\n${soldOut}\n\nຍັງບໍ່ໄດ້ບັນທຶກອໍເດີ`)
+        return
+      }
+      if (Array.isArray(taken.stock)) setStockShop(taken.stock)
+
       const { error } = await supabase.from('orders').insert({
         qnum: qnumData, type: 'walkin', status: 'confirmed',
         items: JSON.stringify(items), total, bag_label: packingLabel,
@@ -668,17 +706,12 @@ export default function StaffPage() {
         paid_amount: total,
         ...(qoName.trim() ? { customer: JSON.stringify({ name: qoName.trim() }) } : {}),
       })
-      if (error) throw error
-      // Subtract inside the database. Reading the stock out, subtracting here
-      // and writing it back loses a deduction whenever two sales land at once
-      // — the second read happens before the first write, so one sale's items
-      // never come off. deduct_stock locks the row, so concurrent sales queue
-      // up behind each other.
-      const { data: newStock, error: stockErr } = await supabase.rpc('deduct_stock', {
-        p_key: 'stock_shop', p_deltas: effSel,
-      })
-      if (stockErr) showToast('⚠️ ຫັກສະຕັອກບໍ່ສຳເລັດ', 'orange')
-      else if (newStock) setStockShop(newStock)
+      if (error) {
+        const giveBack = {}
+        Object.entries(effSel).forEach(([i, q]) => { giveBack[i] = -q })
+        await supabase.rpc('deduct_stock', { p_key: 'stock_shop', p_deltas: giveBack })
+        throw error
+      }
       const received = paymentMethod === 'cash' ? qoCashReceivedRef.current : 0
       setQoTicket({
         items, total, method: paymentMethod,
