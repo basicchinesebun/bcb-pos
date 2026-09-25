@@ -92,7 +92,37 @@ export default function KitchenPage() {
   async function markCancel(o) {
     setOrders(prev => prev.filter(x => x.id !== o.id))
     const { error } = await supabase.from('orders').update({ cancelled: true }).eq('id', o.id)
-    if (error) { await loadOrders(); alert('ບັນທຶກບໍ່ສຳເລັດ: ' + error.message) }
+    if (error) { await loadOrders(); alert('ບັນທຶກບໍ່ສຳເລັດ: ' + error.message); return }
+    // Cancelling here used to stop at the order row, so the buns came off the
+    // stock when the order was placed and never went back on. The shelf then
+    // held more than the till believed and the menu read ໝົດ with trays still
+    // full. Hand them back the same way every other path does: negative deltas
+    // through deduct_stock, which takes the row lock, so a sale landing at the
+    // same moment is not overwritten.
+    try {
+      const items = typeof o.items === 'string' ? JSON.parse(o.items) : o.items || []
+      const deltas = {}
+      items.forEach(it => {
+        // menuIdx is what every order carries now; fall back to the name for
+        // anything written before it did.
+        const idx = Number.isInteger(it.menuIdx)
+          ? it.menuIdx
+          : menus.findIndex(m => normName(m.lo || m) === normName(it.name || ''))
+        if (idx >= 0 && it.qty > 0) deltas[idx] = (deltas[idx] || 0) - it.qty
+      })
+      if (Object.keys(deltas).length) {
+        await supabase.rpc('deduct_stock', {
+          p_key: o.type === 'online' ? 'stock_online' : 'stock_shop',
+          p_deltas: deltas,
+        })
+      }
+      // The staff page logs who cancelled what; the board did not, so orders
+      // cancelled from the kitchen left no trace to reconcile against.
+      await supabase.from('audit_log').insert({
+        staff_name: 'ຄົວ', action: 'cancel_order',
+        detail: `#${String(o.qnum).padStart(4, '0')} — ຍົກເລີກຈາກຈໍຄົວ`,
+      })
+    } catch (_) { /* the order is already cancelled; stock is best-effort */ }
   }
 
   function applyFilter(list) {

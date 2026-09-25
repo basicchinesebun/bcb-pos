@@ -1215,15 +1215,37 @@ export default function StaffPage() {
     showToast(`📺 ສົ່ງຄິວ #${String(o.qnum).padStart(4, '0')} ຂຶ້ນຈໍລູກຄ້າ`, 'green')
   }
 
+  // Put an order's items back on the shelf it came off. Cancelling and
+  // rejecting both used to read the whole stock array, add the items in the
+  // browser and write the array back, which silently undid anything sold from
+  // another till in that window. deduct_stock takes the row lock and applies
+  // only these menus, so a sale landing at the same moment survives.
+  async function returnStockFor(o) {
+    const items = typeof o.items === 'string' ? JSON.parse(o.items) : o.items || []
+    const deltas = {}
+    items.forEach(it => {
+      const idx = Number.isInteger(it.menuIdx)
+        ? it.menuIdx
+        : menus.findIndex(m => normName(m.lo || m) === normName(it.name || ''))
+      if (idx >= 0 && it.qty > 0) deltas[idx] = (deltas[idx] || 0) - it.qty
+    })
+    if (!Object.keys(deltas).length) return
+    const stockKey = o.type === 'online' ? 'stock_online' : 'stock_shop'
+    const { data: newStock, error } = await supabase.rpc('deduct_stock', { p_key: stockKey, p_deltas: deltas })
+    if (error) { showToast('⚠️ ຄືນສະຕັອກບໍ່ສຳເລັດ', 'orange'); return }
+    if (newStock) { if (o.type === 'online') setStockOnline(newStock); else setStockShop(newStock) }
+  }
+
   function rejectOrder(o) {
     showConfirm('ຢືນຢັນການຍົກເລີກອໍເດີນີ້ບໍ?', async () => {
       setOrders(prev => prev.map(ord => ord.id === o.id ? { ...ord, status: 'rejected' } : ord))
-      const items = typeof o.items === 'string' ? JSON.parse(o.items) : o.items || []
-      // Fetch fresh stock from DB to avoid stale closure
-      const { data: row } = await supabase.from('shop_config').select('value').eq('key', 'stock_online').single()
-      const freshStock = row ? JSON.parse(row.value) : [...stockOnline]
-      items.forEach(it => { freshStock[it.menuIdx] = (freshStock[it.menuIdx] || 0) + it.qty })
-      await saveConfig('stock_online', freshStock)
+      // Reading the array out and writing it back whole discards every sale
+      // that landed in between, which is how the till came to believe it still
+      // had buns it had already sold. Give the items back as negative deltas
+      // instead — deduct_stock holds the row lock and touches only these menus.
+      // The key follows the order's own type; this always wrote to the online
+      // shelf, so rejecting a walk-in credited stock the shop did not have.
+      await returnStockFor(o)
       await supabase.from('orders').update({ status: 'rejected' }).eq('id', o.id)
       logActivity('reject_order', `#${String(o.qnum).padStart(4, '0')}`)
       showToast('✕ ປະຕິເສດ', 'orange')
@@ -1243,14 +1265,7 @@ export default function StaffPage() {
     setOrders(prev => prev.map(ord => ord.id === o.id
       ? { ...ord, cancelled: true, cancel_reason: reason }
       : ord))
-    const items = typeof o.items === 'string' ? JSON.parse(o.items) : o.items || []
-    const stockKey = o.type === 'online' ? 'stock_online' : 'stock_shop'
-    // Fetch fresh stock from DB to avoid stale closure
-    const { data: row } = await supabase.from('shop_config').select('value').eq('key', stockKey).single()
-    const fallback = o.type === 'online' ? stockOnline : stockShop
-    const freshStock = row ? JSON.parse(row.value) : [...fallback]
-    items.forEach(it => { freshStock[it.menuIdx] = (freshStock[it.menuIdx] || 0) + it.qty })
-    await saveConfig(stockKey, freshStock)
+    await returnStockFor(o)
     await supabase.from('orders').update({ cancelled: true, cancel_reason: reason }).eq('id', o.id)
     logActivity('cancel_order', `#${String(o.qnum).padStart(4, '0')} — ${reason || 'ບໍ່ໄດ້ໃສ່ເຫດຜົນ'}`)
     showToast('ຍົກເລີກ', 'orange')
