@@ -912,6 +912,9 @@ export default function StaffPage() {
     // for the same pipe: config lost, the six-second failsafe fired, and the
     // till was left on "ການເຊື່ອມຕໍ່ຊ້າ" with a database that was perfectly
     // healthy. Fetch it first, on its own.
+    // Straight in from the last known config if there is one, so the till is
+    // usable while the network is still thinking about it.
+    loadCachedConfig()
     await loadConfig()
     setLoading(false)
     // The board only needs what is still open plus the last few days. Fetch
@@ -966,9 +969,36 @@ export default function StaffPage() {
     { lo: 'ເມນູ 10', en: 'Menu 10' },
   ]
 
-  async function loadConfig() {
+  // Open from the last known config, then refresh. A request that never comes
+  // back used to hold the whole till shut: the PIN lives in shop_config, so
+  // without it the page cannot tell whether to show the gate, and it sat on
+  // "connection slow" with no way in. The till has opened before, so it
+  // already knows the answer — use it, and let the network catch up.
+  function loadCachedConfig() {
+    try {
+      const raw = localStorage.getItem('bcb_staff_config')
+      if (!raw) return false
+      const rows = JSON.parse(raw)
+      if (!Array.isArray(rows) || !rows.length) return false
+      loadConfig(rows)
+      return true
+    } catch { return false }
+  }
+
+  async function loadConfig(cachedRows) {
     if (!supabase) return
-    const { data, error } = await supabase.from('shop_config').select('*')
+    // Rows handed in come from the cache: apply them without asking the network.
+    if (cachedRows) {
+      applyConfigRows(cachedRows)
+      return
+    }
+    // Supabase's client has no timeout of its own, so a request that hangs
+    // hangs forever — which is what left the retry loop running with nothing
+    // to report: no error, no data, no end.
+    const { data, error } = await Promise.race([
+      supabase.from('shop_config').select('*'),
+      new Promise(resolve => setTimeout(() => resolve({ data: null, error: { message: 'ໝົດເວລາລໍຖ້າ (timeout 12s)' } }), 12000)),
+    ])
     if (error) {
       console.error('loadConfig error:', error)
       setConfigError(error.message || String(error))
@@ -980,6 +1010,11 @@ export default function StaffPage() {
       setConfigStalled(true)
       return
     }
+    try { localStorage.setItem('bcb_staff_config', JSON.stringify(data || [])) } catch { }
+    applyConfigRows(data)
+  }
+
+  function applyConfigRows(data) {
     const cfg = {}
     if (data) data.forEach(r => { cfg[r.key] = r.value })
 
@@ -1015,18 +1050,20 @@ export default function StaffPage() {
     if (cfg.blocked_ips) try { setBlockedIps(JSON.parse(cfg.blocked_ips)) } catch (_) {}
     if (cfg.blocked_fp) try { setBlockedFp(JSON.parse(cfg.blocked_fp)) } catch (_) {}
 
-    // ถ้ายังไม่มีข้อมูลใน Supabase ให้ save default ขึ้นไปก่อน
+    // ถ້າຍັງບໍ່ມີຂໍ້ມູນໃນ Supabase ໃຫ້ save default ຂຶ້ນໄປກ່ອນ
     if (!cfg.menus) {
-      await supabase.from('shop_config').upsert([
+      supabase.from('shop_config').upsert([
         { key: 'menus', value: JSON.stringify(DEFAULT_MENUS) },
         { key: 'prices', value: JSON.stringify(loadedPrices) },
         { key: 'stock_shop', value: JSON.stringify(loadedStockShop) },
         { key: 'stock_online', value: JSON.stringify(loadedStockOnline) },
         { key: 'next_queue', value: '0' },
-      ], { onConflict: 'key' })
+      ], { onConflict: 'key' }).then(() => { }, () => { })
     }
     configLoadedRef.current = true
     setConfigError('')
+    setConfigStalled(false)
+    setLoading(false)
   }
 
   async function saveConfig(key, value) {
