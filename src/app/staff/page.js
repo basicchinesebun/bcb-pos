@@ -1028,7 +1028,6 @@ export default function StaffPage() {
     setMenus(loadedMenus)
     setPrices(loadedPrices)
     setCosts(loadedCosts)
-    setStockTotal(loadedStockTotal)
     setStockShop(loadedStockShop)
     setStockOnline(loadedStockOnline)
     // ตรวจสต็อกต่ำหลังโหลด
@@ -1450,7 +1449,7 @@ export default function StaffPage() {
   // Payment slips are 99% of this project's file storage and were on course to
   // fill the 1 GB allowance in about two months. They're only needed while the
   // preorder they belong to is still live, so keep two weeks and drop the rest.
-  const BUILD_TAG = 'SW-FIX'
+  const BUILD_TAG = 'ok-2'
 
 const SLIP_KEEP_DAYS = 14
 
