@@ -1450,7 +1450,7 @@ export default function StaffPage() {
   // Payment slips are 99% of this project's file storage and were on course to
   // fill the 1 GB allowance in about two months. They're only needed while the
   // preorder they belong to is still live, so keep two weeks and drop the rest.
-  const BUILD_TAG = 'f6ba1a2+'
+  const BUILD_TAG = 'SW-FIX'
 
 const SLIP_KEEP_DAYS = 14
 
