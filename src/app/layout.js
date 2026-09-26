@@ -27,6 +27,11 @@ export const viewport = {
   maximumScale: 1,
   userScalable: false,
   colorScheme: 'only light',
+  // Without this the page stops at the safe area and iOS fills the rest with
+  // black — the bars down the sides of a notched screen the moment it is
+  // turned on its side. With it the page reaches the physical edge of the
+  // glass, and globals.css keeps the content itself clear of the notch.
+  viewportFit: 'cover',
 }
 
 export default function RootLayout({ children }) {

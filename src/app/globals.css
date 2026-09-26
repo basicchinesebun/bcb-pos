@@ -45,6 +45,29 @@ body {
   }
 }
 
+/* Every page is one of these two shells. With viewport-fit=cover the shell now
+   reaches the edge of the glass, so its own background fills what used to be a
+   black bar; the padding then holds the content clear of the notch, the rounded
+   corners and the home indicator. Boxes are border-box, so the shell is still
+   exactly one screen tall.
+   On a screen with no cutout — every Android tablet and the Windows till —
+   these insets are 0 and nothing moves. */
+@supports (padding: env(safe-area-inset-top)) {
+  .h-dvh,
+  .min-h-dvh {
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    padding-left: env(safe-area-inset-left, 0px);
+    padding-right: env(safe-area-inset-right, 0px);
+  }
+
+  /* Toasts are pinned to the viewport rather than to the shell, so they need
+     the same clearance or they slide under the notch. */
+  .fixed.top-5 {
+    top: calc(1.25rem + env(safe-area-inset-top, 0px));
+  }
+}
+
 @layer components {
   .btn-primary {
     @apply w-full py-4 bg-[#3d1f0a] text-[#fdf6ee] rounded-xl font-black text-base cursor-pointer border-none;
