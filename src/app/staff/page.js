@@ -1250,6 +1250,11 @@ export default function StaffPage() {
   // another till in that window. deduct_stock takes the row lock and applies
   // only these menus, so a sale landing at the same moment survives.
   async function returnStockFor(o) {
+    // An order's buns come off the shelf once, so they go back on once.
+    // Rejecting an order that had already been cancelled used to credit the
+    // same items a second time, leaving the till believing in buns that were
+    // never baked.
+    if (o.cancelled || o.status === 'rejected' || o.status === 'blocked') return
     const items = typeof o.items === 'string' ? JSON.parse(o.items) : o.items || []
     const deltas = {}
     items.forEach(it => {
@@ -1313,14 +1318,49 @@ export default function StaffPage() {
       { key: 'blocked_ips', value: JSON.stringify(newIps) },
       { key: 'blocked_fp', value: JSON.stringify(newFp) },
     ], { onConflict: 'key' })
+    // Blocking is a cancellation with a ban attached — the order will never be
+    // made, so its buns belong back on the shelf. Without this they stayed
+    // deducted and the menu read ໝົດ with trays still full.
+    await returnStockFor(o)
     await supabase.from('orders').update({ status: 'blocked' }).eq('id', o.id)
     setOrders(prev => prev.map(ord => ord.id === o.id ? { ...ord, status: 'blocked' } : ord))
     showToast('🚫 ບ໋ອກຜູ້ໃຊ້ແລ້ວ', 'orange')
   }
 
   async function undoOrder(id, field) {
-    setOrders(prev => prev.map(o => o.id === id ? { ...o, [field]: false } : o))
+    const o = orders.find(x => x.id === id)
+    // Undoing a cancellation brings the order back, so the buns have to come
+    // off the shelf again — they were handed back when it was cancelled. This
+    // used to flip the row and nothing else, which is free stock: the till
+    // believed it still had what this order was about to take.
+    if (field === 'cancelled' && o) {
+      const items = typeof o.items === 'string' ? JSON.parse(o.items) : o.items || []
+      const deltas = {}
+      items.forEach(it => {
+        const idx = Number.isInteger(it.menuIdx)
+          ? it.menuIdx
+          : menus.findIndex(m => normName(m.lo || m) === normName(it.name || ''))
+        if (idx >= 0 && it.qty > 0) deltas[idx] = (deltas[idx] || 0) + it.qty
+      })
+      if (Object.keys(deltas).length) {
+        const stockKey = o.type === 'online' ? 'stock_online' : 'stock_shop'
+        const { data: taken, error } = await supabase.rpc('take_stock', { p_key: stockKey, p_deltas: deltas })
+        if (error || !taken?.ok) {
+          const short = Object.entries(taken?.short || {})
+            .map(([i, left]) => `${menus[+i]?.lo || ''} (ເຫຼືອ ${left})`)
+            .join('\n')
+          alert(`ສະຕັອກບໍ່ພໍຈະກູ້ອໍເດີນີ້ຄືນ:\n${short || 'ບໍ່ສາມາດກວດສະຕັອກໄດ້'}\n\nຕ້ອງເພີ່ມສະຕັອກກ່ອນ`)
+          return
+        }
+        if (Array.isArray(taken.stock)) {
+          if (o.type === 'online') setStockOnline(taken.stock); else setStockShop(taken.stock)
+        }
+      }
+    }
+    setOrders(prev => prev.map(x => x.id === id ? { ...x, [field]: false } : x))
     await supabase.from('orders').update({ [field]: false }).eq('id', id)
+    logActivity(field === 'cancelled' ? 'undo_cancel' : 'undo_done',
+      `#${String(o?.qnum ?? '').padStart(4, '0')}`)
   }
 
   async function verifySlip(o) {
