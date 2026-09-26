@@ -151,6 +151,7 @@ export default function StaffPage() {
   const setConfigStalled = v => { configStalledRef.current = v; _setConfigStalled(v) }
   const configLoadedRef = useRef(false)
   const configStalledRef = useRef(false)
+  const [configError, setConfigError] = useState('')
   const [chatConvos, setChatConvos] = useState([])
   const [activeChatPhone, setActiveChatPhone] = useState(null)
   const [chatMessages, setChatMessages] = useState([])
@@ -308,7 +309,11 @@ export default function StaffPage() {
     const heal = setInterval(() => {
       if (configLoadedRef.current && !configStalledRef.current) return
       loadConfig().then(() => {
-        if (configLoadedRef.current && !configStalledRef.current) setConfigStalled(false)
+        // Clear the stall on the strength of the config having landed. Testing
+        // the stalled flag here as well was the bug: it is still set from the
+        // failure that started the retrying, so a successful retry checked a
+        // flag only this line could clear and left the screen up for good.
+        if (configLoadedRef.current) { setConfigStalled(false); setLoading(false) }
       }).catch(() => { })
     }, 5000)
 
@@ -966,6 +971,7 @@ export default function StaffPage() {
     const { data, error } = await supabase.from('shop_config').select('*')
     if (error) {
       console.error('loadConfig error:', error)
+      setConfigError(error.message || String(error))
       // Deliberately NOT marking config as loaded: we still don't know
       // staff_pin, and leaving it false is what lets the retry above run.
       // An explicit fetch error (e.g. Supabase quota/plan restriction) means we
@@ -1020,6 +1026,7 @@ export default function StaffPage() {
       ], { onConflict: 'key' })
     }
     configLoadedRef.current = true
+    setConfigError('')
   }
 
   async function saveConfig(key, value) {
@@ -2999,6 +3006,12 @@ setStockShop(newSS); setStockOnline(newSO)
         ການເຊື່ອມຕໍ່ຊ້າ ບໍ່ສາມາດກວດສອບລະຫັດ Staff ໄດ້<br/>
         <span style={{ color: 'rgba(253,246,238,0.5)' }}>ກຳລັງລອງໃໝ່ເອງທຸກ 5 ວິນາທີ...</span>
       </div>
+      {configError && (
+        <div className="text-xs font-bold text-center px-8 break-all"
+          style={{ color: 'rgba(253,246,238,0.35)' }}>
+          {configError}
+        </div>
+      )}
       <button onClick={() => window.location.reload()} className="btn-primary px-6 py-2 rounded-full text-sm font-bold">
         ລອງໃໝ່
       </button>
