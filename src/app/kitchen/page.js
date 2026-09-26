@@ -12,6 +12,11 @@ export default function KitchenPage() {
   const [images, setImages] = useState({})
   const [liveStatus, setLiveStatus] = useState('connecting')
   const [filter, setFilter] = useState('all')
+  // The order the ✕ is asking about, and the tray-clearing screen.
+  const [cancelAsk, setCancelAsk] = useState(null)
+  const [bulkOpen, setBulkOpen] = useState(false)
+  const [bulkSel, setBulkSel] = useState(new Set())
+  const [bulkBusy, setBulkBusy] = useState(false)
 
   useEffect(() => {
     if (!supabase) return
@@ -89,6 +94,28 @@ export default function KitchenPage() {
       .upsert({ key: 'current_queue', value: String(o.qnum) }, { onConflict: 'key' })
   }
 
+  // A tray out of the steamer clears a run of queue numbers at once. Tapping ✓
+  // on each card is fine for one order and hopeless for twenty, which is how
+  // the board came to be left un-cleared for a whole service.
+  async function markDoneMany(list) {
+    if (!list.length) return
+    setBulkBusy(true)
+    const ids = list.map(o => o.id)
+    setOrders(prev => prev.filter(x => !ids.includes(x.id)))
+    const doneAt = new Date().toISOString()
+    const { error } = await supabase.from('orders')
+      .update({ done: true, done_at: doneAt }).in('id', ids)
+    if (error) { await loadOrders(); alert('ບັນທຶກບໍ່ສຳເລັດ: ' + error.message) }
+    else {
+      // Publish the highest number cleared, so the board customers watch
+      // jumps straight to where the counter actually is.
+      const top = list.reduce((m, o) => Math.max(m, o.qnum || 0), 0)
+      if (top) await supabase.from('shop_config')
+        .upsert({ key: 'current_queue', value: String(top) }, { onConflict: 'key' })
+    }
+    setBulkBusy(false); setBulkOpen(false); setBulkSel(new Set())
+  }
+
   async function markCancel(o) {
     setOrders(prev => prev.filter(x => x.id !== o.id))
     const { error } = await supabase.from('orders').update({ cancelled: true }).eq('id', o.id)
@@ -139,7 +166,7 @@ export default function KitchenPage() {
     { key: 'walkin', label: '🏪 Walk-in' },
   ]
 
-  const sharedProps = { onDone: markDone, onCancel: markCancel, menus, images }
+  const sharedProps = { onDone: markDone, onAskCancel: setCancelAsk, menus, images }
 
   return (
     <div className="min-h-dvh flex flex-col" style={{ background: 'var(--cream)' }}>
@@ -151,10 +178,22 @@ export default function KitchenPage() {
             <div className="font-serif text-lg font-black" style={{ color: 'var(--cream)' }}>🍳 Kitchen Display</div>
             <div className="text-xs" style={{ color: 'rgba(253,246,238,0.6)' }}>{shopInfo.name}</div>
           </div>
-          <div className="flex items-center gap-1.5 text-xs px-2 py-1 rounded-full"
-            style={{ background: liveStatus === 'live' ? 'rgba(34,197,94,0.2)' : 'rgba(234,179,8,0.2)', color: liveStatus === 'live' ? '#16a34a' : '#92400e' }}>
-            <div className="w-1.5 h-1.5 rounded-full" style={{ background: liveStatus === 'live' ? '#22c55e' : '#f59e0b' }} />
-            {liveStatus === 'live' ? 'LIVE' : '...'}
+          <div className="flex items-center gap-2">
+            {confirmed.length > 0 && (
+              <button
+                onClick={() => { setBulkSel(new Set()); setBulkOpen(true) }}
+                className="px-3 py-2 rounded-xl text-sm font-black flex items-center gap-1.5"
+                style={{ background: 'var(--cream)', color: 'var(--brown)', touchAction: 'manipulation' }}>
+                ✓ ສຳເລັດຫຼາຍໃບ
+                <span className="px-1.5 py-0.5 rounded-full text-xs"
+                  style={{ background: 'var(--cream3)' }}>{confirmed.length}</span>
+              </button>
+            )}
+            <div className="flex items-center gap-1.5 text-xs px-2 py-1 rounded-full"
+              style={{ background: liveStatus === 'live' ? 'rgba(34,197,94,0.2)' : 'rgba(234,179,8,0.2)', color: liveStatus === 'live' ? '#16a34a' : '#92400e' }}>
+              <div className="w-1.5 h-1.5 rounded-full" style={{ background: liveStatus === 'live' ? '#22c55e' : '#f59e0b' }} />
+              {liveStatus === 'live' ? 'LIVE' : '...'}
+            </div>
           </div>
         </div>
         {/* Filter tabs */}
@@ -171,6 +210,93 @@ export default function KitchenPage() {
           ))}
         </div>
       </div>
+
+      {/* Asked before anything happens, because ✕ sits beside ✓ and the board
+          is used with wet hands. Names the order so the answer is to the card
+          that was actually pressed. */}
+      {cancelAsk && (() => {
+        const items = (() => { try { return typeof cancelAsk.items === 'string' ? JSON.parse(cancelAsk.items) : cancelAsk.items || [] } catch { return [] } })()
+        return (
+          <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4"
+            style={{ background: 'rgba(61,31,10,0.6)' }} onClick={() => setCancelAsk(null)}>
+            <div className="w-full max-w-md rounded-2xl p-5" style={{ background: 'var(--warm-white)' }}
+              onClick={e => e.stopPropagation()}>
+              <div className="text-lg font-black mb-1" style={{ color: 'var(--brown)' }}>ຍົກເລີກອໍເດີນີ້ແທ້ບໍ?</div>
+              <div className="font-serif text-3xl font-black my-2" style={{ color: 'var(--brown)' }}>
+                #{String(cancelAsk.qnum).padStart(4, '0')}
+              </div>
+              <div className="text-sm font-bold leading-6 mb-1" style={{ color: 'var(--gray3)' }}>
+                {items.map(it => `${it.name} ×${it.qty}`).join(', ')}
+              </div>
+              <div className="text-xs font-bold mb-4" style={{ color: 'var(--gray3)' }}>
+                ສິນຄ້າຈະຖືກຄືນເຂົ້າສະຕ໋ອກ · ກູ້ຄືນໄດ້ທີ່ໜ້າ Staff
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <button onClick={() => setCancelAsk(null)}
+                  className="py-4 rounded-xl font-black text-base"
+                  style={{ background: 'var(--cream2)', color: 'var(--brown)', border: '2px solid var(--cream3)', touchAction: 'manipulation' }}>
+                  ບໍ່ ກັບຄືນ
+                </button>
+                <button onClick={() => { const o = cancelAsk; setCancelAsk(null); markCancel(o) }}
+                  className="py-4 rounded-xl font-black text-base text-white"
+                  style={{ background: '#b91c1c', touchAction: 'manipulation' }}>
+                  ✕ ຍົກເລີກ
+                </button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
+
+      {/* Clear a tray's worth at once. Only orders already being made are
+          listed, so nothing here can be a preorder that has not been steamed. */}
+      {bulkOpen && (
+        <div className="fixed inset-0 z-50 flex flex-col" style={{ background: 'var(--cream)' }}>
+          <div className="flex items-center gap-3 px-4 py-3 flex-shrink-0" style={{ background: 'var(--brown)' }}>
+            <button onClick={() => setBulkOpen(false)} className="text-2xl font-black w-9" style={{ color: 'var(--cream)' }}>✕</button>
+            <div className="flex-1 font-serif text-lg font-black" style={{ color: 'var(--cream)' }}>✓ ສຳເລັດຫຼາຍໃບ</div>
+            <button
+              onClick={() => setBulkSel(prev => prev.size === confirmed.length ? new Set() : new Set(confirmed.map(o => o.id)))}
+              className="px-3 py-2 rounded-xl text-sm font-black"
+              style={{ background: 'rgba(253,246,238,0.15)', color: 'var(--cream)' }}>
+              {bulkSel.size === confirmed.length ? 'ເອົາອອກທັງໝົດ' : 'ເລືອກທັງໝົດ'}
+            </button>
+          </div>
+          <div className="flex-1 overflow-y-auto p-3 flex flex-col gap-2">
+            {confirmed.map(o => {
+              const on = bulkSel.has(o.id)
+              const items = (() => { try { return typeof o.items === 'string' ? JSON.parse(o.items) : o.items || [] } catch { return [] } })()
+              return (
+                <button key={o.id}
+                  onClick={() => setBulkSel(prev => { const n = new Set(prev); n.has(o.id) ? n.delete(o.id) : n.add(o.id); return n })}
+                  className="flex items-center gap-3 p-3 rounded-2xl text-left"
+                  style={{ background: 'var(--warm-white)', border: `2px solid ${on ? 'var(--brown)' : 'var(--cream3)'}`, touchAction: 'manipulation' }}>
+                  <span className="flex-shrink-0 w-8 h-8 rounded-lg grid place-items-center text-lg font-black"
+                    style={{ background: on ? 'var(--brown)' : 'var(--cream2)', color: on ? 'var(--cream)' : 'var(--cream3)', border: '2px solid var(--cream3)' }}>
+                    {on ? '✓' : ''}
+                  </span>
+                  <span className="font-serif text-2xl font-black flex-shrink-0" style={{ color: 'var(--brown)' }}>
+                    {String(o.qnum).padStart(4, '0')}
+                  </span>
+                  <span className="text-xs font-bold flex-1 min-w-0 leading-5" style={{ color: 'var(--gray3)' }}>
+                    {items.map(it => `${it.name} ×${it.qty}`).join(', ')}
+                  </span>
+                </button>
+              )
+            })}
+          </div>
+          <div className="flex-shrink-0 p-3 flex items-center gap-3" style={{ background: 'var(--warm-white)', borderTop: '2px solid var(--cream3)' }}>
+            <span className="text-sm font-black" style={{ color: 'var(--gray3)' }}>ເລືອກ {bulkSel.size} ໃບ</span>
+            <button
+              disabled={bulkBusy || bulkSel.size === 0}
+              onClick={() => markDoneMany(confirmed.filter(o => bulkSel.has(o.id)))}
+              className="flex-1 py-4 rounded-xl font-black text-base disabled:opacity-40"
+              style={{ background: '#15803d', color: '#fff', touchAction: 'manipulation' }}>
+              {bulkBusy ? '...' : `✓ ສຳເລັດ ${bulkSel.size} ໃບ`}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* ── Mobile: vertical scroll (original layout) ── */}
       <div className="md:hidden flex-1 overflow-y-auto p-3">
@@ -275,7 +401,7 @@ function parseBagLabel(bagLabel) {
     .map((b, i) => ({ ...b, header: b.header.replace(/\d+/, String(i + 1)) }))
 }
 
-function OrderCard({ o, onDone, onCancel, menus, images }) {
+function OrderCard({ o, onDone, onAskCancel, menus, images }) {
   const [slipOpen, setSlipOpen] = useState(false)
   // A second tap landing before React has removed the card would fire the
   // action twice. Latch on the first one.
@@ -408,10 +534,12 @@ function OrderCard({ o, onDone, onCancel, menus, images }) {
           )}
         </div>
 
-        {/* Buttons */}
+        {/* Buttons. ✓ fires on the first touch because it is pressed all day.
+            ✕ destroys a real order and sits right beside it, so it asks first —
+            one slip with floury hands used to be enough to lose an order. */}
         <div className="grid grid-cols-2 gap-2 p-3 border-t flex-shrink-0" style={{ borderColor: 'var(--cream3)' }}>
           <button
-            onClick={() => { if (busy) return; setBusy(true); onCancel(o) }}
+            onClick={() => { if (busy) return; onAskCancel(o) }}
             disabled={busy}
             className="py-4 rounded-xl text-sm font-black bg-red-50 text-red-600 disabled:opacity-40"
             style={{ border: '1.5px solid #fca5a5', touchAction: 'manipulation' }}>
