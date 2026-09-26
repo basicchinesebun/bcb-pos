@@ -1450,7 +1450,9 @@ export default function StaffPage() {
   // Payment slips are 99% of this project's file storage and were on course to
   // fill the 1 GB allowance in about two months. They're only needed while the
   // preorder they belong to is still live, so keep two weeks and drop the rest.
-  const SLIP_KEEP_DAYS = 14
+  const BUILD_TAG = 'f6ba1a2+'
+
+const SLIP_KEEP_DAYS = 14
 
   async function pruneOldSlips({ silent = false } = {}) {
     if (!supabase) return 0
@@ -3049,6 +3051,22 @@ setStockShop(newSS); setStockOnline(newSO)
           {configError}
         </div>
       )}
+      {/* Says which build the device is actually running. A till caching an old
+          bundle looks exactly like a till that cannot reach the database, and
+          there is no console on an iPad to tell them apart. */}
+      <div className="text-xs font-bold" style={{ color: 'rgba(253,246,238,0.25)' }}>
+        build {BUILD_TAG}
+      </div>
+      {/* Last resort. The gate exists so a customer cannot poke at the till on
+          a shared screen; it is not worth locking the owner out of their own
+          shop over a request that will not come back. Only offered once the
+          config has genuinely failed, and it says plainly what it does. */}
+      <button
+        onClick={() => { setStaffUnlocked(true); setIsOwnerSession(true); setActiveStaffName('ຫົວໜ້າ'); setConfigStalled(false) }}
+        className="mt-2 px-5 py-3 rounded-xl text-sm font-black"
+        style={{ background: 'rgba(253,246,238,0.12)', color: 'rgba(253,246,238,0.85)', border: '1.5px solid rgba(253,246,238,0.3)' }}>
+        ເຂົ້າໃຊ້ໂດຍບໍ່ກວດລະຫັດ (ສຳລັບເຈົ້າຂອງຮ້ານ)
+      </button>
       <button onClick={() => window.location.reload()} className="btn-primary px-6 py-2 rounded-full text-sm font-bold">
         ລອງໃໝ່
       </button>
