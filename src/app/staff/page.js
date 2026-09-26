@@ -147,8 +147,10 @@ export default function StaffPage() {
   const [isOnline, setIsOnline] = useState(true)
   const [liveStatus, setLiveStatus] = useState('connecting') // 'live' | 'connecting' | 'error'
   const [loading, setLoading] = useState(true)
-  const [configStalled, setConfigStalled] = useState(false)
+  const [configStalled, _setConfigStalled] = useState(false)
+  const setConfigStalled = v => { configStalledRef.current = v; _setConfigStalled(v) }
   const configLoadedRef = useRef(false)
+  const configStalledRef = useRef(false)
   const [chatConvos, setChatConvos] = useState([])
   const [activeChatPhone, setActiveChatPhone] = useState(null)
   const [chatMessages, setChatMessages] = useState([])
@@ -296,10 +298,19 @@ export default function StaffPage() {
     // (which carries staff_pin) hasn't resolved yet, we don't actually know
     // whether the PIN gate should apply, so don't silently fall through into
     // the dashboard. Surface a stalled state instead of bypassing the lock.
+    // Six seconds was tight for a phone on shop wifi. Give it longer, and
+    // when it does give up, keep trying in the background — a till that heals
+    // itself beats one waiting for someone to spot the retry button.
     const timer = setTimeout(() => {
       if (!configLoadedRef.current) setConfigStalled(true)
       setLoading(false)
-    }, 6000)
+    }, 15000)
+    const heal = setInterval(() => {
+      if (configLoadedRef.current && !configStalledRef.current) return
+      loadConfig().then(() => {
+        if (configLoadedRef.current && !configStalledRef.current) setConfigStalled(false)
+      }).catch(() => { })
+    }, 5000)
 
     // Real-time orders — direct state mutations (instant UI) + status tracking
     const ch = supabase.channel('staff-orders')
@@ -346,6 +357,7 @@ export default function StaffPage() {
       supabase.removeChannel(ch)
       clearInterval(poll)
       clearTimeout(timer)
+      clearInterval(heal)
       window.removeEventListener('online', onOnline)
       window.removeEventListener('offline', onOffline)
     }
@@ -889,8 +901,19 @@ export default function StaffPage() {
   }
 
   async function loadAll() {
-    await Promise.all([loadOrders(), loadConfig()])
+    // shop_config is a few kilobytes and carries staff_pin, so nothing can
+    // start until it lands. It used to be fired off alongside the whole order
+    // history — over a megabyte — and on a weak connection the two competed
+    // for the same pipe: config lost, the six-second failsafe fired, and the
+    // till was left on "ການເຊື່ອມຕໍ່ຊ້າ" with a database that was perfectly
+    // healthy. Fetch it first, on its own.
+    await loadConfig()
     setLoading(false)
+    // The board only needs what is still open plus the last few days. Fetch
+    // that now so the orders appear, and pull the rest of the history behind
+    // it for the sales tab, which nobody is looking at in the first second.
+    await loadOrders('recent')
+    loadOrders('full').catch(() => { })
   }
 
   async function loadOrders(scope = 'full') {
@@ -943,7 +966,8 @@ export default function StaffPage() {
     const { data, error } = await supabase.from('shop_config').select('*')
     if (error) {
       console.error('loadConfig error:', error)
-      configLoadedRef.current = true
+      // Deliberately NOT marking config as loaded: we still don't know
+      // staff_pin, and leaving it false is what lets the retry above run.
       // An explicit fetch error (e.g. Supabase quota/plan restriction) means we
       // genuinely don't know staff_pin — same failure mode as a timeout, so
       // don't let it silently look like "no PIN configured".
@@ -2972,7 +2996,8 @@ setStockShop(newSS); setStockOnline(newSO)
   if (configStalled && !staffUnlocked) return (
     <div className="min-h-dvh flex flex-col items-center justify-center gap-4" style={{ background: '#3d1f0a' }}>
       <div className="text-sm font-bold text-center px-6" style={{ color: 'rgba(253,246,238,0.8)' }}>
-        ການເຊື່ອມຕໍ່ຊ້າ ບໍ່ສາມາດກວດສອບລະຫັດ Staff ໄດ້<br/>ກະລຸນາລອງໃໝ່
+        ການເຊື່ອມຕໍ່ຊ້າ ບໍ່ສາມາດກວດສອບລະຫັດ Staff ໄດ້<br/>
+        <span style={{ color: 'rgba(253,246,238,0.5)' }}>ກຳລັງລອງໃໝ່ເອງທຸກ 5 ວິນາທີ...</span>
       </div>
       <button onClick={() => window.location.reload()} className="btn-primary px-6 py-2 rounded-full text-sm font-bold">
         ລອງໃໝ່
