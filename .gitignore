@@ -3,3 +3,6 @@ node_modules/
 out/
 .env.local
 .vercel
+
+# Practice-shop env files, pasted into Vercel by hand. Never committed.
+.env.test-shop
