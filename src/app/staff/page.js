@@ -866,17 +866,58 @@ export default function StaffPage() {
     })
   }
 
-  async function announce(qnum) {
-    saveConfig('current_queue', String(qnum))
-    if (!settings.soundOn) return
+  // A recorded Lao voice if one has been put in /public/voice, and the Thai
+  // speech synthesiser if not. No phone or tablet ships a Lao voice, so the
+  // synthesiser can only ever speak Thai here — which is what banks and
+  // hospitals avoid by recording a human once and stitching the pieces:
+  // a fixed opening, the ten digits, a fixed closing.
+  const voicePackRef = useRef(null)
+
+  async function hasVoicePack() {
+    if (voicePackRef.current !== null) return voicePackRef.current
+    try {
+      const r = await fetch('/voice/prefix.mp3', { method: 'HEAD', cache: 'no-store' })
+      voicePackRef.current = r.ok
+    } catch { voicePackRef.current = false }
+    return voicePackRef.current
+  }
+
+  // Resolves when the clip finishes — or straight away if it will not play, so
+  // one missing file cannot leave the call hanging half-said.
+  function playClip(src) {
+    return new Promise(resolve => {
+      try {
+        const a = new Audio(src)
+        a.onended = resolve
+        a.onerror = resolve
+        a.play().catch(() => resolve())
+        setTimeout(resolve, 4000)
+      } catch { resolve() }
+    })
+  }
+
+  async function speakQueue(qnum) {
+    const padded = String(qnum).padStart(4, '0')
+    if (await hasVoicePack()) {
+      await playClip('/voice/prefix.mp3')
+      for (const d of padded) await playClip(`/voice/${d}.mp3`)
+      await playClip('/voice/suffix.mp3')
+      return
+    }
     window.speechSynthesis.cancel()
-    await playCallChime()
-    const u = new SpeechSynthesisUtterance(`ออเดอร์หมายเลข ${String(qnum).padStart(4, '0')} เชิญมารับสินค้าที่หน้าเคาน์เตอร์`)
+    const u = new SpeechSynthesisUtterance(`ออเดอร์หมายเลข ${padded} เชิญมารับสินค้าที่หน้าเคาน์เตอร์`)
     const v = voicesRef.current.find(v => v.lang === 'th-TH') || voicesRef.current[0]
     if (v) u.voice = v
     u.lang = 'th-TH'
     u.rate = 0.85
     window.speechSynthesis.speak(u)
+  }
+
+  async function announce(qnum) {
+    saveConfig('current_queue', String(qnum))
+    if (!settings.soundOn) return
+    await playCallChime()
+    await speakQueue(qnum)
   }
 
   function playChatSound() {
