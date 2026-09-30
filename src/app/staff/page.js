@@ -173,6 +173,7 @@ export default function StaffPage() {
   // the cash drawer; 'tablet' is a second person taking orders on an iPad with
   // its own printer, and must not touch either.
   const [stationMode, setStationMode] = useState('main')
+  const [deviceSheet, setDeviceSheet] = useState(false)
   useEffect(() => {
     // ?tablet=1 wins over whatever is stored, so the iPad can be given a
     // bookmark that always lands in tablet mode — nobody has to remember to
@@ -3022,6 +3023,8 @@ setStockShop(newSS); setStockOnline(newSO)
     logActivity('export_sales_csv', `${salesDateFrom} - ${salesDateTo}`)
   }
 
+  const printerReady = usbConnected || btConnected || serialConnected
+
   if (loading) return (
     <div className="min-h-dvh flex flex-col items-center justify-center" style={{ background: '#3d1f0a' }}>
       <div className="flex flex-col items-center gap-6">
@@ -3156,97 +3159,19 @@ setStockShop(newSS); setStockOnline(newSO)
                 {liveStatus === 'live' ? 'LIVE' : '...'}
               </div>
             </div>
-            <div className="flex gap-2">
-              {/* Which till this device is. A second person takes orders on an
-                  iPad with its own printer, and that station must not drive the
-                  customer screen or the cash drawer — both live at the main
-                  till. Stored per device, so switching here changes only this
-                  browser and never the other station. */}
+            <div className="flex gap-2 items-center">
+              {/* Eight buttons used to sit here — station, USB, BT, COM, drawer,
+                  QR, USB recovery, reset — on the row everyone looks at all day
+                  while almost none of them are pressed during service. One chip
+                  now says what the hardware is doing and opens the rest. */}
               <button
-                onClick={() => {
-                  const next = isTablet ? 'main' : 'tablet'
-                  setStationMode(next)
-                  try { localStorage.setItem('bcb_station_mode', next) } catch { }
-                  showToast(next === 'tablet'
-                    ? '📱 ໂໝດແທັບເລັດ · ບໍ່ຄວບຄຸມຈໍລູກຄ້າ ແລະ ລິ້ນຊັກ'
-                    : '🖥 ໂໝດເຄື່ອງຫຼັກ · ຄວບຄຸມຈໍລູກຄ້າ + ລິ້ນຊັກ', 'blue')
-                }}
-                title={isTablet
-                  ? 'ສະຖານີທີ 2 (ແທັບເລັດ) — ພິມໃບເສດຢ່າງດຽວ'
-                  : 'ເຄື່ອງຫຼັກ — ຄວບຄຸມຈໍລູກຄ້າ ແລະ ລິ້ນຊັກ'}
-                className={`text-xs font-black px-3 py-2 rounded-lg border ${isTablet ? 'border-amber-400 text-amber-300' : 'border-[rgba(253,246,238,0.35)] text-[#fdf6ee]'}`}>
-                {isTablet ? '📱 Tablet' : '🖥 ຫຼັກ'}
+                onClick={() => setDeviceSheet(true)}
+                className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-black border ${
+                  printerReady ? 'border-green-400 text-green-300' : 'border-[rgba(253,246,238,0.35)] text-[#fdf6ee]'
+                }`}>
+                🖨 {printerReady ? (usbConnected ? 'USB ✓' : btConnected ? 'BT ✓' : 'COM ✓') : 'ອຸປະກອນ'}
+                {isTablet && <span className="text-amber-300">· 📱</span>}
               </button>
-              {/* Only offer the connections this browser can actually make.
-                  On an iPad neither exists — Safari has no WebUSB or Web
-                  Bluetooth, and every browser there is Safari underneath — so
-                  these buttons did nothing at all when pressed. A button that
-                  silently does nothing is what cost days on the main till's
-                  printer; better that it isn't there, with a line saying where
-                  receipts will come out instead. */}
-              {caps.usb && (
-                <button onClick={() => connectUsbPrinter()} className={`text-xs font-black px-3 py-2 rounded-lg border ${usbConnected ? 'border-green-400 text-green-300' : 'border-[rgba(253,246,238,0.35)] text-[#fdf6ee]'}`}>
-                  {usbConnected ? '🖨 USB ✓' : 'USB'}
-                </button>
-              )}
-              {caps.bt && (
-                <button onClick={connectPrinter} className={`text-xs font-black px-3 py-2 rounded-lg border ${btConnected ? 'border-green-400 text-green-300' : 'border-[rgba(253,246,238,0.35)] text-[#fdf6ee]'}`}>
-                  {btConnected ? '🖨 BT ✓' : 'BT'}
-                </button>
-              )}
-              {caps.ready && !caps.usb && !caps.bt && (
-                <span
-                  title="ເບຣົາເຊີນີ້ຕໍ່ເຄື່ອງພິມໂດຍກົງບໍ່ໄດ້ (iPad/iPhone) — ກົດພິມຈະເປີດໜ້າຕ່າງພິມຂອງເບຣົາເຊີແທນ"
-                  className="text-xs font-black px-3 py-2 rounded-lg border border-[rgba(253,246,238,0.25)] text-[rgba(253,246,238,0.6)]">
-                  🖨 ຜ່ານເບຣົາເຊີ
-                </span>
-              )}
-              {hasSerial && (
-                <button onClick={connectSerialPrinter} title="ສຳລັບເຄື່ອງພິມທີ່ pair ແບບ Bluetooth ທຳມະດາ (COM port)" className={`text-xs font-black px-3 py-2 rounded-lg border ${serialConnected ? 'border-green-400 text-green-300' : 'border-[rgba(253,246,238,0.35)] text-[#fdf6ee]'}`}>
-                  {serialConnected ? '🖨 COM ✓' : 'COM'}
-                </button>
-              )}
-              <button onClick={() => kickDrawer()} title="ເປີດລິ້ນຊັກ" className="text-xs font-black px-3 py-2 rounded-lg border border-[rgba(253,246,238,0.35)] text-[#fdf6ee]">🔓</button>
-              {/* Put the payment QR up on its own. Until now the QR only
-                  appeared attached to an order, so there was no way to let
-                  someone scan and pay without ringing something up first.
-                  Hidden on the tablet, which doesn't drive that screen. */}
-              {!isTablet && <button
-                onClick={() => {
-                  if (qrOnlyOn) { clearDisplay(); setQrOnlyOn(false); showToast('ປິດ QR ແລ້ວ', 'orange'); return }
-                  writeDisplay({ items: [], total: 0, qrOnly: true })
-                  setQrOnlyOn(true)
-                  showToast('📱 ສະແດງ QR ຈ່າຍເງິນ', 'green')
-                }}
-                title="ສະແດງ QR ຈ່າຍເງິນຢ່າງດຽວຢູ່ຈໍລູກຄ້າ"
-                className={`text-xs font-black px-3 py-2 rounded-lg border ${qrOnlyOn ? 'border-green-400 text-green-300' : 'border-[rgba(253,246,238,0.35)] text-[#fdf6ee]'}`}>
-                {qrOnlyOn ? '📱 QR ✓' : '📱 QR'}
-              </button>}
-              {/* Recovers a stuck USB printer, so it belongs with the USB
-                  button — on a device with no WebUSB there is nothing for it
-                  to recover. Missed when USB and BT were gated. */}
-              {caps.usb && <button
-                onClick={async () => {
-                  // Deliberately does NOT forget the device. Forgetting drops
-                  // the permission, which forces Chrome's chooser to open —
-                  // and on this dual-screen till that window appears where
-                  // nobody sees it, so the button just hung on "connecting…".
-                  // Releasing and re-acquiring clears a stuck printer without
-                  // needing anyone to pick anything.
-                  showToast('ກຳລັງລ້າງການເຊື່ອມ USB...', 'orange')
-                  usbDeviceRef.current = null
-                  setUsbConnected(false)
-                  await releaseAllUsb()
-                  await new Promise(r => setTimeout(r, 800))
-                  if (await connectUsbPrinter({ silent: true, force: true })) {
-                    showToast('🖨 USB ພ້ອມໃຊ້ ✅', 'green')
-                  } else {
-                    showToast('❌ ຍັງເຊື່ອມບໍ່ໄດ້ — ກົດປຸ່ມ USB', 'red')
-                  }
-                }}
-                title="ລ້າງ USB ທີ່ຄ້າງ ແລ້ວເຊື່ອມໃໝ່"
-                className="text-xs font-black px-3 py-2 rounded-lg border border-[rgba(253,246,238,0.35)] text-[#fdf6ee]">🔄USB</button>}
-              <button onClick={() => alert('ຕ້ອງຊອກຫາ ↺ Reset ໃນລາຍການ')} className="text-xs font-black px-3 py-2 rounded-lg border border-red-400 text-red-300">↺</button>
               <button onClick={() => setHeaderCollapsed(true)} title="ເຊື່ອງແຖບເທິງ" className="text-xs font-black px-3 py-2 rounded-lg border border-[rgba(253,246,238,0.35)] text-[#fdf6ee]">▲</button>
             </div>
           </div>
@@ -4841,6 +4766,118 @@ setStockShop(newSS); setStockOnline(newSO)
           ແຊດ
         </button>
       </div>
+
+
+      {/* Everything that used to crowd the top bar. Opened from the one chip
+          that replaced it, so the row above stays about the shop and this stays
+          about the machines. */}
+      {deviceSheet && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4"
+          style={{ background: 'rgba(61,31,10,0.6)' }} onClick={() => setDeviceSheet(false)}>
+          <div className="w-full max-w-lg rounded-2xl p-4" style={{ background: 'var(--brown)' }}
+            onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-3">
+              <span className="font-serif text-lg font-black" style={{ color: 'var(--cream)' }}>🖨 ອຸປະກອນ</span>
+              <button onClick={() => setDeviceSheet(false)} className="text-xl font-black px-2" style={{ color: 'var(--cream)' }}>✕</button>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {/* Which till this device is. A second person takes orders on an
+                  iPad with its own printer, and that station must not drive the
+                  customer screen or the cash drawer — both live at the main
+                  till. Stored per device, so switching here changes only this
+                  browser and never the other station. */}
+              <button
+                onClick={() => {
+                  const next = isTablet ? 'main' : 'tablet'
+                  setStationMode(next)
+                  try { localStorage.setItem('bcb_station_mode', next) } catch { }
+                  showToast(next === 'tablet'
+                    ? '📱 ໂໝດແທັບເລັດ · ບໍ່ຄວບຄຸມຈໍລູກຄ້າ ແລະ ລິ້ນຊັກ'
+                    : '🖥 ໂໝດເຄື່ອງຫຼັກ · ຄວບຄຸມຈໍລູກຄ້າ + ລິ້ນຊັກ', 'blue')
+                }}
+                title={isTablet
+                  ? 'ສະຖານີທີ 2 (ແທັບເລັດ) — ພິມໃບເສດຢ່າງດຽວ'
+                  : 'ເຄື່ອງຫຼັກ — ຄວບຄຸມຈໍລູກຄ້າ ແລະ ລິ້ນຊັກ'}
+                className={`text-xs font-black px-3 py-2 rounded-lg border ${isTablet ? 'border-amber-400 text-amber-300' : 'border-[rgba(253,246,238,0.35)] text-[#fdf6ee]'}`}>
+                {isTablet ? '📱 Tablet' : '🖥 ຫຼັກ'}
+              </button>
+              {/* Only offer the connections this browser can actually make.
+                  On an iPad neither exists — Safari has no WebUSB or Web
+                  Bluetooth, and every browser there is Safari underneath — so
+                  these buttons did nothing at all when pressed. A button that
+                  silently does nothing is what cost days on the main till's
+                  printer; better that it isn't there, with a line saying where
+                  receipts will come out instead. */}
+              {caps.usb && (
+                <button onClick={() => connectUsbPrinter()} className={`text-xs font-black px-3 py-2 rounded-lg border ${usbConnected ? 'border-green-400 text-green-300' : 'border-[rgba(253,246,238,0.35)] text-[#fdf6ee]'}`}>
+                  {usbConnected ? '🖨 USB ✓' : 'USB'}
+                </button>
+              )}
+              {caps.bt && (
+                <button onClick={connectPrinter} className={`text-xs font-black px-3 py-2 rounded-lg border ${btConnected ? 'border-green-400 text-green-300' : 'border-[rgba(253,246,238,0.35)] text-[#fdf6ee]'}`}>
+                  {btConnected ? '🖨 BT ✓' : 'BT'}
+                </button>
+              )}
+              {caps.ready && !caps.usb && !caps.bt && (
+                <span
+                  title="ເບຣົາເຊີນີ້ຕໍ່ເຄື່ອງພິມໂດຍກົງບໍ່ໄດ້ (iPad/iPhone) — ກົດພິມຈະເປີດໜ້າຕ່າງພິມຂອງເບຣົາເຊີແທນ"
+                  className="text-xs font-black px-3 py-2 rounded-lg border border-[rgba(253,246,238,0.25)] text-[rgba(253,246,238,0.6)]">
+                  🖨 ຜ່ານເບຣົາເຊີ
+                </span>
+              )}
+              {hasSerial && (
+                <button onClick={connectSerialPrinter} title="ສຳລັບເຄື່ອງພິມທີ່ pair ແບບ Bluetooth ທຳມະດາ (COM port)" className={`text-xs font-black px-3 py-2 rounded-lg border ${serialConnected ? 'border-green-400 text-green-300' : 'border-[rgba(253,246,238,0.35)] text-[#fdf6ee]'}`}>
+                  {serialConnected ? '🖨 COM ✓' : 'COM'}
+                </button>
+              )}
+              <button onClick={() => kickDrawer()} title="ເປີດລິ້ນຊັກ" className="text-xs font-black px-3 py-2 rounded-lg border border-[rgba(253,246,238,0.35)] text-[#fdf6ee]">🔓</button>
+              {/* Put the payment QR up on its own. Until now the QR only
+                  appeared attached to an order, so there was no way to let
+                  someone scan and pay without ringing something up first.
+                  Hidden on the tablet, which doesn't drive that screen. */}
+              {!isTablet && <button
+                onClick={() => {
+                  if (qrOnlyOn) { clearDisplay(); setQrOnlyOn(false); showToast('ປິດ QR ແລ້ວ', 'orange'); return }
+                  writeDisplay({ items: [], total: 0, qrOnly: true })
+                  setQrOnlyOn(true)
+                  showToast('📱 ສະແດງ QR ຈ່າຍເງິນ', 'green')
+                }}
+                title="ສະແດງ QR ຈ່າຍເງິນຢ່າງດຽວຢູ່ຈໍລູກຄ້າ"
+                className={`text-xs font-black px-3 py-2 rounded-lg border ${qrOnlyOn ? 'border-green-400 text-green-300' : 'border-[rgba(253,246,238,0.35)] text-[#fdf6ee]'}`}>
+                {qrOnlyOn ? '📱 QR ✓' : '📱 QR'}
+              </button>}
+              {/* Recovers a stuck USB printer, so it belongs with the USB
+                  button — on a device with no WebUSB there is nothing for it
+                  to recover. Missed when USB and BT were gated. */}
+              {caps.usb && <button
+                onClick={async () => {
+                  // Deliberately does NOT forget the device. Forgetting drops
+                  // the permission, which forces Chrome's chooser to open —
+                  // and on this dual-screen till that window appears where
+                  // nobody sees it, so the button just hung on "connecting…".
+                  // Releasing and re-acquiring clears a stuck printer without
+                  // needing anyone to pick anything.
+                  showToast('ກຳລັງລ້າງການເຊື່ອມ USB...', 'orange')
+                  usbDeviceRef.current = null
+                  setUsbConnected(false)
+                  await releaseAllUsb()
+                  await new Promise(r => setTimeout(r, 800))
+                  if (await connectUsbPrinter({ silent: true, force: true })) {
+                    showToast('🖨 USB ພ້ອມໃຊ້ ✅', 'green')
+                  } else {
+                    showToast('❌ ຍັງເຊື່ອມບໍ່ໄດ້ — ກົດປຸ່ມ USB', 'red')
+                  }
+                }}
+                title="ລ້າງ USB ທີ່ຄ້າງ ແລ້ວເຊື່ອມໃໝ່"
+                className="text-xs font-black px-3 py-2 rounded-lg border border-[rgba(253,246,238,0.35)] text-[#fdf6ee]">🔄USB</button>}
+              <button onClick={() => alert('ຕ້ອງຊອກຫາ ↺ Reset ໃນລາຍການ')} className="text-xs font-black px-3 py-2 rounded-lg border border-red-400 text-red-300">↺</button>
+              <button onClick={() => setHeaderCollapsed(true)} title="ເຊື່ອງແຖບເທິງ" className="text-xs font-black px-3 py-2 rounded-lg border border-[rgba(253,246,238,0.35)] text-[#fdf6ee]">▲</button>
+            </div>
+            <button onClick={() => setDeviceSheet(false)} className="w-full mt-4 py-3 rounded-xl font-black"
+              style={{ background: 'var(--cream)', color: 'var(--brown)' }}>ປິດ</button>
+          </div>
+        </div>
+      )}
 
       {/* Quick Order Modal */}
       {qoOpen && (
