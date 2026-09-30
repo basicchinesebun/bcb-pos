@@ -3127,6 +3127,59 @@ setStockShop(newSS); setStockOnline(newSO)
         </div>
       )}
 
+      {/* Taking orders and running the shop are different jobs an hour apart,
+          and mixing them is why the selling screen carried a column of settings
+          nobody reads mid-service. One switch, always in the same place. */}
+      <div className="flex-shrink-0 flex items-center gap-2 px-3 py-2" style={{ background: 'var(--brown)' }}>
+        <div className="flex rounded-full p-1 gap-1" style={{ background: 'rgba(0,0,0,0.28)' }}>
+          {[['orders', 'ໜ້າຂາຍ'], ['office', 'ຫຼັງຮ້ານ']].map(([m, l]) => {
+            const on = m === 'orders' ? tab === 'orders' : tab !== 'orders'
+            return (
+              <button key={m}
+                onClick={() => setTab(m === 'orders' ? 'orders' : 'sales')}
+                className="px-5 font-black text-sm rounded-full"
+                style={{
+                  minHeight: 44,
+                  background: on ? 'var(--cream)' : 'transparent',
+                  color: on ? 'var(--brown)' : 'rgba(253,246,238,0.6)',
+                }}>
+                {l}
+              </button>
+            )
+          })}
+        </div>
+        {/* Inside ຫຼັງຮ້ານ these pick the section. Chat keeps its unread count
+            here because it is the one thing back here that cannot wait. */}
+        {tab !== 'orders' && (
+          <div className="flex gap-1.5 overflow-x-auto">
+            {[['sales', '📊 ຍອດຂາຍ'], ['chat', '💬 ແຊດ'], ['settings', '⚙ ຕັ້ງຄ່າ']].map(([t, l]) => (
+              <button key={t} onClick={() => setTab(t)}
+                className="px-3 font-black text-xs rounded-lg border flex-shrink-0 relative"
+                style={{
+                  minHeight: 44,
+                  background: tab === t ? 'var(--cream)' : 'transparent',
+                  color: tab === t ? 'var(--brown)' : 'rgba(253,246,238,0.75)',
+                  borderColor: tab === t ? 'var(--cream)' : 'rgba(253,246,238,0.3)',
+                }}>
+                {l}
+                {t === 'chat' && unreadChat > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[9px] font-black rounded-full w-4 h-4 flex items-center justify-center leading-none">
+                    {unreadChat > 9 ? '9+' : unreadChat}
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+        )}
+        {tab === 'orders' && unreadChat > 0 && (
+          <button onClick={() => setTab('chat')}
+            className="ml-auto px-3 rounded-lg text-xs font-black flex items-center gap-1.5"
+            style={{ minHeight: 44, background: '#b91c1c', color: '#fff' }}>
+            💬 {unreadChat}
+          </button>
+        )}
+      </div>
+
       {/* ─── ORDERS TAB ─── */}
       {tab === 'orders' && (
         <div className="flex-1 flex flex-col overflow-hidden">
@@ -3199,10 +3252,549 @@ setStockShop(newSS); setStockOnline(newSO)
             </div>
           )}
 
-          {/* Sidebar + Orders layout */}
-          <div className={`flex-1 overflow-hidden flex flex-col md:grid max-w-[1800px] mx-auto w-full transition-all duration-300 ${sidebarOpen ? 'md:grid-cols-[320px_1fr]' : 'md:grid-cols-[0px_1fr]'}`}>
-            {/* Sidebar */}
-            <div className={`flex flex-col gap-3 overflow-y-auto overflow-x-hidden transition-all duration-300 ${sidebarOpen ? 'p-3 opacity-100 max-h-[50vh] md:max-h-none' : 'max-h-0 p-0 opacity-0 md:w-0 pointer-events-none'}`}>
+          {/* Orders fill the screen now. The settings that used to sit in a
+              column beside them have their own place in ຫຼັງຮ້ານ, because
+              during service nobody is reading them and they were taking a
+              third of a 1024px till. */}
+          <div className="flex-1 overflow-hidden flex flex-col max-w-[1800px] mx-auto w-full">
+
+            {/* Orders Main */}
+            <div className="flex-1 flex flex-col overflow-hidden min-w-0">
+              {!headerCollapsed && (
+              <div className="flex-shrink-0 px-3 pt-3 pb-1">
+              <div className="flex gap-2 items-center mb-2">
+                <button
+                  onClick={() => setTab('settings')}
+                  className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-black transition-all active:scale-95 flex-shrink-0"
+                  style={{ background: 'var(--cream2)', color: 'var(--brown2)', border: '1.5px solid var(--cream3)' }}
+                  title="ຕັ້ງຄ່າ"
+                >
+                  ⚙
+                </button>
+                <span className="text-xs font-black tracking-widest uppercase" style={{ color: 'var(--gray3)' }}>ລາຍການ</span>
+                {/* Takings for the current filter, sitting in the gap the filter
+                    buttons already left empty. */}
+                <button
+                  onClick={() => setMoneyScope(v => v === 'today' ? 'all' : 'today')}
+                  className="flex items-baseline gap-1.5 px-2.5 py-1 rounded-lg flex-shrink min-w-0 active:scale-95 transition-all"
+                  style={{ background: 'var(--cream2)', border: '1.5px solid var(--cream3)' }}
+                  title="ຍອດເງິນຂອງລາຍການທີ່ສະແດງຢູ່ (ບໍ່ນັບທີ່ຍົກເລີກ/ປະຕິເສດ) — ກົດເພື່ອສະຫຼັບ ມື້ນີ້ / ທັງໝົດ"
+                >
+                  <span className="text-xs font-black flex-shrink-0" style={{ color: 'var(--gray3)' }}>
+                    {filterMoneyLabel}
+                  </span>
+                  <span
+                    className="text-sm font-black truncate"
+                    style={{ color: 'var(--brown)', fontVariantNumeric: 'tabular-nums' }}
+                  >
+                    {filterMoney.toLocaleString()}
+                  </span>
+                  <span className="text-xs font-bold flex-shrink-0" style={{ color: 'var(--gray3)' }}>ກີບ</span>
+                </button>
+                <div className="flex gap-1 ml-auto items-center">
+                  {(() => {
+                    const pendingOnline = orders.filter(o =>
+                      o.type === 'online' && o.status === 'pending' && !o.done && !o.cancelled
+                    ).length
+                    return pendingOnline > 0 ? (
+                      <button
+                        onClick={() => { setBatchOpen(true); setBatchSelected(new Set()) }}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-black active:scale-95 transition-all"
+                        style={{ background: '#15803d', color: 'white' }}
+                      >
+                        ✓ ເລືອກຢືນຢັນ
+                        <span className="px-1.5 py-0.5 rounded-full text-xs font-black" style={{ background: 'rgba(255,255,255,0.25)' }}>{pendingOnline}</span>
+                      </button>
+                    ) : null
+                  })()}
+                  {(() => {
+                    // Everything the kitchen is actually working on, walk-in
+                    // and confirmed preorder alike — those all finish the same
+                    // way, off the same trays.
+                    const openCount = orders.filter(o =>
+                      !o.done && !o.cancelled && o.status === 'confirmed'
+                    ).length
+                    return openCount > 0 ? (
+                      <button
+                        onClick={() => { setDoneBatchOpen(true); setDoneBatchSelected(new Set()); setDoneRangeFrom(''); setDoneRangeTo(''); setDoneBatchKind('all') }}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-black active:scale-95 transition-all"
+                        style={{ background: 'var(--brown)', color: 'var(--cream)' }}
+                      >
+                        ✓ ສຳເລັດຫຼາຍໃບ
+                        <span className="px-1.5 py-0.5 rounded-full text-xs font-black" style={{ background: 'rgba(255,255,255,0.25)' }}>{openCount}</span>
+                      </button>
+                    ) : null
+                  })()}
+                  {[['all','ທັງໝົດ'],['walkin','🏪'],['online','🌐']].map(([f,l]) => (
+                    <button key={f} onClick={() => setFilter(f)} className={`px-3 py-1 rounded-lg text-xs font-black border ${filter===f ? 'bg-[#3d1f0a] text-[#fdf6ee] border-[#3d1f0a]' : 'border-[#e8d5c0] text-[#8a6a55]'}`}>{l}</button>
+                  ))}
+                  <button
+                    onClick={() => setMainSearchCollapsed(v => !v)}
+                    className={`px-3 py-1 rounded-lg text-xs font-black border ${!mainSearchCollapsed ? 'bg-[#3d1f0a] text-[#fdf6ee] border-[#3d1f0a]' : 'border-[#e8d5c0] text-[#8a6a55]'}`}
+                    title="ຄົ້ນຫາ: ເລກຄິວ, ຊື່, ເບີໂທ, ເມນູ"
+                  >
+                    🔍
+                  </button>
+                  <button
+                    onClick={() => setCustomerSearchCollapsed(v => !v)}
+                    className={`px-3 py-1 rounded-lg text-xs font-black border ${!customerSearchCollapsed ? 'bg-[#3d1f0a] text-[#fdf6ee] border-[#3d1f0a]' : 'border-[#e8d5c0] text-[#8a6a55]'}`}
+                    title="ຄົ້ນຫາລູກຄ້າ · Customer"
+                  >
+                    👤
+                  </button>
+                </div>
+              </div>
+              {!mainSearchCollapsed && (
+                <div className="relative mb-3">
+                  <input
+                    type="text"
+                    value={search}
+                    onChange={e => setSearch(e.target.value)}
+                    placeholder="ຄົ້ນຫາ: ເລກຄິວ, ຊື່, ເບີໂທ, ເມນູ..."
+                    className="input-field w-full text-sm pl-8"
+                    autoFocus
+                  />
+                  <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-sm" style={{ color: 'var(--gray3)' }}>🔍</span>
+                  {search && <button onClick={() => setSearch('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs font-black" style={{ color: 'var(--gray3)' }}>✕</button>}
+                </div>
+              )}
+
+              {/* Customer search */}
+              {!customerSearchCollapsed && (
+                <div className="relative mb-3">
+                  <input
+                    type="text"
+                    value={customerSearch}
+                    onChange={e => setCustomerSearch(e.target.value)}
+                    placeholder="ຊື່, ເບີໂທ, ເລກຄິວ (0001)..."
+                    className="input-field w-full text-sm pl-8"
+                  />
+                  <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-sm" style={{ color: 'var(--gray3)' }}>👤</span>
+                  {customerSearch && (
+                    <button onClick={() => setCustomerSearch('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs font-black px-2 py-0.5 rounded" style={{ color: 'var(--brown)', background: 'var(--cream2)' }}>
+                      ລ້າງ · Clear
+                    </button>
+                  )}
+                </div>
+              )}
+              </div>
+              )}{/* end fixed header */}
+
+              <div className="flex-1 overflow-y-auto px-3 pb-20">
+              {/* Customer search results */}
+              {customerSearch.trim() && (
+                <div className="mb-4">
+                  <div className="text-xs font-black tracking-widest uppercase mb-2" style={{ color: 'var(--gray3)' }}>
+                    ຜົນຄົ້ນຫາ · Results ({customerSearchResults.length})
+                  </div>
+                  {customerSearchResults.length === 0 && (
+                    <div className="text-center py-6 text-sm font-bold rounded-xl" style={{ color: 'var(--cream3)', background: 'var(--cream2)' }}>
+                      ບໍ່ພົບຜົນ
+                    </div>
+                  )}
+                  <div className="flex flex-col gap-3">
+                    {customerSearchResults.map(o => {
+                      const items = typeof o.items === 'string' ? JSON.parse(o.items) : o.items || []
+                      const cust = o.customer ? (typeof o.customer === 'string' ? JSON.parse(o.customer) : o.customer) : null
+                      const time = orderStamp(o.created_at)
+                      const stale = isFromEarlierDay(o.created_at) && !o.done && !o.cancelled
+                      const borderColor = o.cancelled || o.status === 'rejected' ? '#fca5a5' : o.status === 'blocked' ? '#c4b5fd' : o.done ? '#e8d5c0' : '#3d1f0a'
+                      return (
+                        <div key={o.id} className="rounded-2xl overflow-hidden" style={{ border: `2px solid ${borderColor}`, background: 'var(--warm-white)' }}>
+                          <div className="p-3">
+                            <div className="flex justify-between items-start mb-2">
+                              <div className="flex items-center gap-2">
+                                <div className="font-serif text-2xl font-black" style={{ color: 'var(--brown)' }}>
+                                  #{String(o.qnum).padStart(4,'0')}
+                                </div>
+                              </div>
+                              <div className="text-right">
+                                <div className="text-xs font-bold" style={{ color: stale ? '#c2410c' : 'var(--gray3)' }}>{stale ? '⚠️ ' : ''}{time}</div>
+                                <span className={`tag text-xs mt-1 ${o.type === 'online' ? 'bg-orange-50 text-orange-700' : 'bg-blue-50 text-blue-700'}`}>
+                                  {o.type === 'online' ? '🌐 Online' : '🏪 Walk-in'}
+                                </span>
+                                {o.done && <span className="tag bg-green-50 text-green-700 text-xs ml-1">✓ Done</span>}
+                                {o.cancelled && <span className="tag bg-red-50 text-red-700 text-xs ml-1">✕ ຍົກເລີກ</span>}
+                                {o.status === 'rejected' && <span className="tag bg-red-50 text-red-700 text-xs ml-1">✕ ປະຕິເສດ</span>}
+                                {o.status === 'blocked' && <span className="tag bg-purple-50 text-purple-700 text-xs ml-1">🚫 ຖືກບ໋ອກ</span>}
+                                {o.status === 'confirmed' && !o.done && <span className="tag bg-green-50 text-green-700 text-xs ml-1">✓ ຢືນຢັນ</span>}
+                                {o.status === 'pending' && !o.cancelled && <span className="tag bg-yellow-50 text-yellow-700 text-xs ml-1">⏳ ລໍຖ້າ</span>}
+                              </div>
+                            </div>
+                            {cust && (
+                              <div className="rounded-xl p-2 mb-2 text-sm font-bold leading-6" style={{ background: 'var(--cream2)', color: 'var(--brown2)' }}>
+                                <div>👤 {cust.name} · 📞 {cust.phone}</div>
+                                {cust.time && <div>🕐 {cust.time}</div>}
+                              </div>
+                            )}
+                            <div className="text-sm font-bold mb-1" style={{ color: 'var(--brown2)' }}>
+                              {items.map((it, ii) => <span key={ii} className="mr-2">{it.name} ×{it.qty}</span>)}
+                            </div>
+                            <div className="text-sm font-black" style={{ color: 'var(--brown)' }}>
+                              ລວມ: {(o.total || 0).toLocaleString()} ກີບ
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {!customerSearch.trim() && activeOrders.length === 0 && <div className="text-center py-12 text-lg font-bold" style={{ color: 'var(--cream3)' }}>ຍັງບໍ່ມີອໍເດີ</div>}
+
+              {!customerSearch.trim() && <div className="flex flex-col gap-3 xl:grid xl:grid-cols-2 xl:items-start xl:gap-3">
+                {activeOrders.map(o => {
+                  const items = typeof o.items === 'string' ? JSON.parse(o.items) : o.items || []
+                  const cust = o.customer ? (typeof o.customer === 'string' ? JSON.parse(o.customer) : o.customer) : null
+                  const time = orderStamp(o.created_at)
+                  const stale = isFromEarlierDay(o.created_at) && !o.done && !o.cancelled
+                  const borderColor = o.cancelled || o.status === 'rejected' ? '#fca5a5' : o.status === 'blocked' ? '#c4b5fd' : o.done ? '#e8d5c0' : '#3d1f0a'
+
+                  return (
+                    <div key={o.id} className="rounded-2xl overflow-hidden" style={{ border: `2px solid ${borderColor}`, background: 'var(--warm-white)' }}>
+
+                      <div className="p-3">
+                        {/* Slip warning banner */}
+                        {(() => {
+                          const sv = slipVerify[o.id]
+                          const r = sv?.result
+                          if (!r) return null
+                          const warn = r.suspicious || !r.amount_matches || !r.date_is_today
+                          if (!warn) return null
+                          const [warnOpen, setWarnOpen] = [expandedArchive.has('warn_' + o.id), v => setExpandedArchive(prev => { const n = new Set(prev); v ? n.add('warn_' + o.id) : n.delete('warn_' + o.id); return n })]
+                          return (
+                            <div className="rounded-xl mb-2 overflow-hidden" style={{ border: '2px solid #f97316' }}>
+                              <button onClick={() => setWarnOpen(!warnOpen)} className="w-full flex items-center gap-2 px-3 py-2 text-left" style={{ background: '#fff7ed' }}>
+                                <span className="text-base">⚠️</span>
+                                <span className="text-xs font-black flex-1" style={{ color: '#c2410c' }}>ສລິບນີ້ຕ້ອງກວດສອບ — ກົດເພື່ອເບິ່ງ</span>
+                                <span className="text-xs" style={{ color: '#c2410c' }}>{warnOpen ? '▲' : '▼'}</span>
+                              </button>
+                              {warnOpen && (
+                                <div className="px-3 pb-3 pt-1 text-xs font-bold leading-6" style={{ background: '#fff7ed', color: '#7c2d12' }}>
+                                  {!r.amount_matches && <div>❌ ຈຳນວນ: {r.amount_found != null ? r.amount_found.toLocaleString() + ' ກີບ' : 'ບໍ່ພົບ'} (ຄາດ {(o.total||0).toLocaleString()} ກີບ)</div>}
+                                  {!r.date_is_today && <div>⚠️ ວັນໂອນ: {r.transfer_date || 'ບໍ່ພົບ'} — ບໍ່ໃຊ່ມື້ນີ້</div>}
+                                  {r.suspicious && <div>🚨 {r.suspicious_reason}</div>}
+                                  {r.summary_lo && <div className="mt-1 opacity-70">{r.summary_lo}</div>}
+                                </div>
+                              )}
+                            </div>
+                          )
+                        })()}
+
+                        <div className="flex justify-between items-start mb-2">
+                          <div className="flex items-center gap-2">
+                            <div className="font-serif text-2xl font-black" style={{ color: 'var(--brown)' }}>
+                              #{String(o.qnum).padStart(4,'0')}
+                            </div>
+                            {!o.done && !o.cancelled && o.status !== 'rejected' && (
+                              <button onClick={() => openEditOrder(o)} className="py-1 px-2 rounded-lg text-xs font-black" style={{ background: '#eff6ff', color: '#1d4ed8' }}>✏️ ແກ້</button>
+                            )}
+                          </div>
+                          <div className="text-right">
+                            <div className="text-xs font-bold" style={{ color: stale ? '#c2410c' : 'var(--gray3)' }}>{stale ? '⚠️ ' : ''}{time}</div>
+                            <span className={`tag text-xs mt-1 ${o.type === 'online' ? 'bg-orange-50 text-orange-700' : 'bg-blue-50 text-blue-700'}`}>
+                              {o.type === 'online' ? '🌐 Online' : '🏪 Walk-in'}
+                            </span>
+                            {o.type === 'walkin' && !o.cancelled && !o.done && (
+                              o.paid
+                                ? <span className="tag text-xs ml-1" style={{ background: '#f0fdf4', color: '#16a34a' }}>{o.payment_method === 'cash' ? '💵' : '📱'} ຈ່າຍແລ້ວ</span>
+                                : <span className="tag bg-orange-50 text-orange-600 text-xs ml-1">💰 ຍັງບໍ່ຈ່າຍ</span>
+                            )}
+                            {o.done && <span className="tag bg-green-50 text-green-700 text-xs ml-1">✓ Done</span>}
+                            {o.cancelled && <span className="tag bg-red-50 text-red-700 text-xs ml-1">✕ ຍົກເລີກ</span>}
+                            {o.status === 'rejected' && <span className="tag bg-red-50 text-red-700 text-xs ml-1">✕ ປະຕິເສດ</span>}
+                            {o.status === 'blocked' && <span className="tag bg-purple-50 text-purple-700 text-xs ml-1">🚫 ຖືກບ໋ອກ</span>}
+                            {o.status === 'confirmed' && !o.done && <span className="tag bg-green-50 text-green-700 text-xs ml-1">✓ ຢືນຢັນ</span>}
+                            {o.status === 'pending' && !o.cancelled && <span className="tag bg-yellow-50 text-yellow-700 text-xs ml-1">⏳ ລໍຖ້າ</span>}
+                          </div>
+                        </div>
+
+                        {o.cancelled && o.cancel_reason && (
+                          <div className="rounded-xl p-2 mb-2 text-xs font-bold" style={{ background: '#fef2f2', color: '#b91c1c' }}>
+                            📝 {o.cancel_reason}
+                          </div>
+                        )}
+
+                        {/* Customer info */}
+                        {cust && (
+                          <div className="rounded-xl p-2 mb-2 text-sm font-bold leading-6" style={{ background: 'var(--cream2)', color: 'var(--brown2)' }}>
+                            <div>👤 {cust.name} · 📞 {cust.phone}</div>
+                            <div>📅 {cust.date} · 🕐 {cust.time}</div>
+                            {cust.note && <div>📝 {cust.note}</div>}
+                            {cust.security && (() => {
+                              const sec = cust.security
+                              const warnings = []
+                              if (sec.ip?.country_code && sec.ip.country_code !== 'LA') warnings.push(`🌍 IP ມາຈາກ ${sec.ip.country}`)
+                              const org = (sec.ip?.org || '').toLowerCase()
+                              if (['vpn','proxy','hosting','cloud','digitalocean','amazon','linode','vultr','server'].some(k => org.includes(k))) warnings.push(`🕵️ ISP: ${sec.ip.org}`)
+                              if (sec.tz && sec.ip?.timezone && sec.tz !== sec.ip.timezone) warnings.push(`⏰ Timezone ຕ່າງ: ${sec.tz}`)
+                              const alreadyBlocked = sec.ip?.country_code === 'QA'
+                              const mapsUrl = sec.gps ? `https://maps.google.com/?q=${sec.gps.lat},${sec.gps.lng}` : null
+                              return (
+                                <details className="mt-1" open={warnings.length > 0 || alreadyBlocked}>
+                                  <summary className="cursor-pointer text-xs font-black" style={{ color: alreadyBlocked ? '#7c3aed' : warnings.length ? '#c2410c' : '#5C4033' }}>
+                                    {alreadyBlocked ? '🚫 ຜູ້ໃຊ້ຖືກບ໋ອກ' : warnings.length ? '🚨 ຄວາມປອດໄພ — ຕ້ອງກວດສອບ' : '🔒 ຂໍ້ມູນຄວາມປອດໄພ'}
+                                  </summary>
+                                  <div className="mt-1 flex flex-col gap-0.5 text-xs" style={{ color: '#5C4033' }}>
+                                    {warnings.map((w, i) => <div key={i} className="font-black" style={{ color: '#c2410c' }}>{w}</div>)}
+                                    {sec.ip?.ip && <div>🖥 IP: <span className="font-black select-all">{sec.ip.ip}</span></div>}
+                                    {sec.ip?.city && <div>📡 {sec.ip.city}, {sec.ip.country}{sec.ip.country_code === 'QA' && <span className="ml-1 text-purple-600 font-black">🚫 Qatar</span>}</div>}
+                                    {sec.tz && <div>🕐 TZ: {sec.tz} · Lang: {sec.lang}</div>}
+                                    {sec.screen && <div>📱 {sec.screen} · CPU: {sec.cpu||'?'} cores · RAM: {sec.mem||'?'}GB</div>}
+                                    {sec.gpu && <div>🎮 GPU: <span className="select-all">{sec.gpu}</span></div>}
+                                    {sec.platform && <div>💻 {sec.platform} · touch: {sec.touch}</div>}
+                                    {sec.canvasFp && <div className="opacity-60">fp: {sec.canvasFp}</div>}
+                                    {mapsUrl && <a href={mapsUrl} target="_blank" rel="noreferrer" className="underline font-black" style={{ color: '#1d4ed8' }}>📍 ເບິ່ງ GPS ໃນ Maps</a>}
+                                    {sec.gps && <div className="opacity-60">({sec.gps.lat.toFixed(5)}, {sec.gps.lng.toFixed(5)}) ±{sec.gps.accuracy}m</div>}
+                                    {!alreadyBlocked && (
+                                      <button
+                                        onClick={() => blockUser(o)}
+                                        className="mt-1 px-3 py-1 rounded-lg text-xs font-black text-white"
+                                        style={{ background: '#7c3aed' }}
+                                      >
+                                        🚫 Block ຜູ້ໃຊ້ນີ້
+                                      </button>
+                                    )}
+                                  </div>
+                                </details>
+                              )
+                            })()}
+                          </div>
+                        )}
+
+                        {/* Bag */}
+                        {o.bag_label && (
+                          <div className="border-l-4 border-[#3d1f0a] pl-3 mb-2 flex flex-col gap-1">
+                            {o.bag_label.split(' | ').map((line, li) => (
+                              <div key={li} className="text-sm font-black leading-snug" style={{ color: 'var(--brown)' }}>
+                                {line}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* Items — 2 rows, flow left-to-right, scrollable */}
+                        <div style={{ display: 'grid', gridAutoFlow: 'column', gridTemplateRows: 'repeat(2, auto)', gap: 8, overflowX: 'auto', paddingBottom: 4 }} className="mb-3">
+                          {items.map((it, ii) => {
+                            const img = images[it.menuIdx]
+                            return (
+                              <div key={ii} style={{ width: 104 }} className="rounded-2xl overflow-hidden border-2 border-[#e8d5c0] flex-shrink-0">
+                                <div className="relative overflow-hidden" style={{ width: 104, height: 104, background: 'var(--cream2)' }}>
+                                  {img
+                                    ? <img src={img} className="w-full h-full object-cover" alt={it.name} loading="lazy" />
+                                    : <div className="absolute inset-0 flex items-center justify-center text-4xl" style={{ background: 'var(--cream2)' }}>{EMOJIS[it.menuIdx] || '🍱'}</div>
+                                  }
+                                  <div className="absolute top-1 right-1 w-11 h-11 rounded-full flex items-center justify-center font-black shadow-md" style={{ background: 'var(--brown)', color: 'var(--cream)', fontSize: 20 }}>{it.qty}</div>
+                                </div>
+                                <div className="px-3 py-2" style={{ background: 'var(--warm-white)' }}>
+                                  <div className="text-center font-black leading-tight" style={{ color: 'var(--brown)', fontSize: 13 }}>{it.name}</div>
+                                  {it.sub > 0 && <div className="text-center font-bold mt-0.5" style={{ color: 'var(--gray3)', fontSize: 11 }}>{it.sub.toLocaleString()}</div>}
+                                </div>
+                              </div>
+                            )
+                          })}
+                        </div>
+
+                        {/* Slip */}
+                        {o.slip_url && (
+                          <div className="mb-2 flex items-center gap-2">
+                            <div className="cursor-pointer" onClick={() => setSlipModal({ url: o.slip_url, qnum: o.qnum })}>
+                              <img src={o.slip_url} className="w-20 rounded-lg border-2 border-[#e8d5c0]" alt="slip" loading="lazy" />
+                            </div>
+                            {slipVerify[o.id]?.loading && (
+                              <span className="text-xs font-bold" style={{ color: 'var(--gray3)' }}>🤖 ກຳລັງກວດ...</span>
+                            )}
+                          </div>
+                        )}
+
+                        <div className="text-base font-black mb-3" style={{ color: 'var(--brown)' }}>
+                          ລວມ: {(o.total || 0).toLocaleString()} ກີບ
+                        </div>
+
+                        {/* Money already collected no longer matches the total
+                            — almost always because the order was edited after
+                            payment. Stays up until staff settles it. */}
+                        {(() => {
+                          if (o.paid_amount == null) return null
+                          const diff = (o.total || 0) - o.paid_amount
+                          if (diff === 0) return null
+                          const owed = diff > 0
+                          return (
+                            <div className="mb-3 rounded-xl p-3 flex items-center justify-between gap-2"
+                              style={{ background: owed ? '#fef3c7' : '#dbeafe', border: `2px solid ${owed ? '#f59e0b' : '#3b82f6'}` }}>
+                              <div>
+                                <div className="text-xs font-black" style={{ color: owed ? '#92400e' : '#1e40af' }}>
+                                  {owed ? '⚠️ ຕ້ອງເກັບເພີ່ມ' : '↩️ ຕ້ອງທອນຄືນ'}
+                                </div>
+                                <div className="text-lg font-black" style={{ color: owed ? '#92400e' : '#1e40af' }}>
+                                  {Math.abs(diff).toLocaleString()} ກີບ
+                                </div>
+                                <div className="text-xs font-bold mt-0.5" style={{ color: 'var(--gray3)' }}>
+                                  ຮັບມາແລ້ວ {Number(o.paid_amount).toLocaleString()}
+                                </div>
+                              </div>
+                              <button onClick={() => settleBalance(o)}
+                                className="py-2 px-3 rounded-xl text-xs font-black text-white flex-shrink-0"
+                                style={{ background: owed ? '#f59e0b' : '#3b82f6' }}>
+                                ✓ ເຄລຍແລ້ວ
+                              </button>
+                            </div>
+                          )
+                        })()}
+
+                        {/* Actions. Three fixed slots, the same on every card in
+                            every state: destructive on the left, the small tools
+                            in the middle, the one button pressed all day on the
+                            right, widest. Before this they swapped places — ✓ sat
+                            left on a preorder and right on a walk-in — so the hand
+                            could not learn one target and a mis-tap landed on a
+                            real cancellation. A slot with nothing to do in this
+                            state is held open rather than collapsed. */}
+                        {!o.cancelled && !o.done && o.type === 'walkin' && o.status === 'pending' && !o.paid && payingId === o.id && (
+                          <div className="flex gap-2 mb-2">
+                            <button onClick={() => markPaid(o, 'cash')} className="flex-1 rounded-xl text-sm font-black text-white" style={{ background: '#15803d', minHeight: 56 }}>💵 ສດ</button>
+                            <button onClick={() => markPaid(o, 'qr')} className="flex-1 rounded-xl text-sm font-black text-white" style={{ background: '#1d4ed8', minHeight: 56 }}>📱 ໂອນ</button>
+                            <button onClick={() => setPayingId(null)} className="px-4 rounded-xl text-sm font-black border-2 border-[#e8d5c0]" style={{ color: 'var(--gray3)', minHeight: 56 }}>✕</button>
+                          </div>
+                        )}
+                        <div className="grid gap-2" style={{ gridTemplateColumns: 'auto auto 1fr', alignItems: 'stretch' }}>
+                          {/* slot 1 — destructive, never anywhere else */}
+                          {o.cancelled || o.done ? (
+                            <span />
+                          ) : (
+                            <button
+                              onClick={() => (o.type === 'online' && o.status === 'pending' ? rejectOrder(o) : cancelOrder(o))}
+                              title={o.type === 'online' && o.status === 'pending' ? 'ປະຕິເສດ' : 'ຍົກເລີກ'}
+                              className="px-4 rounded-xl text-sm font-black"
+                              style={{ minHeight: 56, background: '#fef2f2', color: '#b91c1c', border: '2px solid #fca5a5' }}
+                            >✕</button>
+                          )}
+
+                          {/* slot 2 — the small tools */}
+                          <div className="flex gap-2">
+                            {!o.cancelled && !o.done && o.type === 'walkin' && o.status === 'pending' && !o.paid && payingId !== o.id && (
+                              <button onClick={() => setPayingId(o.id)} className="px-4 rounded-xl text-sm font-black border-2 border-orange-400 text-orange-600" style={{ minHeight: 56 }}>💰</button>
+                            )}
+                            {!o.cancelled && !o.done && o.status === 'confirmed' && (
+                              <>
+                                <button onClick={() => announce(o.qnum)} className="px-4 rounded-xl text-sm font-black" style={{ minHeight: 56, background: 'var(--brown2)', color: 'var(--cream)' }}>📢</button>
+                                <button onClick={() => smartPrint(o, { force: true })} className="px-4 rounded-xl text-sm font-black bg-blue-50 text-blue-700" style={{ minHeight: 56 }}>🖨</button>
+                                <button
+                                  onClick={() => showOnDisplay(o)}
+                                  title={displayOrderId === o.id ? 'ເອົາອອກຈາກຈໍລູກຄ້າ' : 'ສະແດງໃສ່ຈໍລູກຄ້າ'}
+                                  className={`px-4 rounded-xl text-sm font-black ${displayOrderId === o.id ? 'bg-purple-700 text-white' : 'bg-purple-50 text-purple-700'}`}
+                                  style={{ minHeight: 56 }}
+                                >📺</button>
+                              </>
+                            )}
+                          </div>
+
+                          {/* slot 3 — the primary, always here, always widest */}
+                          {o.cancelled ? (
+                            <button onClick={() => undoOrder(o.id, 'cancelled')} className="rounded-xl text-sm font-black border-2 border-[#e8d5c0]" style={{ color: 'var(--gray3)', minHeight: 56 }}>↩ ຄືນ</button>
+                          ) : o.done ? (
+                            <button onClick={() => undoOrder(o.id, 'done')} className="rounded-xl text-sm font-black border-2 border-[#e8d5c0]" style={{ color: 'var(--gray3)', minHeight: 56 }}>↩ ຍົກເລີກ Done</button>
+                          ) : o.type === 'walkin' && o.status === 'pending' ? (
+                            <button onClick={() => confirmWalkin(o)} className="rounded-xl text-base font-black text-white" style={{ background: '#15803d', minHeight: 56 }}>🍳 ສົ່ງຄົວ</button>
+                          ) : o.type === 'online' && o.status === 'pending' ? (
+                            <button onClick={() => confirmOrder(o)} className="rounded-xl text-base font-black text-white" style={{ background: '#15803d', minHeight: 56 }}>✓ ຢືນຢັນ</button>
+                          ) : (
+                            <button onClick={() => doneOrder(o)} className="rounded-xl text-base font-black" style={{ background: 'var(--brown)', color: 'var(--cream)', minHeight: 56 }}>✓ ສຳເລັດ</button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>}
+
+              {/* ─── Archive ─── */}
+              {!customerSearch.trim() && archivedOrders.length > 0 && (
+                <div className="mt-4">
+                  <button
+                    onClick={() => setArchiveOpen(o => !o)}
+                    className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl font-black text-xs tracking-widest uppercase"
+                    style={{ background: 'var(--cream2)', color: 'var(--gray3)' }}
+                  >
+                    <span>📦 ປະຫວັດ · Archive ({archivedOrders.length})</span>
+                    <span>{archiveOpen ? '▲' : '▼'}</span>
+                  </button>
+
+                  {archiveOpen && (
+                    <div className="flex flex-col gap-1 mt-2">
+                      {archivedOrders.map(o => {
+                        const isExp = expandedArchive.has(o.id)
+                        const items = typeof o.items === 'string' ? JSON.parse(o.items) : o.items || []
+                        const cust = o.customer ? (typeof o.customer === 'string' ? JSON.parse(o.customer) : o.customer) : null
+                        const time = orderStamp(o.created_at)
+                        return (
+                          <div key={o.id} className="rounded-xl overflow-hidden border border-[#e8d5c0]" style={{ background: 'var(--warm-white)' }}>
+                            <div
+                              className="flex items-center gap-2 px-3 py-2 cursor-pointer select-none"
+                              onClick={() => setExpandedArchive(prev => {
+                                const n = new Set(prev)
+                                n.has(o.id) ? n.delete(o.id) : n.add(o.id)
+                                return n
+                              })}
+                            >
+                              <span className="font-black text-sm w-10 flex-shrink-0" style={{ color: 'var(--brown)' }}>#{String(o.qnum).padStart(4,'0')}</span>
+                              <span className="text-xs flex-shrink-0" style={{ color: 'var(--gray3)' }}>{time}</span>
+                              <span className={`tag text-xs flex-shrink-0 ${o.type === 'online' ? 'bg-orange-50 text-orange-700' : 'bg-blue-50 text-blue-700'}`}>{o.type === 'online' ? '🌐' : '🏪'}</span>
+                              {o.done && <span className="tag bg-green-50 text-green-700 text-xs flex-shrink-0">✓ Done</span>}
+                              {o.cancelled && <span className="tag bg-red-50 text-red-700 text-xs flex-shrink-0">✕ ຍົກເລີກ</span>}
+                              {o.status === 'rejected' && <span className="tag bg-red-50 text-red-700 text-xs flex-shrink-0">✕ ປະຕິເສດ</span>}
+                              {o.status === 'blocked' && <span className="tag bg-purple-50 text-purple-700 text-xs flex-shrink-0">🚫 ບ໋ອກ</span>}
+                              {cust?.name && <span className="text-xs font-bold truncate flex-1 min-w-0" style={{ color: 'var(--brown2)' }}>{cust.name}{cust.phone ? ` · ${cust.phone}` : ''}</span>}
+                              <span className={`text-xs font-black flex-shrink-0 ${cust?.name ? '' : 'ml-auto'}`} style={{ color: 'var(--brown)' }}>{(o.total||0).toLocaleString()}</span>
+                              <span className="text-xs flex-shrink-0" style={{ color: 'var(--gray3)' }}>{isExp ? '▲' : '▼'}</span>
+                            </div>
+                            {isExp && (
+                              <div className="px-3 pb-3 pt-2 border-t border-[#e8d5c0]">
+                                {cust && (
+                                  <div className="text-xs font-bold mb-2 leading-5" style={{ color: 'var(--brown2)' }}>
+                                    👤 {cust.name} · 📞 {cust.phone}
+                                    {cust.date && <span>  📅 {cust.date} {cust.time}</span>}
+                                  </div>
+                                )}
+                                <div className="text-xs font-bold mb-2 leading-5" style={{ color: 'var(--brown2)' }}>
+                                  {items.map((it, ii) => <span key={ii} className="mr-2">{it.name} ×{it.qty}</span>)}
+                                </div>
+                                {o.slip_url && (
+                                  <div className="mb-2 cursor-pointer" onClick={() => setSlipModal({ url: o.slip_url, qnum: o.qnum })}>
+                                    <img src={o.slip_url} className="w-16 rounded-lg border border-[#e8d5c0]" alt="slip" loading="lazy" />
+                                  </div>
+                                )}
+                                <div className="flex gap-2 mt-1">
+                                  {o.cancelled && <button onClick={() => undoOrder(o.id, 'cancelled')} className="text-xs py-1.5 px-3 rounded-lg border-2 border-[#e8d5c0] font-black" style={{ color: 'var(--gray3)' }}>↩ ຄືນ</button>}
+                                  {o.done && <button onClick={() => undoOrder(o.id, 'done')} className="text-xs py-1.5 px-3 rounded-lg border-2 border-[#e8d5c0] font-black" style={{ color: 'var(--gray3)' }}>↩ ຍົກເລີກ Done</button>}
+                                  <button onClick={() => smartPrint(o, { force: true })} className="text-xs py-1.5 px-3 rounded-lg bg-blue-50 text-blue-700 font-black">🖨</button>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── SETTINGS TAB ─── */}
+      {tab === 'settings' && (
+        <div className="flex-1 overflow-y-auto pb-16">
+          <div className="sticky top-0 z-10 px-4 py-3" style={{ background: 'var(--brown)' }}>
+            <div className="font-serif text-lg font-black" style={{ color: 'var(--cream)' }}>⚙ ຕັ້ງຄ່າ · Settings</div>
+          </div>
+          <div className="max-w-3xl mx-auto p-3 flex flex-col gap-3">
+            {/* Was the collapsing sidebar column; on its own screen it is
+                simply the page, so the collapse classes come off. */}
+            <div className="flex flex-col gap-3">
               {/* QR Code shortcut */}
               <a href="/qr" target="_blank" rel="noopener noreferrer"
                 className="card flex items-center gap-3 active:scale-95 transition-all"
@@ -3876,530 +4468,6 @@ setStockShop(newSS); setStockOnline(newSO)
                 </div>
               </details>
             </div>
-
-            {/* Orders Main */}
-            <div className="flex-1 flex flex-col overflow-hidden min-w-0">
-              {!headerCollapsed && (
-              <div className="flex-shrink-0 px-3 pt-3 pb-1">
-              <div className="flex gap-2 items-center mb-2">
-                <button
-                  onClick={() => setSidebarOpen(v => !v)}
-                  className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-black transition-all active:scale-95 flex-shrink-0"
-                  style={{ background: 'var(--cream2)', color: 'var(--brown2)', border: '1.5px solid var(--cream3)' }}
-                  title={sidebarOpen ? 'ເຊື່ອງ Sidebar' : 'ສະແດງ Sidebar'}
-                >
-                  ☰
-                </button>
-                <span className="text-xs font-black tracking-widest uppercase" style={{ color: 'var(--gray3)' }}>ລາຍການ</span>
-                {/* Takings for the current filter, sitting in the gap the filter
-                    buttons already left empty. */}
-                <button
-                  onClick={() => setMoneyScope(v => v === 'today' ? 'all' : 'today')}
-                  className="flex items-baseline gap-1.5 px-2.5 py-1 rounded-lg flex-shrink min-w-0 active:scale-95 transition-all"
-                  style={{ background: 'var(--cream2)', border: '1.5px solid var(--cream3)' }}
-                  title="ຍອດເງິນຂອງລາຍການທີ່ສະແດງຢູ່ (ບໍ່ນັບທີ່ຍົກເລີກ/ປະຕິເສດ) — ກົດເພື່ອສະຫຼັບ ມື້ນີ້ / ທັງໝົດ"
-                >
-                  <span className="text-xs font-black flex-shrink-0" style={{ color: 'var(--gray3)' }}>
-                    {filterMoneyLabel}
-                  </span>
-                  <span
-                    className="text-sm font-black truncate"
-                    style={{ color: 'var(--brown)', fontVariantNumeric: 'tabular-nums' }}
-                  >
-                    {filterMoney.toLocaleString()}
-                  </span>
-                  <span className="text-xs font-bold flex-shrink-0" style={{ color: 'var(--gray3)' }}>ກີບ</span>
-                </button>
-                <div className="flex gap-1 ml-auto items-center">
-                  {(() => {
-                    const pendingOnline = orders.filter(o =>
-                      o.type === 'online' && o.status === 'pending' && !o.done && !o.cancelled
-                    ).length
-                    return pendingOnline > 0 ? (
-                      <button
-                        onClick={() => { setBatchOpen(true); setBatchSelected(new Set()) }}
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-black active:scale-95 transition-all"
-                        style={{ background: '#15803d', color: 'white' }}
-                      >
-                        ✓ ເລືອກຢືນຢັນ
-                        <span className="px-1.5 py-0.5 rounded-full text-xs font-black" style={{ background: 'rgba(255,255,255,0.25)' }}>{pendingOnline}</span>
-                      </button>
-                    ) : null
-                  })()}
-                  {(() => {
-                    // Everything the kitchen is actually working on, walk-in
-                    // and confirmed preorder alike — those all finish the same
-                    // way, off the same trays.
-                    const openCount = orders.filter(o =>
-                      !o.done && !o.cancelled && o.status === 'confirmed'
-                    ).length
-                    return openCount > 0 ? (
-                      <button
-                        onClick={() => { setDoneBatchOpen(true); setDoneBatchSelected(new Set()); setDoneRangeFrom(''); setDoneRangeTo(''); setDoneBatchKind('all') }}
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-black active:scale-95 transition-all"
-                        style={{ background: 'var(--brown)', color: 'var(--cream)' }}
-                      >
-                        ✓ ສຳເລັດຫຼາຍໃບ
-                        <span className="px-1.5 py-0.5 rounded-full text-xs font-black" style={{ background: 'rgba(255,255,255,0.25)' }}>{openCount}</span>
-                      </button>
-                    ) : null
-                  })()}
-                  {[['all','ທັງໝົດ'],['walkin','🏪'],['online','🌐']].map(([f,l]) => (
-                    <button key={f} onClick={() => setFilter(f)} className={`px-3 py-1 rounded-lg text-xs font-black border ${filter===f ? 'bg-[#3d1f0a] text-[#fdf6ee] border-[#3d1f0a]' : 'border-[#e8d5c0] text-[#8a6a55]'}`}>{l}</button>
-                  ))}
-                  <button
-                    onClick={() => setMainSearchCollapsed(v => !v)}
-                    className={`px-3 py-1 rounded-lg text-xs font-black border ${!mainSearchCollapsed ? 'bg-[#3d1f0a] text-[#fdf6ee] border-[#3d1f0a]' : 'border-[#e8d5c0] text-[#8a6a55]'}`}
-                    title="ຄົ້ນຫາ: ເລກຄິວ, ຊື່, ເບີໂທ, ເມນູ"
-                  >
-                    🔍
-                  </button>
-                  <button
-                    onClick={() => setCustomerSearchCollapsed(v => !v)}
-                    className={`px-3 py-1 rounded-lg text-xs font-black border ${!customerSearchCollapsed ? 'bg-[#3d1f0a] text-[#fdf6ee] border-[#3d1f0a]' : 'border-[#e8d5c0] text-[#8a6a55]'}`}
-                    title="ຄົ້ນຫາລູກຄ້າ · Customer"
-                  >
-                    👤
-                  </button>
-                </div>
-              </div>
-              {!mainSearchCollapsed && (
-                <div className="relative mb-3">
-                  <input
-                    type="text"
-                    value={search}
-                    onChange={e => setSearch(e.target.value)}
-                    placeholder="ຄົ້ນຫາ: ເລກຄິວ, ຊື່, ເບີໂທ, ເມນູ..."
-                    className="input-field w-full text-sm pl-8"
-                    autoFocus
-                  />
-                  <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-sm" style={{ color: 'var(--gray3)' }}>🔍</span>
-                  {search && <button onClick={() => setSearch('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs font-black" style={{ color: 'var(--gray3)' }}>✕</button>}
-                </div>
-              )}
-
-              {/* Customer search */}
-              {!customerSearchCollapsed && (
-                <div className="relative mb-3">
-                  <input
-                    type="text"
-                    value={customerSearch}
-                    onChange={e => setCustomerSearch(e.target.value)}
-                    placeholder="ຊື່, ເບີໂທ, ເລກຄິວ (0001)..."
-                    className="input-field w-full text-sm pl-8"
-                  />
-                  <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-sm" style={{ color: 'var(--gray3)' }}>👤</span>
-                  {customerSearch && (
-                    <button onClick={() => setCustomerSearch('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs font-black px-2 py-0.5 rounded" style={{ color: 'var(--brown)', background: 'var(--cream2)' }}>
-                      ລ້າງ · Clear
-                    </button>
-                  )}
-                </div>
-              )}
-              </div>
-              )}{/* end fixed header */}
-
-              <div className="flex-1 overflow-y-auto px-3 pb-20">
-              {/* Customer search results */}
-              {customerSearch.trim() && (
-                <div className="mb-4">
-                  <div className="text-xs font-black tracking-widest uppercase mb-2" style={{ color: 'var(--gray3)' }}>
-                    ຜົນຄົ້ນຫາ · Results ({customerSearchResults.length})
-                  </div>
-                  {customerSearchResults.length === 0 && (
-                    <div className="text-center py-6 text-sm font-bold rounded-xl" style={{ color: 'var(--cream3)', background: 'var(--cream2)' }}>
-                      ບໍ່ພົບຜົນ
-                    </div>
-                  )}
-                  <div className="flex flex-col gap-3">
-                    {customerSearchResults.map(o => {
-                      const items = typeof o.items === 'string' ? JSON.parse(o.items) : o.items || []
-                      const cust = o.customer ? (typeof o.customer === 'string' ? JSON.parse(o.customer) : o.customer) : null
-                      const time = orderStamp(o.created_at)
-                      const stale = isFromEarlierDay(o.created_at) && !o.done && !o.cancelled
-                      const borderColor = o.cancelled || o.status === 'rejected' ? '#fca5a5' : o.status === 'blocked' ? '#c4b5fd' : o.done ? '#e8d5c0' : '#3d1f0a'
-                      return (
-                        <div key={o.id} className="rounded-2xl overflow-hidden" style={{ border: `2px solid ${borderColor}`, background: 'var(--warm-white)' }}>
-                          <div className="p-3">
-                            <div className="flex justify-between items-start mb-2">
-                              <div className="flex items-center gap-2">
-                                <div className="font-serif text-2xl font-black" style={{ color: 'var(--brown)' }}>
-                                  #{String(o.qnum).padStart(4,'0')}
-                                </div>
-                              </div>
-                              <div className="text-right">
-                                <div className="text-xs font-bold" style={{ color: stale ? '#c2410c' : 'var(--gray3)' }}>{stale ? '⚠️ ' : ''}{time}</div>
-                                <span className={`tag text-xs mt-1 ${o.type === 'online' ? 'bg-orange-50 text-orange-700' : 'bg-blue-50 text-blue-700'}`}>
-                                  {o.type === 'online' ? '🌐 Online' : '🏪 Walk-in'}
-                                </span>
-                                {o.done && <span className="tag bg-green-50 text-green-700 text-xs ml-1">✓ Done</span>}
-                                {o.cancelled && <span className="tag bg-red-50 text-red-700 text-xs ml-1">✕ ຍົກເລີກ</span>}
-                                {o.status === 'rejected' && <span className="tag bg-red-50 text-red-700 text-xs ml-1">✕ ປະຕິເສດ</span>}
-                                {o.status === 'blocked' && <span className="tag bg-purple-50 text-purple-700 text-xs ml-1">🚫 ຖືກບ໋ອກ</span>}
-                                {o.status === 'confirmed' && !o.done && <span className="tag bg-green-50 text-green-700 text-xs ml-1">✓ ຢືນຢັນ</span>}
-                                {o.status === 'pending' && !o.cancelled && <span className="tag bg-yellow-50 text-yellow-700 text-xs ml-1">⏳ ລໍຖ້າ</span>}
-                              </div>
-                            </div>
-                            {cust && (
-                              <div className="rounded-xl p-2 mb-2 text-sm font-bold leading-6" style={{ background: 'var(--cream2)', color: 'var(--brown2)' }}>
-                                <div>👤 {cust.name} · 📞 {cust.phone}</div>
-                                {cust.time && <div>🕐 {cust.time}</div>}
-                              </div>
-                            )}
-                            <div className="text-sm font-bold mb-1" style={{ color: 'var(--brown2)' }}>
-                              {items.map((it, ii) => <span key={ii} className="mr-2">{it.name} ×{it.qty}</span>)}
-                            </div>
-                            <div className="text-sm font-black" style={{ color: 'var(--brown)' }}>
-                              ລວມ: {(o.total || 0).toLocaleString()} ກີບ
-                            </div>
-                          </div>
-                        </div>
-                      )
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {!customerSearch.trim() && activeOrders.length === 0 && <div className="text-center py-12 text-lg font-bold" style={{ color: 'var(--cream3)' }}>ຍັງບໍ່ມີອໍເດີ</div>}
-
-              {!customerSearch.trim() && <div className="flex flex-col gap-3 xl:grid xl:grid-cols-2 xl:items-start xl:gap-3">
-                {activeOrders.map(o => {
-                  const items = typeof o.items === 'string' ? JSON.parse(o.items) : o.items || []
-                  const cust = o.customer ? (typeof o.customer === 'string' ? JSON.parse(o.customer) : o.customer) : null
-                  const time = orderStamp(o.created_at)
-                  const stale = isFromEarlierDay(o.created_at) && !o.done && !o.cancelled
-                  const borderColor = o.cancelled || o.status === 'rejected' ? '#fca5a5' : o.status === 'blocked' ? '#c4b5fd' : o.done ? '#e8d5c0' : '#3d1f0a'
-
-                  return (
-                    <div key={o.id} className="rounded-2xl overflow-hidden" style={{ border: `2px solid ${borderColor}`, background: 'var(--warm-white)' }}>
-
-                      <div className="p-3">
-                        {/* Slip warning banner */}
-                        {(() => {
-                          const sv = slipVerify[o.id]
-                          const r = sv?.result
-                          if (!r) return null
-                          const warn = r.suspicious || !r.amount_matches || !r.date_is_today
-                          if (!warn) return null
-                          const [warnOpen, setWarnOpen] = [expandedArchive.has('warn_' + o.id), v => setExpandedArchive(prev => { const n = new Set(prev); v ? n.add('warn_' + o.id) : n.delete('warn_' + o.id); return n })]
-                          return (
-                            <div className="rounded-xl mb-2 overflow-hidden" style={{ border: '2px solid #f97316' }}>
-                              <button onClick={() => setWarnOpen(!warnOpen)} className="w-full flex items-center gap-2 px-3 py-2 text-left" style={{ background: '#fff7ed' }}>
-                                <span className="text-base">⚠️</span>
-                                <span className="text-xs font-black flex-1" style={{ color: '#c2410c' }}>ສລິບນີ້ຕ້ອງກວດສອບ — ກົດເພື່ອເບິ່ງ</span>
-                                <span className="text-xs" style={{ color: '#c2410c' }}>{warnOpen ? '▲' : '▼'}</span>
-                              </button>
-                              {warnOpen && (
-                                <div className="px-3 pb-3 pt-1 text-xs font-bold leading-6" style={{ background: '#fff7ed', color: '#7c2d12' }}>
-                                  {!r.amount_matches && <div>❌ ຈຳນວນ: {r.amount_found != null ? r.amount_found.toLocaleString() + ' ກີບ' : 'ບໍ່ພົບ'} (ຄາດ {(o.total||0).toLocaleString()} ກີບ)</div>}
-                                  {!r.date_is_today && <div>⚠️ ວັນໂອນ: {r.transfer_date || 'ບໍ່ພົບ'} — ບໍ່ໃຊ່ມື້ນີ້</div>}
-                                  {r.suspicious && <div>🚨 {r.suspicious_reason}</div>}
-                                  {r.summary_lo && <div className="mt-1 opacity-70">{r.summary_lo}</div>}
-                                </div>
-                              )}
-                            </div>
-                          )
-                        })()}
-
-                        <div className="flex justify-between items-start mb-2">
-                          <div className="flex items-center gap-2">
-                            <div className="font-serif text-2xl font-black" style={{ color: 'var(--brown)' }}>
-                              #{String(o.qnum).padStart(4,'0')}
-                            </div>
-                            {!o.done && !o.cancelled && o.status !== 'rejected' && (
-                              <button onClick={() => openEditOrder(o)} className="py-1 px-2 rounded-lg text-xs font-black" style={{ background: '#eff6ff', color: '#1d4ed8' }}>✏️ ແກ້</button>
-                            )}
-                          </div>
-                          <div className="text-right">
-                            <div className="text-xs font-bold" style={{ color: stale ? '#c2410c' : 'var(--gray3)' }}>{stale ? '⚠️ ' : ''}{time}</div>
-                            <span className={`tag text-xs mt-1 ${o.type === 'online' ? 'bg-orange-50 text-orange-700' : 'bg-blue-50 text-blue-700'}`}>
-                              {o.type === 'online' ? '🌐 Online' : '🏪 Walk-in'}
-                            </span>
-                            {o.type === 'walkin' && !o.cancelled && !o.done && (
-                              o.paid
-                                ? <span className="tag text-xs ml-1" style={{ background: '#f0fdf4', color: '#16a34a' }}>{o.payment_method === 'cash' ? '💵' : '📱'} ຈ່າຍແລ້ວ</span>
-                                : <span className="tag bg-orange-50 text-orange-600 text-xs ml-1">💰 ຍັງບໍ່ຈ່າຍ</span>
-                            )}
-                            {o.done && <span className="tag bg-green-50 text-green-700 text-xs ml-1">✓ Done</span>}
-                            {o.cancelled && <span className="tag bg-red-50 text-red-700 text-xs ml-1">✕ ຍົກເລີກ</span>}
-                            {o.status === 'rejected' && <span className="tag bg-red-50 text-red-700 text-xs ml-1">✕ ປະຕິເສດ</span>}
-                            {o.status === 'blocked' && <span className="tag bg-purple-50 text-purple-700 text-xs ml-1">🚫 ຖືກບ໋ອກ</span>}
-                            {o.status === 'confirmed' && !o.done && <span className="tag bg-green-50 text-green-700 text-xs ml-1">✓ ຢືນຢັນ</span>}
-                            {o.status === 'pending' && !o.cancelled && <span className="tag bg-yellow-50 text-yellow-700 text-xs ml-1">⏳ ລໍຖ້າ</span>}
-                          </div>
-                        </div>
-
-                        {o.cancelled && o.cancel_reason && (
-                          <div className="rounded-xl p-2 mb-2 text-xs font-bold" style={{ background: '#fef2f2', color: '#b91c1c' }}>
-                            📝 {o.cancel_reason}
-                          </div>
-                        )}
-
-                        {/* Customer info */}
-                        {cust && (
-                          <div className="rounded-xl p-2 mb-2 text-sm font-bold leading-6" style={{ background: 'var(--cream2)', color: 'var(--brown2)' }}>
-                            <div>👤 {cust.name} · 📞 {cust.phone}</div>
-                            <div>📅 {cust.date} · 🕐 {cust.time}</div>
-                            {cust.note && <div>📝 {cust.note}</div>}
-                            {cust.security && (() => {
-                              const sec = cust.security
-                              const warnings = []
-                              if (sec.ip?.country_code && sec.ip.country_code !== 'LA') warnings.push(`🌍 IP ມາຈາກ ${sec.ip.country}`)
-                              const org = (sec.ip?.org || '').toLowerCase()
-                              if (['vpn','proxy','hosting','cloud','digitalocean','amazon','linode','vultr','server'].some(k => org.includes(k))) warnings.push(`🕵️ ISP: ${sec.ip.org}`)
-                              if (sec.tz && sec.ip?.timezone && sec.tz !== sec.ip.timezone) warnings.push(`⏰ Timezone ຕ່າງ: ${sec.tz}`)
-                              const alreadyBlocked = sec.ip?.country_code === 'QA'
-                              const mapsUrl = sec.gps ? `https://maps.google.com/?q=${sec.gps.lat},${sec.gps.lng}` : null
-                              return (
-                                <details className="mt-1" open={warnings.length > 0 || alreadyBlocked}>
-                                  <summary className="cursor-pointer text-xs font-black" style={{ color: alreadyBlocked ? '#7c3aed' : warnings.length ? '#c2410c' : '#5C4033' }}>
-                                    {alreadyBlocked ? '🚫 ຜູ້ໃຊ້ຖືກບ໋ອກ' : warnings.length ? '🚨 ຄວາມປອດໄພ — ຕ້ອງກວດສອບ' : '🔒 ຂໍ້ມູນຄວາມປອດໄພ'}
-                                  </summary>
-                                  <div className="mt-1 flex flex-col gap-0.5 text-xs" style={{ color: '#5C4033' }}>
-                                    {warnings.map((w, i) => <div key={i} className="font-black" style={{ color: '#c2410c' }}>{w}</div>)}
-                                    {sec.ip?.ip && <div>🖥 IP: <span className="font-black select-all">{sec.ip.ip}</span></div>}
-                                    {sec.ip?.city && <div>📡 {sec.ip.city}, {sec.ip.country}{sec.ip.country_code === 'QA' && <span className="ml-1 text-purple-600 font-black">🚫 Qatar</span>}</div>}
-                                    {sec.tz && <div>🕐 TZ: {sec.tz} · Lang: {sec.lang}</div>}
-                                    {sec.screen && <div>📱 {sec.screen} · CPU: {sec.cpu||'?'} cores · RAM: {sec.mem||'?'}GB</div>}
-                                    {sec.gpu && <div>🎮 GPU: <span className="select-all">{sec.gpu}</span></div>}
-                                    {sec.platform && <div>💻 {sec.platform} · touch: {sec.touch}</div>}
-                                    {sec.canvasFp && <div className="opacity-60">fp: {sec.canvasFp}</div>}
-                                    {mapsUrl && <a href={mapsUrl} target="_blank" rel="noreferrer" className="underline font-black" style={{ color: '#1d4ed8' }}>📍 ເບິ່ງ GPS ໃນ Maps</a>}
-                                    {sec.gps && <div className="opacity-60">({sec.gps.lat.toFixed(5)}, {sec.gps.lng.toFixed(5)}) ±{sec.gps.accuracy}m</div>}
-                                    {!alreadyBlocked && (
-                                      <button
-                                        onClick={() => blockUser(o)}
-                                        className="mt-1 px-3 py-1 rounded-lg text-xs font-black text-white"
-                                        style={{ background: '#7c3aed' }}
-                                      >
-                                        🚫 Block ຜູ້ໃຊ້ນີ້
-                                      </button>
-                                    )}
-                                  </div>
-                                </details>
-                              )
-                            })()}
-                          </div>
-                        )}
-
-                        {/* Bag */}
-                        {o.bag_label && (
-                          <div className="border-l-4 border-[#3d1f0a] pl-3 mb-2 flex flex-col gap-1">
-                            {o.bag_label.split(' | ').map((line, li) => (
-                              <div key={li} className="text-sm font-black leading-snug" style={{ color: 'var(--brown)' }}>
-                                {line}
-                              </div>
-                            ))}
-                          </div>
-                        )}
-
-                        {/* Items — 2 rows, flow left-to-right, scrollable */}
-                        <div style={{ display: 'grid', gridAutoFlow: 'column', gridTemplateRows: 'repeat(2, auto)', gap: 8, overflowX: 'auto', paddingBottom: 4 }} className="mb-3">
-                          {items.map((it, ii) => {
-                            const img = images[it.menuIdx]
-                            return (
-                              <div key={ii} style={{ width: 104 }} className="rounded-2xl overflow-hidden border-2 border-[#e8d5c0] flex-shrink-0">
-                                <div className="relative overflow-hidden" style={{ width: 104, height: 104, background: 'var(--cream2)' }}>
-                                  {img
-                                    ? <img src={img} className="w-full h-full object-cover" alt={it.name} loading="lazy" />
-                                    : <div className="absolute inset-0 flex items-center justify-center text-4xl" style={{ background: 'var(--cream2)' }}>{EMOJIS[it.menuIdx] || '🍱'}</div>
-                                  }
-                                  <div className="absolute top-1 right-1 w-11 h-11 rounded-full flex items-center justify-center font-black shadow-md" style={{ background: 'var(--brown)', color: 'var(--cream)', fontSize: 20 }}>{it.qty}</div>
-                                </div>
-                                <div className="px-3 py-2" style={{ background: 'var(--warm-white)' }}>
-                                  <div className="text-center font-black leading-tight" style={{ color: 'var(--brown)', fontSize: 13 }}>{it.name}</div>
-                                  {it.sub > 0 && <div className="text-center font-bold mt-0.5" style={{ color: 'var(--gray3)', fontSize: 11 }}>{it.sub.toLocaleString()}</div>}
-                                </div>
-                              </div>
-                            )
-                          })}
-                        </div>
-
-                        {/* Slip */}
-                        {o.slip_url && (
-                          <div className="mb-2 flex items-center gap-2">
-                            <div className="cursor-pointer" onClick={() => setSlipModal({ url: o.slip_url, qnum: o.qnum })}>
-                              <img src={o.slip_url} className="w-20 rounded-lg border-2 border-[#e8d5c0]" alt="slip" loading="lazy" />
-                            </div>
-                            {slipVerify[o.id]?.loading && (
-                              <span className="text-xs font-bold" style={{ color: 'var(--gray3)' }}>🤖 ກຳລັງກວດ...</span>
-                            )}
-                          </div>
-                        )}
-
-                        <div className="text-base font-black mb-3" style={{ color: 'var(--brown)' }}>
-                          ລວມ: {(o.total || 0).toLocaleString()} ກີບ
-                        </div>
-
-                        {/* Money already collected no longer matches the total
-                            — almost always because the order was edited after
-                            payment. Stays up until staff settles it. */}
-                        {(() => {
-                          if (o.paid_amount == null) return null
-                          const diff = (o.total || 0) - o.paid_amount
-                          if (diff === 0) return null
-                          const owed = diff > 0
-                          return (
-                            <div className="mb-3 rounded-xl p-3 flex items-center justify-between gap-2"
-                              style={{ background: owed ? '#fef3c7' : '#dbeafe', border: `2px solid ${owed ? '#f59e0b' : '#3b82f6'}` }}>
-                              <div>
-                                <div className="text-xs font-black" style={{ color: owed ? '#92400e' : '#1e40af' }}>
-                                  {owed ? '⚠️ ຕ້ອງເກັບເພີ່ມ' : '↩️ ຕ້ອງທອນຄືນ'}
-                                </div>
-                                <div className="text-lg font-black" style={{ color: owed ? '#92400e' : '#1e40af' }}>
-                                  {Math.abs(diff).toLocaleString()} ກີບ
-                                </div>
-                                <div className="text-xs font-bold mt-0.5" style={{ color: 'var(--gray3)' }}>
-                                  ຮັບມາແລ້ວ {Number(o.paid_amount).toLocaleString()}
-                                </div>
-                              </div>
-                              <button onClick={() => settleBalance(o)}
-                                className="py-2 px-3 rounded-xl text-xs font-black text-white flex-shrink-0"
-                                style={{ background: owed ? '#f59e0b' : '#3b82f6' }}>
-                                ✓ ເຄລຍແລ້ວ
-                              </button>
-                            </div>
-                          )
-                        })()}
-
-                        {/* Actions. Three fixed slots, the same on every card in
-                            every state: destructive on the left, the small tools
-                            in the middle, the one button pressed all day on the
-                            right, widest. Before this they swapped places — ✓ sat
-                            left on a preorder and right on a walk-in — so the hand
-                            could not learn one target and a mis-tap landed on a
-                            real cancellation. A slot with nothing to do in this
-                            state is held open rather than collapsed. */}
-                        {!o.cancelled && !o.done && o.type === 'walkin' && o.status === 'pending' && !o.paid && payingId === o.id && (
-                          <div className="flex gap-2 mb-2">
-                            <button onClick={() => markPaid(o, 'cash')} className="flex-1 rounded-xl text-sm font-black text-white" style={{ background: '#15803d', minHeight: 56 }}>💵 ສດ</button>
-                            <button onClick={() => markPaid(o, 'qr')} className="flex-1 rounded-xl text-sm font-black text-white" style={{ background: '#1d4ed8', minHeight: 56 }}>📱 ໂອນ</button>
-                            <button onClick={() => setPayingId(null)} className="px-4 rounded-xl text-sm font-black border-2 border-[#e8d5c0]" style={{ color: 'var(--gray3)', minHeight: 56 }}>✕</button>
-                          </div>
-                        )}
-                        <div className="grid gap-2" style={{ gridTemplateColumns: 'auto auto 1fr', alignItems: 'stretch' }}>
-                          {/* slot 1 — destructive, never anywhere else */}
-                          {o.cancelled || o.done ? (
-                            <span />
-                          ) : (
-                            <button
-                              onClick={() => (o.type === 'online' && o.status === 'pending' ? rejectOrder(o) : cancelOrder(o))}
-                              title={o.type === 'online' && o.status === 'pending' ? 'ປະຕິເສດ' : 'ຍົກເລີກ'}
-                              className="px-4 rounded-xl text-sm font-black"
-                              style={{ minHeight: 56, background: '#fef2f2', color: '#b91c1c', border: '2px solid #fca5a5' }}
-                            >✕</button>
-                          )}
-
-                          {/* slot 2 — the small tools */}
-                          <div className="flex gap-2">
-                            {!o.cancelled && !o.done && o.type === 'walkin' && o.status === 'pending' && !o.paid && payingId !== o.id && (
-                              <button onClick={() => setPayingId(o.id)} className="px-4 rounded-xl text-sm font-black border-2 border-orange-400 text-orange-600" style={{ minHeight: 56 }}>💰</button>
-                            )}
-                            {!o.cancelled && !o.done && o.status === 'confirmed' && (
-                              <>
-                                <button onClick={() => announce(o.qnum)} className="px-4 rounded-xl text-sm font-black" style={{ minHeight: 56, background: 'var(--brown2)', color: 'var(--cream)' }}>📢</button>
-                                <button onClick={() => smartPrint(o, { force: true })} className="px-4 rounded-xl text-sm font-black bg-blue-50 text-blue-700" style={{ minHeight: 56 }}>🖨</button>
-                                <button
-                                  onClick={() => showOnDisplay(o)}
-                                  title={displayOrderId === o.id ? 'ເອົາອອກຈາກຈໍລູກຄ້າ' : 'ສະແດງໃສ່ຈໍລູກຄ້າ'}
-                                  className={`px-4 rounded-xl text-sm font-black ${displayOrderId === o.id ? 'bg-purple-700 text-white' : 'bg-purple-50 text-purple-700'}`}
-                                  style={{ minHeight: 56 }}
-                                >📺</button>
-                              </>
-                            )}
-                          </div>
-
-                          {/* slot 3 — the primary, always here, always widest */}
-                          {o.cancelled ? (
-                            <button onClick={() => undoOrder(o.id, 'cancelled')} className="rounded-xl text-sm font-black border-2 border-[#e8d5c0]" style={{ color: 'var(--gray3)', minHeight: 56 }}>↩ ຄືນ</button>
-                          ) : o.done ? (
-                            <button onClick={() => undoOrder(o.id, 'done')} className="rounded-xl text-sm font-black border-2 border-[#e8d5c0]" style={{ color: 'var(--gray3)', minHeight: 56 }}>↩ ຍົກເລີກ Done</button>
-                          ) : o.type === 'walkin' && o.status === 'pending' ? (
-                            <button onClick={() => confirmWalkin(o)} className="rounded-xl text-base font-black text-white" style={{ background: '#15803d', minHeight: 56 }}>🍳 ສົ່ງຄົວ</button>
-                          ) : o.type === 'online' && o.status === 'pending' ? (
-                            <button onClick={() => confirmOrder(o)} className="rounded-xl text-base font-black text-white" style={{ background: '#15803d', minHeight: 56 }}>✓ ຢືນຢັນ</button>
-                          ) : (
-                            <button onClick={() => doneOrder(o)} className="rounded-xl text-base font-black" style={{ background: 'var(--brown)', color: 'var(--cream)', minHeight: 56 }}>✓ ສຳເລັດ</button>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>}
-
-              {/* ─── Archive ─── */}
-              {!customerSearch.trim() && archivedOrders.length > 0 && (
-                <div className="mt-4">
-                  <button
-                    onClick={() => setArchiveOpen(o => !o)}
-                    className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl font-black text-xs tracking-widest uppercase"
-                    style={{ background: 'var(--cream2)', color: 'var(--gray3)' }}
-                  >
-                    <span>📦 ປະຫວັດ · Archive ({archivedOrders.length})</span>
-                    <span>{archiveOpen ? '▲' : '▼'}</span>
-                  </button>
-
-                  {archiveOpen && (
-                    <div className="flex flex-col gap-1 mt-2">
-                      {archivedOrders.map(o => {
-                        const isExp = expandedArchive.has(o.id)
-                        const items = typeof o.items === 'string' ? JSON.parse(o.items) : o.items || []
-                        const cust = o.customer ? (typeof o.customer === 'string' ? JSON.parse(o.customer) : o.customer) : null
-                        const time = orderStamp(o.created_at)
-                        return (
-                          <div key={o.id} className="rounded-xl overflow-hidden border border-[#e8d5c0]" style={{ background: 'var(--warm-white)' }}>
-                            <div
-                              className="flex items-center gap-2 px-3 py-2 cursor-pointer select-none"
-                              onClick={() => setExpandedArchive(prev => {
-                                const n = new Set(prev)
-                                n.has(o.id) ? n.delete(o.id) : n.add(o.id)
-                                return n
-                              })}
-                            >
-                              <span className="font-black text-sm w-10 flex-shrink-0" style={{ color: 'var(--brown)' }}>#{String(o.qnum).padStart(4,'0')}</span>
-                              <span className="text-xs flex-shrink-0" style={{ color: 'var(--gray3)' }}>{time}</span>
-                              <span className={`tag text-xs flex-shrink-0 ${o.type === 'online' ? 'bg-orange-50 text-orange-700' : 'bg-blue-50 text-blue-700'}`}>{o.type === 'online' ? '🌐' : '🏪'}</span>
-                              {o.done && <span className="tag bg-green-50 text-green-700 text-xs flex-shrink-0">✓ Done</span>}
-                              {o.cancelled && <span className="tag bg-red-50 text-red-700 text-xs flex-shrink-0">✕ ຍົກເລີກ</span>}
-                              {o.status === 'rejected' && <span className="tag bg-red-50 text-red-700 text-xs flex-shrink-0">✕ ປະຕິເສດ</span>}
-                              {o.status === 'blocked' && <span className="tag bg-purple-50 text-purple-700 text-xs flex-shrink-0">🚫 ບ໋ອກ</span>}
-                              {cust?.name && <span className="text-xs font-bold truncate flex-1 min-w-0" style={{ color: 'var(--brown2)' }}>{cust.name}{cust.phone ? ` · ${cust.phone}` : ''}</span>}
-                              <span className={`text-xs font-black flex-shrink-0 ${cust?.name ? '' : 'ml-auto'}`} style={{ color: 'var(--brown)' }}>{(o.total||0).toLocaleString()}</span>
-                              <span className="text-xs flex-shrink-0" style={{ color: 'var(--gray3)' }}>{isExp ? '▲' : '▼'}</span>
-                            </div>
-                            {isExp && (
-                              <div className="px-3 pb-3 pt-2 border-t border-[#e8d5c0]">
-                                {cust && (
-                                  <div className="text-xs font-bold mb-2 leading-5" style={{ color: 'var(--brown2)' }}>
-                                    👤 {cust.name} · 📞 {cust.phone}
-                                    {cust.date && <span>  📅 {cust.date} {cust.time}</span>}
-                                  </div>
-                                )}
-                                <div className="text-xs font-bold mb-2 leading-5" style={{ color: 'var(--brown2)' }}>
-                                  {items.map((it, ii) => <span key={ii} className="mr-2">{it.name} ×{it.qty}</span>)}
-                                </div>
-                                {o.slip_url && (
-                                  <div className="mb-2 cursor-pointer" onClick={() => setSlipModal({ url: o.slip_url, qnum: o.qnum })}>
-                                    <img src={o.slip_url} className="w-16 rounded-lg border border-[#e8d5c0]" alt="slip" loading="lazy" />
-                                  </div>
-                                )}
-                                <div className="flex gap-2 mt-1">
-                                  {o.cancelled && <button onClick={() => undoOrder(o.id, 'cancelled')} className="text-xs py-1.5 px-3 rounded-lg border-2 border-[#e8d5c0] font-black" style={{ color: 'var(--gray3)' }}>↩ ຄືນ</button>}
-                                  {o.done && <button onClick={() => undoOrder(o.id, 'done')} className="text-xs py-1.5 px-3 rounded-lg border-2 border-[#e8d5c0] font-black" style={{ color: 'var(--gray3)' }}>↩ ຍົກເລີກ Done</button>}
-                                  <button onClick={() => smartPrint(o, { force: true })} className="text-xs py-1.5 px-3 rounded-lg bg-blue-50 text-blue-700 font-black">🖨</button>
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        )
-                      })}
-                    </div>
-                  )}
-                </div>
-              )}
-              </div>
-            </div>
           </div>
         </div>
       )}
@@ -4745,138 +4813,6 @@ setStockShop(newSS); setStockOnline(newSO)
         >
           🛒
         </button>
-      )}
-
-      {/* Bottom Nav */}
-      <div className="flex flex-shrink-0" style={{ background: 'var(--brown)', borderTop: '2px solid var(--brown2)' }}>
-        {[['orders','📋','ອໍເດີ'],['sales','📊','ຍອດຂາຍ']].map(([t,icon,l]) => (
-          <button key={t} onClick={() => setTab(t)} className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 border-none text-xs font-bold ${tab===t ? 'text-[#fdf6ee]' : 'text-[rgba(253,246,238,0.45)]'}`} style={{ background: 'transparent' }}>
-            <span className="text-base">{icon}</span>{l}
-          </button>
-        ))}
-        <button onClick={() => setTab('chat')} className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 border-none text-xs font-bold relative ${tab==='chat' ? 'text-[#fdf6ee]' : 'text-[rgba(253,246,238,0.45)]'}`} style={{ background: 'transparent' }}>
-          <span className="text-base relative inline-block">
-            💬
-            {unreadChat > 0 && (
-              <span className="absolute -top-1.5 -right-2 bg-red-500 text-white text-[9px] font-black rounded-full w-4 h-4 flex items-center justify-center leading-none">
-                {unreadChat > 9 ? '9+' : unreadChat}
-              </span>
-            )}
-          </span>
-          ແຊດ
-        </button>
-      </div>
-
-
-      {/* Everything that used to crowd the top bar. Opened from the one chip
-          that replaced it, so the row above stays about the shop and this stays
-          about the machines. */}
-      {deviceSheet && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4"
-          style={{ background: 'rgba(61,31,10,0.6)' }} onClick={() => setDeviceSheet(false)}>
-          <div className="w-full max-w-lg rounded-2xl p-4" style={{ background: 'var(--brown)' }}
-            onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-3">
-              <span className="font-serif text-lg font-black" style={{ color: 'var(--cream)' }}>🖨 ອຸປະກອນ</span>
-              <button onClick={() => setDeviceSheet(false)} className="text-xl font-black px-2" style={{ color: 'var(--cream)' }}>✕</button>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {/* Which till this device is. A second person takes orders on an
-                  iPad with its own printer, and that station must not drive the
-                  customer screen or the cash drawer — both live at the main
-                  till. Stored per device, so switching here changes only this
-                  browser and never the other station. */}
-              <button
-                onClick={() => {
-                  const next = isTablet ? 'main' : 'tablet'
-                  setStationMode(next)
-                  try { localStorage.setItem('bcb_station_mode', next) } catch { }
-                  showToast(next === 'tablet'
-                    ? '📱 ໂໝດແທັບເລັດ · ບໍ່ຄວບຄຸມຈໍລູກຄ້າ ແລະ ລິ້ນຊັກ'
-                    : '🖥 ໂໝດເຄື່ອງຫຼັກ · ຄວບຄຸມຈໍລູກຄ້າ + ລິ້ນຊັກ', 'blue')
-                }}
-                title={isTablet
-                  ? 'ສະຖານີທີ 2 (ແທັບເລັດ) — ພິມໃບເສດຢ່າງດຽວ'
-                  : 'ເຄື່ອງຫຼັກ — ຄວບຄຸມຈໍລູກຄ້າ ແລະ ລິ້ນຊັກ'}
-                className={`text-xs font-black px-3 py-2 rounded-lg border ${isTablet ? 'border-amber-400 text-amber-300' : 'border-[rgba(253,246,238,0.35)] text-[#fdf6ee]'}`}>
-                {isTablet ? '📱 Tablet' : '🖥 ຫຼັກ'}
-              </button>
-              {/* Only offer the connections this browser can actually make.
-                  On an iPad neither exists — Safari has no WebUSB or Web
-                  Bluetooth, and every browser there is Safari underneath — so
-                  these buttons did nothing at all when pressed. A button that
-                  silently does nothing is what cost days on the main till's
-                  printer; better that it isn't there, with a line saying where
-                  receipts will come out instead. */}
-              {caps.usb && (
-                <button onClick={() => connectUsbPrinter()} className={`text-xs font-black px-3 py-2 rounded-lg border ${usbConnected ? 'border-green-400 text-green-300' : 'border-[rgba(253,246,238,0.35)] text-[#fdf6ee]'}`}>
-                  {usbConnected ? '🖨 USB ✓' : 'USB'}
-                </button>
-              )}
-              {caps.bt && (
-                <button onClick={connectPrinter} className={`text-xs font-black px-3 py-2 rounded-lg border ${btConnected ? 'border-green-400 text-green-300' : 'border-[rgba(253,246,238,0.35)] text-[#fdf6ee]'}`}>
-                  {btConnected ? '🖨 BT ✓' : 'BT'}
-                </button>
-              )}
-              {caps.ready && !caps.usb && !caps.bt && (
-                <span
-                  title="ເບຣົາເຊີນີ້ຕໍ່ເຄື່ອງພິມໂດຍກົງບໍ່ໄດ້ (iPad/iPhone) — ກົດພິມຈະເປີດໜ້າຕ່າງພິມຂອງເບຣົາເຊີແທນ"
-                  className="text-xs font-black px-3 py-2 rounded-lg border border-[rgba(253,246,238,0.25)] text-[rgba(253,246,238,0.6)]">
-                  🖨 ຜ່ານເບຣົາເຊີ
-                </span>
-              )}
-              {hasSerial && (
-                <button onClick={connectSerialPrinter} title="ສຳລັບເຄື່ອງພິມທີ່ pair ແບບ Bluetooth ທຳມະດາ (COM port)" className={`text-xs font-black px-3 py-2 rounded-lg border ${serialConnected ? 'border-green-400 text-green-300' : 'border-[rgba(253,246,238,0.35)] text-[#fdf6ee]'}`}>
-                  {serialConnected ? '🖨 COM ✓' : 'COM'}
-                </button>
-              )}
-              <button onClick={() => kickDrawer()} title="ເປີດລິ້ນຊັກ" className="text-xs font-black px-3 py-2 rounded-lg border border-[rgba(253,246,238,0.35)] text-[#fdf6ee]">🔓</button>
-              {/* Put the payment QR up on its own. Until now the QR only
-                  appeared attached to an order, so there was no way to let
-                  someone scan and pay without ringing something up first.
-                  Hidden on the tablet, which doesn't drive that screen. */}
-              {!isTablet && <button
-                onClick={() => {
-                  if (qrOnlyOn) { clearDisplay(); setQrOnlyOn(false); showToast('ປິດ QR ແລ້ວ', 'orange'); return }
-                  writeDisplay({ items: [], total: 0, qrOnly: true })
-                  setQrOnlyOn(true)
-                  showToast('📱 ສະແດງ QR ຈ່າຍເງິນ', 'green')
-                }}
-                title="ສະແດງ QR ຈ່າຍເງິນຢ່າງດຽວຢູ່ຈໍລູກຄ້າ"
-                className={`text-xs font-black px-3 py-2 rounded-lg border ${qrOnlyOn ? 'border-green-400 text-green-300' : 'border-[rgba(253,246,238,0.35)] text-[#fdf6ee]'}`}>
-                {qrOnlyOn ? '📱 QR ✓' : '📱 QR'}
-              </button>}
-              {/* Recovers a stuck USB printer, so it belongs with the USB
-                  button — on a device with no WebUSB there is nothing for it
-                  to recover. Missed when USB and BT were gated. */}
-              {caps.usb && <button
-                onClick={async () => {
-                  // Deliberately does NOT forget the device. Forgetting drops
-                  // the permission, which forces Chrome's chooser to open —
-                  // and on this dual-screen till that window appears where
-                  // nobody sees it, so the button just hung on "connecting…".
-                  // Releasing and re-acquiring clears a stuck printer without
-                  // needing anyone to pick anything.
-                  showToast('ກຳລັງລ້າງການເຊື່ອມ USB...', 'orange')
-                  usbDeviceRef.current = null
-                  setUsbConnected(false)
-                  await releaseAllUsb()
-                  await new Promise(r => setTimeout(r, 800))
-                  if (await connectUsbPrinter({ silent: true, force: true })) {
-                    showToast('🖨 USB ພ້ອມໃຊ້ ✅', 'green')
-                  } else {
-                    showToast('❌ ຍັງເຊື່ອມບໍ່ໄດ້ — ກົດປຸ່ມ USB', 'red')
-                  }
-                }}
-                title="ລ້າງ USB ທີ່ຄ້າງ ແລ້ວເຊື່ອມໃໝ່"
-                className="text-xs font-black px-3 py-2 rounded-lg border border-[rgba(253,246,238,0.35)] text-[#fdf6ee]">🔄USB</button>}
-              <button onClick={() => alert('ຕ້ອງຊອກຫາ ↺ Reset ໃນລາຍການ')} className="text-xs font-black px-3 py-2 rounded-lg border border-red-400 text-red-300">↺</button>
-              <button onClick={() => setHeaderCollapsed(true)} title="ເຊື່ອງແຖບເທິງ" className="text-xs font-black px-3 py-2 rounded-lg border border-[rgba(253,246,238,0.35)] text-[#fdf6ee]">▲</button>
-            </div>
-            <button onClick={() => setDeviceSheet(false)} className="w-full mt-4 py-3 rounded-xl font-black"
-              style={{ background: 'var(--cream)', color: 'var(--brown)' }}>ປິດ</button>
-          </div>
-        </div>
       )}
 
       {/* Quick Order Modal */}
