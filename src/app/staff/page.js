@@ -4337,49 +4337,64 @@ setStockShop(newSS); setStockOnline(newSO)
                           )
                         })()}
 
-                        {/* Actions */}
-                        <div className="flex gap-2 flex-wrap">
-                          {o.cancelled ? (
-                            <button onClick={() => undoOrder(o.id, 'cancelled')} className="flex-1 py-2 rounded-xl text-sm font-black border-2 border-[#e8d5c0]" style={{ color: 'var(--gray3)' }}>↩ ຄືນ</button>
-                          ) : o.done ? (
-                            <button onClick={() => undoOrder(o.id, 'done')} className="flex-1 py-2 rounded-xl text-sm font-black border-2 border-[#e8d5c0]" style={{ color: 'var(--gray3)' }}>↩ ຍົກເລີກ Done</button>
-                          ) : o.type === 'walkin' && o.status === 'pending' ? (
-                            <div className="w-full flex flex-col gap-2">
-                              {!o.paid && (
-                                payingId === o.id ? (
-                                  <div className="flex gap-2">
-                                    <button onClick={() => markPaid(o, 'cash')} className="flex-1 py-3 rounded-xl text-sm font-black text-white" style={{ background: '#15803d' }}>💵 ສດ</button>
-                                    <button onClick={() => markPaid(o, 'qr')} className="flex-1 py-3 rounded-xl text-sm font-black text-white" style={{ background: '#1d4ed8' }}>📱 ໂອນ</button>
-                                    <button onClick={() => setPayingId(null)} className="py-3 px-3 rounded-xl text-sm font-black border-2 border-[#e8d5c0]" style={{ color: 'var(--gray3)' }}>✕</button>
-                                  </div>
-                                ) : (
-                                  <button onClick={() => setPayingId(o.id)} className="w-full py-3 rounded-xl text-sm font-black border-2 border-orange-400 text-orange-600">💰 ຮັບເງິນ</button>
-                                )
-                              )}
-                              <div className="flex gap-2">
-                                <button onClick={() => confirmWalkin(o)} className="flex-1 py-3 rounded-xl text-sm font-black text-white bg-green-700">🍳 ສົ່ງຄົວ</button>
-                                <button onClick={() => cancelOrder(o)} className="py-3 px-4 rounded-xl text-sm font-black border-2 border-red-400 text-red-600">✕</button>
-                              </div>
-                            </div>
-                          ) : o.type === 'online' && o.status === 'pending' ? (
-                            <>
-                              <button onClick={() => confirmOrder(o)} className="flex-1 py-3 rounded-xl text-sm font-black text-white bg-green-700">✓ ຢືນຢັນ</button>
-                              <button onClick={() => rejectOrder(o)} className="flex-1 py-3 rounded-xl text-sm font-black text-white bg-red-700">✕ ປະຕິເສດ</button>
-                            </>
+                        {/* Actions. Three fixed slots, the same on every card in
+                            every state: destructive on the left, the small tools
+                            in the middle, the one button pressed all day on the
+                            right, widest. Before this they swapped places — ✓ sat
+                            left on a preorder and right on a walk-in — so the hand
+                            could not learn one target and a mis-tap landed on a
+                            real cancellation. A slot with nothing to do in this
+                            state is held open rather than collapsed. */}
+                        {!o.cancelled && !o.done && o.type === 'walkin' && o.status === 'pending' && !o.paid && payingId === o.id && (
+                          <div className="flex gap-2 mb-2">
+                            <button onClick={() => markPaid(o, 'cash')} className="flex-1 rounded-xl text-sm font-black text-white" style={{ background: '#15803d', minHeight: 56 }}>💵 ສດ</button>
+                            <button onClick={() => markPaid(o, 'qr')} className="flex-1 rounded-xl text-sm font-black text-white" style={{ background: '#1d4ed8', minHeight: 56 }}>📱 ໂອນ</button>
+                            <button onClick={() => setPayingId(null)} className="px-4 rounded-xl text-sm font-black border-2 border-[#e8d5c0]" style={{ color: 'var(--gray3)', minHeight: 56 }}>✕</button>
+                          </div>
+                        )}
+                        <div className="grid gap-2" style={{ gridTemplateColumns: 'auto auto 1fr', alignItems: 'stretch' }}>
+                          {/* slot 1 — destructive, never anywhere else */}
+                          {o.cancelled || o.done ? (
+                            <span />
                           ) : (
-                            <>
-                              <button onClick={() => doneOrder(o)} className="flex-[4] py-3 rounded-xl text-sm font-black" style={{ background: 'var(--brown)', color: 'var(--cream)' }}>✓ Done</button>
-                              <button onClick={() => announce(o.qnum)} className="flex-[2] py-3 rounded-xl text-sm font-black" style={{ background: 'var(--brown2)', color: 'var(--cream)' }}>📢</button>
-                              <button onClick={() => smartPrint(o, { force: true })} className="py-3 px-3 rounded-xl text-sm font-black bg-blue-50 text-blue-700">🖨</button>
-                              <button
-                                onClick={() => showOnDisplay(o)}
-                                title={displayOrderId === o.id ? 'ເອົາອອກຈາກຈໍລູກຄ້າ' : 'ສະແດງໃສ່ຈໍລູກຄ້າ'}
-                                className={`py-3 px-3 rounded-xl text-sm font-black ${displayOrderId === o.id ? 'bg-purple-700 text-white' : 'bg-purple-50 text-purple-700'}`}
-                              >
-                                📺
-                              </button>
-                              <button onClick={() => cancelOrder(o)} className="py-3 px-3 rounded-xl text-sm font-black border-2 border-red-400 text-red-600">✕</button>
-                            </>
+                            <button
+                              onClick={() => (o.type === 'online' && o.status === 'pending' ? rejectOrder(o) : cancelOrder(o))}
+                              title={o.type === 'online' && o.status === 'pending' ? 'ປະຕິເສດ' : 'ຍົກເລີກ'}
+                              className="px-4 rounded-xl text-sm font-black"
+                              style={{ minHeight: 56, background: '#fef2f2', color: '#b91c1c', border: '2px solid #fca5a5' }}
+                            >✕</button>
+                          )}
+
+                          {/* slot 2 — the small tools */}
+                          <div className="flex gap-2">
+                            {!o.cancelled && !o.done && o.type === 'walkin' && o.status === 'pending' && !o.paid && payingId !== o.id && (
+                              <button onClick={() => setPayingId(o.id)} className="px-4 rounded-xl text-sm font-black border-2 border-orange-400 text-orange-600" style={{ minHeight: 56 }}>💰</button>
+                            )}
+                            {!o.cancelled && !o.done && o.status === 'confirmed' && (
+                              <>
+                                <button onClick={() => announce(o.qnum)} className="px-4 rounded-xl text-sm font-black" style={{ minHeight: 56, background: 'var(--brown2)', color: 'var(--cream)' }}>📢</button>
+                                <button onClick={() => smartPrint(o, { force: true })} className="px-4 rounded-xl text-sm font-black bg-blue-50 text-blue-700" style={{ minHeight: 56 }}>🖨</button>
+                                <button
+                                  onClick={() => showOnDisplay(o)}
+                                  title={displayOrderId === o.id ? 'ເອົາອອກຈາກຈໍລູກຄ້າ' : 'ສະແດງໃສ່ຈໍລູກຄ້າ'}
+                                  className={`px-4 rounded-xl text-sm font-black ${displayOrderId === o.id ? 'bg-purple-700 text-white' : 'bg-purple-50 text-purple-700'}`}
+                                  style={{ minHeight: 56 }}
+                                >📺</button>
+                              </>
+                            )}
+                          </div>
+
+                          {/* slot 3 — the primary, always here, always widest */}
+                          {o.cancelled ? (
+                            <button onClick={() => undoOrder(o.id, 'cancelled')} className="rounded-xl text-sm font-black border-2 border-[#e8d5c0]" style={{ color: 'var(--gray3)', minHeight: 56 }}>↩ ຄືນ</button>
+                          ) : o.done ? (
+                            <button onClick={() => undoOrder(o.id, 'done')} className="rounded-xl text-sm font-black border-2 border-[#e8d5c0]" style={{ color: 'var(--gray3)', minHeight: 56 }}>↩ ຍົກເລີກ Done</button>
+                          ) : o.type === 'walkin' && o.status === 'pending' ? (
+                            <button onClick={() => confirmWalkin(o)} className="rounded-xl text-base font-black text-white" style={{ background: '#15803d', minHeight: 56 }}>🍳 ສົ່ງຄົວ</button>
+                          ) : o.type === 'online' && o.status === 'pending' ? (
+                            <button onClick={() => confirmOrder(o)} className="rounded-xl text-base font-black text-white" style={{ background: '#15803d', minHeight: 56 }}>✓ ຢືນຢັນ</button>
+                          ) : (
+                            <button onClick={() => doneOrder(o)} className="rounded-xl text-base font-black" style={{ background: 'var(--brown)', color: 'var(--cream)', minHeight: 56 }}>✓ ສຳເລັດ</button>
                           )}
                         </div>
                       </div>
