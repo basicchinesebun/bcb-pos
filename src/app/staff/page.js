@@ -128,6 +128,10 @@ export default function StaffPage() {
     { id: 'houayhong', name: 'ສາຂາຫວຍຫົງ', nameEn: 'Houay Hong Branch', visible: true, schedule: 'ຄ · ສກ · ອ (Tue / Thu / Sat)', mapUrl: '', facebookUrl: '', tiktokUrl: '', phone1: '', phone2: '', whatsapp: '' },
   ])
   const [filter, setFilter] = useState('all')
+  // Channel (filter) answers "whose order"; stage answers "what is it waiting
+  // for". They are different questions and the board needs both — during a rush
+  // the only list worth looking at is the one still to be confirmed.
+  const [stage, setStage] = useState('all')
   // Takings shown next to the filter buttons. Today is what matters during
   // service; all-time is one tap away for when the question is the other one.
   const [moneyScope, setMoneyScope] = useState('today')
@@ -1141,7 +1145,9 @@ export default function StaffPage() {
     }
     return false
   })
-  const activeOrders = filteredOrders.filter(o => !o.done && !o.cancelled && o.status !== 'rejected' && o.status !== 'blocked')
+  const openOrders = filteredOrders.filter(o => !o.done && !o.cancelled && o.status !== 'rejected' && o.status !== 'blocked')
+  const stageOf = o => (o.status === 'pending' ? 'needs' : 'making')
+  const activeOrders = openOrders.filter(o => stage === 'all' || stageOf(o) === stage)
   const archivedOrders = filteredOrders.filter(o => o.done || o.cancelled || o.status === 'rejected' || o.status === 'blocked')
 
   // Money for whatever the ທັງໝົດ / 🏪 / 🌐 buttons are currently showing, so
@@ -3303,6 +3309,29 @@ setStockShop(newSS); setStockOnline(newSO)
                       </button>
                     ) : null
                   })()}
+                  {/* Stage first, because during service it is the only
+                      question: what still needs confirming, what is being made.
+                      Channel comes after it, and the two narrow together. */}
+                  {[['all', 'ທັງໝົດ'], ['needs', 'ລໍຖ້າຢືນຢັນ'], ['making', 'ກຳລັງເຮັດ']].map(([k, l]) => {
+                    const n = openOrders.filter(o => k === 'all' || stageOf(o) === k).length
+                    const urgent = k === 'needs' && n > 0
+                    const on = stage === k
+                    return (
+                      <button key={k} onClick={() => setStage(k)}
+                        className="flex items-center gap-1.5 px-3 rounded-lg text-xs font-black border"
+                        style={{
+                          minHeight: 44,
+                          background: on ? (urgent ? '#b45309' : 'var(--brown)') : (urgent ? '#fef3c7' : 'transparent'),
+                          color: on ? '#fff' : (urgent ? '#92400e' : 'var(--gray3)'),
+                          borderColor: on ? (urgent ? '#b45309' : 'var(--brown)') : (urgent ? '#fcd34d' : 'var(--cream3)'),
+                        }}>
+                        {l}
+                        <span className="px-1.5 py-0.5 rounded-full text-xs"
+                          style={{ background: on ? 'rgba(255,255,255,0.22)' : 'var(--cream2)', color: on ? '#fff' : 'var(--brown)', fontVariantNumeric: 'tabular-nums' }}>{n}</span>
+                      </button>
+                    )
+                  })}
+                  <span className="w-px self-stretch my-1" style={{ background: 'var(--cream3)' }} />
                   {/* The counts used to live in three big cards above the
                       list, repeating what these buttons are about to filter.
                       They ride on the buttons now and the band is gone. */}
