@@ -838,11 +838,40 @@ export default function StaffPage() {
     kickDrawer()
   }
 
-  function announce(qnum) {
+  // The three-note chime shops use before an announcement. It plays first so a
+  // room full of people looks up before the number is said, rather than half of
+  // them catching the tail of it. Synthesised rather than a sound file: no
+  // download, no cache to go stale, and it works with the network down.
+  function playCallChime() {
+    return new Promise(resolve => {
+      try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)()
+        const t0 = ctx.currentTime + 0.02
+        // G5 · E5 · C5 — falling, which reads as "attention" rather than "alert"
+        const notes = [[784.0, 0.00], [659.3, 0.22], [523.3, 0.44]]
+        notes.forEach(([freq, at]) => {
+          const osc = ctx.createOscillator()
+          const gain = ctx.createGain()
+          osc.type = 'sine'
+          osc.frequency.value = freq
+          osc.connect(gain); gain.connect(ctx.destination)
+          // struck, then left to ring, so it sounds like a chime and not a beep
+          gain.gain.setValueAtTime(0.0001, t0 + at)
+          gain.gain.exponentialRampToValueAtTime(0.35, t0 + at + 0.015)
+          gain.gain.exponentialRampToValueAtTime(0.0001, t0 + at + 0.55)
+          osc.start(t0 + at); osc.stop(t0 + at + 0.6)
+        })
+        setTimeout(() => { try { ctx.close() } catch { } resolve() }, 900)
+      } catch { resolve() }
+    })
+  }
+
+  async function announce(qnum) {
     saveConfig('current_queue', String(qnum))
     if (!settings.soundOn) return
     window.speechSynthesis.cancel()
-    const u = new SpeechSynthesisUtterance(`หมายเลข ${String(qnum).padStart(4, '0')} รับสินค้าได้เลยค่ะ`)
+    await playCallChime()
+    const u = new SpeechSynthesisUtterance(`ออเดอร์หมายเลข ${String(qnum).padStart(4, '0')} รับสินค้าได้เลยค่ะ`)
     const v = voicesRef.current.find(v => v.lang === 'th-TH') || voicesRef.current[0]
     if (v) u.voice = v
     u.lang = 'th-TH'
