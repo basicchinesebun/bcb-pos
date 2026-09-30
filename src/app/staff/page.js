@@ -3130,7 +3130,7 @@ setStockShop(newSS); setStockOnline(newSO)
       {/* Taking orders and running the shop are different jobs an hour apart,
           and mixing them is why the selling screen carried a column of settings
           nobody reads mid-service. One switch, always in the same place. */}
-      <div className="flex-shrink-0 flex items-center gap-2 px-3 py-2" style={{ background: 'var(--brown)' }}>
+      <div className="flex-shrink-0 flex items-center gap-2 px-3 pt-2" style={{ background: 'var(--brown)' }}>
         <div className="flex rounded-full p-1 gap-1" style={{ background: 'rgba(0,0,0,0.28)' }}>
           {[['orders', 'ໜ້າຂາຍ'], ['office', 'ຫຼັງຮ້ານ']].map(([m, l]) => {
             const on = m === 'orders' ? tab === 'orders' : tab !== 'orders'
@@ -3230,28 +3230,6 @@ setStockShop(newSS); setStockOnline(newSO)
           </div>
           )}
 
-          {!headerCollapsed && (
-          <div className="flex-shrink-0 flex items-center justify-end px-3 pt-2">
-            <button
-              onClick={() => setStatsCollapsed(v => !v)}
-              className="text-xs font-black px-2 py-1 rounded-lg"
-              style={{ color: 'var(--gray3)' }}
-            >
-              {statsCollapsed ? '▼ ສະຖິຕິ' : '▲ ເຊື່ອງສະຖິຕິ'}
-            </button>
-          </div>
-          )}
-          {!headerCollapsed && !statsCollapsed && (
-            <div className="flex-shrink-0 grid grid-cols-3 gap-2 p-3 pt-1">
-              {[['ລໍຖ້າ', waiting, 'var(--brown)'], ['ສຳເລັດ', done, 'var(--green,#2d6a2d)'], ['ທັງໝົດ', orders.length, 'var(--gray3)']].map(([l, n, c]) => (
-                <div key={l} className="card text-center py-2">
-                  <div className="text-2xl font-black" style={{ color: c }}>{n}</div>
-                  <div className="text-xs font-bold mt-0.5" style={{ color: 'var(--gray3)' }}>{l}</div>
-                </div>
-              ))}
-            </div>
-          )}
-
           {/* Orders fill the screen now. The settings that used to sit in a
               column beside them have their own place in ຫຼັງຮ້ານ, because
               during service nobody is reading them and they were taking a
@@ -3325,9 +3303,23 @@ setStockShop(newSS); setStockOnline(newSO)
                       </button>
                     ) : null
                   })()}
-                  {[['all','ທັງໝົດ'],['walkin','🏪'],['online','🌐']].map(([f,l]) => (
-                    <button key={f} onClick={() => setFilter(f)} className={`px-3 py-1 rounded-lg text-xs font-black border ${filter===f ? 'bg-[#3d1f0a] text-[#fdf6ee] border-[#3d1f0a]' : 'border-[#e8d5c0] text-[#8a6a55]'}`}>{l}</button>
-                  ))}
+                  {/* The counts used to live in three big cards above the
+                      list, repeating what these buttons are about to filter.
+                      They ride on the buttons now and the band is gone. */}
+                  {[['all','ທັງໝົດ'],['walkin','🏪 ໜ້າຮ້ານ'],['online','🌐 ອອນລາຍ']].map(([f,l]) => {
+                    const n = orders.filter(o =>
+                      !o.done && !o.cancelled && o.status !== 'rejected' && o.status !== 'blocked'
+                      && (f === 'all' || o.type === f)).length
+                    return (
+                      <button key={f} onClick={() => setFilter(f)}
+                        className={`flex items-center gap-1.5 px-3 rounded-lg text-xs font-black border ${filter===f ? 'bg-[#3d1f0a] text-[#fdf6ee] border-[#3d1f0a]' : 'border-[#e8d5c0] text-[#8a6a55]'}`}
+                        style={{ minHeight: 44 }}>
+                        {l}
+                        <span className="px-1.5 py-0.5 rounded-full text-xs"
+                          style={{ background: filter===f ? 'rgba(253,246,238,0.22)' : 'var(--cream2)', fontVariantNumeric: 'tabular-nums' }}>{n}</span>
+                      </button>
+                    )
+                  })}
                   <button
                     onClick={() => setMainSearchCollapsed(v => !v)}
                     className={`px-3 py-1 rounded-lg text-xs font-black border ${!mainSearchCollapsed ? 'bg-[#3d1f0a] text-[#fdf6ee] border-[#3d1f0a]' : 'border-[#e8d5c0] text-[#8a6a55]'}`}
