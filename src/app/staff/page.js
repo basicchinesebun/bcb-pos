@@ -871,7 +871,7 @@ export default function StaffPage() {
     if (!settings.soundOn) return
     window.speechSynthesis.cancel()
     await playCallChime()
-    const u = new SpeechSynthesisUtterance(`ออเดอร์หมายเลข ${String(qnum).padStart(4, '0')} รับสินค้าได้เลยค่ะ`)
+    const u = new SpeechSynthesisUtterance(`ออเดอร์หมายเลข ${String(qnum).padStart(4, '0')} เชิญมารับสินค้าที่หน้าเคาน์เตอร์`)
     const v = voicesRef.current.find(v => v.lang === 'th-TH') || voicesRef.current[0]
     if (v) u.voice = v
     u.lang = 'th-TH'
