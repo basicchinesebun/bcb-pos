@@ -3156,27 +3156,6 @@ setStockShop(newSS); setStockOnline(newSO)
         </div>
         {/* Inside ຫຼັງຮ້ານ these pick the section. Chat keeps its unread count
             here because it is the one thing back here that cannot wait. */}
-        {tab !== 'orders' && (
-          <div className="flex gap-1.5 overflow-x-auto">
-            {[['sales', '📊 ຍອດຂາຍ'], ['chat', '💬 ແຊດ'], ['settings', '⚙ ຕັ້ງຄ່າ']].map(([t, l]) => (
-              <button key={t} onClick={() => setTab(t)}
-                className="px-3 font-black text-xs rounded-lg border flex-shrink-0 relative"
-                style={{
-                  minHeight: 44,
-                  background: tab === t ? 'var(--cream)' : 'transparent',
-                  color: tab === t ? 'var(--brown)' : 'rgba(253,246,238,0.75)',
-                  borderColor: tab === t ? 'var(--cream)' : 'rgba(253,246,238,0.3)',
-                }}>
-                {l}
-                {t === 'chat' && unreadChat > 0 && (
-                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[9px] font-black rounded-full w-4 h-4 flex items-center justify-center leading-none">
-                    {unreadChat > 9 ? '9+' : unreadChat}
-                  </span>
-                )}
-              </button>
-            ))}
-          </div>
-        )}
         {tab === 'orders' && unreadChat > 0 && (
           <button onClick={() => setTab('chat')}
             className="ml-auto px-3 rounded-lg text-xs font-black flex items-center gap-1.5"
@@ -3805,6 +3784,32 @@ setStockShop(newSS); setStockOnline(newSO)
           </div>
         </div>
       )}
+
+      {/* ຫຼັງຮ້ານ gets a rail down the side rather than a row of chips on the
+          brown bar. There is room for it here — nothing back here is urgent —
+          and it leaves the section names readable instead of abbreviated. */}
+      {tab !== 'orders' && (
+        <div className="flex-1 flex overflow-hidden">
+          <nav className="flex-shrink-0 flex flex-col gap-1 p-2 overflow-y-auto"
+            style={{ width: 168, background: 'var(--warm-white)', borderRight: '2px solid var(--cream3)' }}>
+            {[['sales', '📊', 'ຍອດຂາຍ'], ['chat', '💬', 'ແຊດ'], ['settings', '⚙', 'ຕັ້ງຄ່າ']].map(([t, ic, l]) => (
+              <button key={t} onClick={() => setTab(t)}
+                className="flex items-center gap-2 px-3 rounded-xl text-sm font-black relative"
+                style={{
+                  minHeight: 48,
+                  background: tab === t ? 'var(--brown)' : 'transparent',
+                  color: tab === t ? 'var(--cream)' : 'var(--brown2)',
+                }}>
+                <span className="text-base">{ic}</span>{l}
+                {t === 'chat' && unreadChat > 0 && (
+                  <span className="ml-auto bg-red-600 text-white text-[10px] font-black rounded-full min-w-[18px] h-[18px] px-1 flex items-center justify-center leading-none">
+                    {unreadChat > 9 ? '9+' : unreadChat}
+                  </span>
+                )}
+              </button>
+            ))}
+          </nav>
+          <div className="flex-1 flex flex-col overflow-hidden min-w-0">
 
       {/* ─── SETTINGS TAB ─── */}
       {tab === 'settings' && (
@@ -4824,6 +4829,10 @@ setStockShop(newSS); setStockOnline(newSO)
           )}
         </div>
       )}
+          </div>
+        </div>
+      )}
+
 
       {/* Quick Order FAB */}
       {tab === 'orders' && !qoOpen && (
