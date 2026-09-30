@@ -73,12 +73,12 @@ function isFromEarlierDay(iso) {
 }
 
 const STATUS_COLORS = {
-  walkin: 'bg-blue-50 text-blue-700',
+  walkin: '',
   online: 'bg-orange-50 text-orange-700',
   pending: 'bg-yellow-50 text-yellow-700',
   confirmed: 'bg-green-50 text-green-700',
   rejected: 'bg-red-50 text-red-700',
-  blocked: 'bg-purple-50 text-purple-700',
+  blocked: ' ',
   done: 'bg-green-100 text-green-900',
   called: 'bg-[#3d1f0a] text-[#fdf6ee]',
 }
@@ -3402,13 +3402,13 @@ setStockShop(newSS); setStockOnline(newSO)
                               </div>
                               <div className="text-right">
                                 <div className="text-xs font-bold" style={{ color: stale ? '#c2410c' : 'var(--gray3)' }}>{stale ? '⚠️ ' : ''}{time}</div>
-                                <span className={`tag text-xs mt-1 ${o.type === 'online' ? 'bg-orange-50 text-orange-700' : 'bg-blue-50 text-blue-700'}`}>
+                                <span className={`tag text-xs mt-1 ${o.type === 'online' ? 'bg-orange-50 text-orange-700' : ''}`}>
                                   {o.type === 'online' ? '🌐 Online' : '🏪 Walk-in'}
                                 </span>
                                 {o.done && <span className="tag bg-green-50 text-green-700 text-xs ml-1">✓ Done</span>}
                                 {o.cancelled && <span className="tag bg-red-50 text-red-700 text-xs ml-1">✕ ຍົກເລີກ</span>}
                                 {o.status === 'rejected' && <span className="tag bg-red-50 text-red-700 text-xs ml-1">✕ ປະຕິເສດ</span>}
-                                {o.status === 'blocked' && <span className="tag bg-purple-50 text-purple-700 text-xs ml-1">🚫 ຖືກບ໋ອກ</span>}
+                                {o.status === 'blocked' && <span className="tag   text-xs ml-1">🚫 ຖືກບ໋ອກ</span>}
                                 {o.status === 'confirmed' && !o.done && <span className="tag bg-green-50 text-green-700 text-xs ml-1">✓ ຢືນຢັນ</span>}
                                 {o.status === 'pending' && !o.cancelled && <span className="tag bg-yellow-50 text-yellow-700 text-xs ml-1">⏳ ລໍຖ້າ</span>}
                               </div>
@@ -3480,12 +3480,12 @@ setStockShop(newSS); setStockOnline(newSO)
                               #{String(o.qnum).padStart(4,'0')}
                             </div>
                             {!o.done && !o.cancelled && o.status !== 'rejected' && (
-                              <button onClick={() => openEditOrder(o)} className="py-1 px-2 rounded-lg text-xs font-black" style={{ background: '#eff6ff', color: '#1d4ed8' }}>✏️ ແກ້</button>
+                              <button onClick={() => openEditOrder(o)} className="py-1 px-2 rounded-lg text-xs font-black" style={{ background: 'var(--cream2)', color: 'var(--brown2)' }}>✏️ ແກ້</button>
                             )}
                           </div>
                           <div className="text-right">
                             <div className="text-xs font-bold" style={{ color: stale ? '#c2410c' : 'var(--gray3)' }}>{stale ? '⚠️ ' : ''}{time}</div>
-                            <span className={`tag text-xs mt-1 ${o.type === 'online' ? 'bg-orange-50 text-orange-700' : 'bg-blue-50 text-blue-700'}`}>
+                            <span className={`tag text-xs mt-1 ${o.type === 'online' ? 'bg-orange-50 text-orange-700' : ''}`}>
                               {o.type === 'online' ? '🌐 Online' : '🏪 Walk-in'}
                             </span>
                             {o.type === 'walkin' && !o.cancelled && !o.done && (
@@ -3496,7 +3496,7 @@ setStockShop(newSS); setStockOnline(newSO)
                             {o.done && <span className="tag bg-green-50 text-green-700 text-xs ml-1">✓ Done</span>}
                             {o.cancelled && <span className="tag bg-red-50 text-red-700 text-xs ml-1">✕ ຍົກເລີກ</span>}
                             {o.status === 'rejected' && <span className="tag bg-red-50 text-red-700 text-xs ml-1">✕ ປະຕິເສດ</span>}
-                            {o.status === 'blocked' && <span className="tag bg-purple-50 text-purple-700 text-xs ml-1">🚫 ຖືກບ໋ອກ</span>}
+                            {o.status === 'blocked' && <span className="tag   text-xs ml-1">🚫 ຖືກບ໋ອກ</span>}
                             {o.status === 'confirmed' && !o.done && <span className="tag bg-green-50 text-green-700 text-xs ml-1">✓ ຢືນຢັນ</span>}
                             {o.status === 'pending' && !o.cancelled && <span className="tag bg-yellow-50 text-yellow-700 text-xs ml-1">⏳ ລໍຖ້າ</span>}
                           </div>
@@ -3614,7 +3614,7 @@ setStockShop(newSS); setStockOnline(newSO)
                           const owed = diff > 0
                           return (
                             <div className="mb-3 rounded-xl p-3 flex items-center justify-between gap-2"
-                              style={{ background: owed ? '#fef3c7' : '#dbeafe', border: `2px solid ${owed ? '#f59e0b' : '#3b82f6'}` }}>
+                              style={{ background: owed ? '#fef3c7' : 'var(--cream2)', border: `2px solid ${owed ? '#b45309' : 'var(--cream3)'}` }}>
                               <div>
                                 <div className="text-xs font-black" style={{ color: owed ? '#92400e' : '#1e40af' }}>
                                   {owed ? '⚠️ ຕ້ອງເກັບເພີ່ມ' : '↩️ ຕ້ອງທອນຄືນ'}
@@ -3628,7 +3628,7 @@ setStockShop(newSS); setStockOnline(newSO)
                               </div>
                               <button onClick={() => settleBalance(o)}
                                 className="py-2 px-3 rounded-xl text-xs font-black text-white flex-shrink-0"
-                                style={{ background: owed ? '#f59e0b' : '#3b82f6' }}>
+                                style={{ background: owed ? '#b45309' : 'var(--brown2)' }}>
                                 ✓ ເຄລຍແລ້ວ
                               </button>
                             </div>
@@ -3646,7 +3646,7 @@ setStockShop(newSS); setStockOnline(newSO)
                         {!o.cancelled && !o.done && o.type === 'walkin' && o.status === 'pending' && !o.paid && payingId === o.id && (
                           <div className="flex gap-2 mb-2">
                             <button onClick={() => markPaid(o, 'cash')} className="flex-1 rounded-xl text-sm font-black text-white" style={{ background: '#15803d', minHeight: 56 }}>💵 ສດ</button>
-                            <button onClick={() => markPaid(o, 'qr')} className="flex-1 rounded-xl text-sm font-black text-white" style={{ background: '#1d4ed8', minHeight: 56 }}>📱 ໂອນ</button>
+                            <button onClick={() => markPaid(o, 'qr')} className="flex-1 rounded-xl text-sm font-black text-white" style={{ background: '#a0522d', minHeight: 56 }}>📱 ໂອນ</button>
                             <button onClick={() => setPayingId(null)} className="px-4 rounded-xl text-sm font-black border-2 border-[#e8d5c0]" style={{ color: 'var(--gray3)', minHeight: 56 }}>✕</button>
                           </div>
                         )}
@@ -3671,11 +3671,11 @@ setStockShop(newSS); setStockOnline(newSO)
                             {!o.cancelled && !o.done && o.status === 'confirmed' && (
                               <>
                                 <button onClick={() => announce(o.qnum)} className="px-4 rounded-xl text-sm font-black" style={{ minHeight: 56, background: 'var(--brown2)', color: 'var(--cream)' }}>📢</button>
-                                <button onClick={() => smartPrint(o, { force: true })} className="px-4 rounded-xl text-sm font-black bg-blue-50 text-blue-700" style={{ minHeight: 56 }}>🖨</button>
+                                <button onClick={() => smartPrint(o, { force: true })} className="px-4 rounded-xl text-sm font-black" style={{ minHeight: 56 }}>🖨</button>
                                 <button
                                   onClick={() => showOnDisplay(o)}
                                   title={displayOrderId === o.id ? 'ເອົາອອກຈາກຈໍລູກຄ້າ' : 'ສະແດງໃສ່ຈໍລູກຄ້າ'}
-                                  className={`px-4 rounded-xl text-sm font-black ${displayOrderId === o.id ? 'bg-purple-700 text-white' : 'bg-purple-50 text-purple-700'}`}
+                                  className={`px-4 rounded-xl text-sm font-black ${displayOrderId === o.id ? 'text-[#fdf6ee]' : 'text-[#a0522d]'}`}
                                   style={{ minHeight: 56 }}
                                 >📺</button>
                               </>
@@ -3732,11 +3732,11 @@ setStockShop(newSS); setStockOnline(newSO)
                             >
                               <span className="font-black text-sm w-10 flex-shrink-0" style={{ color: 'var(--brown)' }}>#{String(o.qnum).padStart(4,'0')}</span>
                               <span className="text-xs flex-shrink-0" style={{ color: 'var(--gray3)' }}>{time}</span>
-                              <span className={`tag text-xs flex-shrink-0 ${o.type === 'online' ? 'bg-orange-50 text-orange-700' : 'bg-blue-50 text-blue-700'}`}>{o.type === 'online' ? '🌐' : '🏪'}</span>
+                              <span className={`tag text-xs flex-shrink-0 ${o.type === 'online' ? 'bg-orange-50 text-orange-700' : ''}`}>{o.type === 'online' ? '🌐' : '🏪'}</span>
                               {o.done && <span className="tag bg-green-50 text-green-700 text-xs flex-shrink-0">✓ Done</span>}
                               {o.cancelled && <span className="tag bg-red-50 text-red-700 text-xs flex-shrink-0">✕ ຍົກເລີກ</span>}
                               {o.status === 'rejected' && <span className="tag bg-red-50 text-red-700 text-xs flex-shrink-0">✕ ປະຕິເສດ</span>}
-                              {o.status === 'blocked' && <span className="tag bg-purple-50 text-purple-700 text-xs flex-shrink-0">🚫 ບ໋ອກ</span>}
+                              {o.status === 'blocked' && <span className="tag   text-xs flex-shrink-0">🚫 ບ໋ອກ</span>}
                               {cust?.name && <span className="text-xs font-bold truncate flex-1 min-w-0" style={{ color: 'var(--brown2)' }}>{cust.name}{cust.phone ? ` · ${cust.phone}` : ''}</span>}
                               <span className={`text-xs font-black flex-shrink-0 ${cust?.name ? '' : 'ml-auto'}`} style={{ color: 'var(--brown)' }}>{(o.total||0).toLocaleString()}</span>
                               <span className="text-xs flex-shrink-0" style={{ color: 'var(--gray3)' }}>{isExp ? '▲' : '▼'}</span>
@@ -3760,7 +3760,7 @@ setStockShop(newSS); setStockOnline(newSO)
                                 <div className="flex gap-2 mt-1">
                                   {o.cancelled && <button onClick={() => undoOrder(o.id, 'cancelled')} className="text-xs py-1.5 px-3 rounded-lg border-2 border-[#e8d5c0] font-black" style={{ color: 'var(--gray3)' }}>↩ ຄືນ</button>}
                                   {o.done && <button onClick={() => undoOrder(o.id, 'done')} className="text-xs py-1.5 px-3 rounded-lg border-2 border-[#e8d5c0] font-black" style={{ color: 'var(--gray3)' }}>↩ ຍົກເລີກ Done</button>}
-                                  <button onClick={() => smartPrint(o, { force: true })} className="text-xs py-1.5 px-3 rounded-lg bg-blue-50 text-blue-700 font-black">🖨</button>
+                                  <button onClick={() => smartPrint(o, { force: true })} className="text-xs py-1.5 px-3 rounded-lg  font-black">🖨</button>
                                 </div>
                               </div>
                             )}
@@ -4528,11 +4528,11 @@ setStockShop(newSS); setStockOnline(newSO)
 
             <div className="grid grid-cols-2 gap-3 mb-3">
               <div className="card text-center">
-                <div className="text-xl font-black text-blue-700">{walkinTotal.toLocaleString()}</div>
+                <div className="text-xl font-black" style={{ color: 'var(--brown)' }}>{walkinTotal.toLocaleString()}</div>
                 <div className="text-xs font-bold mt-1" style={{ color: 'var(--gray3)' }}>🏪 Walk-in</div>
               </div>
               <div className="card text-center">
-                <div className="text-xl font-black text-orange-600">{onlineTotal.toLocaleString()}</div>
+                <div className="text-xl font-black" style={{ color: 'var(--brown3)' }}>{onlineTotal.toLocaleString()}</div>
                 <div className="text-xs font-bold mt-1" style={{ color: 'var(--gray3)' }}>🌐 Online</div>
               </div>
             </div>
@@ -4576,11 +4576,11 @@ setStockShop(newSS); setStockOnline(newSO)
 
                 <div className="grid grid-cols-2 gap-3 mb-3">
                   <div className="card text-center">
-                    <div className="text-xl font-black text-blue-700">{openWalkin.toLocaleString()}</div>
+                    <div className="text-xl font-black" style={{ color: 'var(--brown)' }}>{openWalkin.toLocaleString()}</div>
                     <div className="text-xs font-bold mt-1" style={{ color: 'var(--gray3)' }}>🏪 Walk-in ຄ້າງ</div>
                   </div>
                   <div className="card text-center">
-                    <div className="text-xl font-black text-orange-600">{openOnline.toLocaleString()}</div>
+                    <div className="text-xl font-black" style={{ color: 'var(--brown3)' }}>{openOnline.toLocaleString()}</div>
                     <div className="text-xs font-bold mt-1" style={{ color: 'var(--gray3)' }}>🌐 Online ຄ້າງ</div>
                   </div>
                 </div>
@@ -4939,7 +4939,7 @@ setStockShop(newSS); setStockOnline(newSO)
                       </button>
                       <button onClick={() => { pushCartToDisplay('qr'); submitQuickOrder('qr') }} disabled={qoSubmitting}
                         className="py-4 rounded-2xl font-black text-base text-white active:scale-95 transition-all"
-                        style={{ background: '#1d4ed8' }}>
+                        style={{ background: '#a0522d' }}>
                         {qoSubmitting ? '...' : '📱 ໂອນ'}
                       </button>
                     </div>
@@ -5069,7 +5069,7 @@ setStockShop(newSS); setStockOnline(newSO)
                         {qoSubmitting ? '...' : '💵 ສດ · ຮັບຄິວ'}
                       </button>
                       <button onClick={() => { pushCartToDisplay('qr'); submitQuickOrder('qr') }} disabled={qoSubmitting}
-                        className="py-4 rounded-2xl font-black text-base text-white" style={{ background: '#1d4ed8' }}>
+                        className="py-4 rounded-2xl font-black text-base text-white" style={{ background: '#a0522d' }}>
                         {qoSubmitting ? '...' : '📱 ໂອນ · ຮັບຄິວ'}
                       </button>
                     </div>
@@ -5578,7 +5578,7 @@ setStockShop(newSS); setStockOnline(newSO)
               const owed = diff > 0
               return (
                 <div className="mb-3 rounded-xl p-3 text-center"
-                  style={{ background: owed ? '#fef3c7' : '#dbeafe', border: `2px solid ${owed ? '#f59e0b' : '#3b82f6'}` }}>
+                  style={{ background: owed ? '#fef3c7' : 'var(--cream2)', border: `2px solid ${owed ? '#b45309' : 'var(--cream3)'}` }}>
                   <div className="text-xs font-black" style={{ color: owed ? '#92400e' : '#1e40af' }}>
                     {owed ? '⚠️ ຕ້ອງເກັບເພີ່ມຈາກລູກຄ້າ' : '↩️ ຕ້ອງທອນຄືນລູກຄ້າ'}
                   </div>
