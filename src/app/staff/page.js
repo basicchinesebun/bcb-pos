@@ -178,6 +178,57 @@ export default function StaffPage() {
   // its own printer, and must not touch either.
   const [stationMode, setStationMode] = useState('main')
   const [deviceSheet, setDeviceSheet] = useState(false)
+  // The quick-order button sat in one corner and covered the card under it.
+  // It can be dragged now, but only ever lands against the left or right edge —
+  // a button parked mid-screen would cover more, not less, and would drift out
+  // of reach of the hand that holds the till.
+  const [fabPos, setFabPos] = useState({ side: 'right', top: 0 })
+  const [fabDragging, setFabDragging] = useState(false)
+  const fabRef = useRef(null)
+  const fabDraggedRef = useRef(false)
+
+  useEffect(() => {
+    const fallback = { side: 'right', top: Math.max(80, window.innerHeight - 160) }
+    try {
+      const raw = localStorage.getItem('bcb_fab_pos')
+      const p = raw ? JSON.parse(raw) : null
+      setFabPos(p && (p.side === 'left' || p.side === 'right') ? p : fallback)
+    } catch { setFabPos(fallback) }
+  }, [])
+
+  function fabPointerDown(e) {
+    const el = fabRef.current
+    if (!el) return
+    const box = el.getBoundingClientRect()
+    const grabX = e.clientX - box.left
+    const grabY = e.clientY - box.top
+    let moved = false
+    setFabDragging(true)
+    el.setPointerCapture?.(e.pointerId)
+
+    const onMove = ev => {
+      if (Math.abs(ev.clientX - e.clientX) > 4 || Math.abs(ev.clientY - e.clientY) > 4) moved = true
+      const top = Math.min(window.innerHeight - box.height - 8, Math.max(8, ev.clientY - grabY))
+      const side = (ev.clientX - grabX + box.width / 2) < window.innerWidth / 2 ? 'left' : 'right'
+      setFabPos({ side, top })
+    }
+    const onUp = ev => {
+      el.releasePointerCapture?.(ev.pointerId)
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
+      setFabDragging(false)
+      fabDraggedRef.current = moved
+      if (moved) {
+        const top = Math.min(window.innerHeight - box.height - 8, Math.max(8, ev.clientY - grabY))
+        const side = (ev.clientX - grabX + box.width / 2) < window.innerWidth / 2 ? 'left' : 'right'
+        const next = { side, top }
+        setFabPos(next)
+        try { localStorage.setItem('bcb_fab_pos', JSON.stringify(next)) } catch { }
+      }
+    }
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onUp)
+  }
   useEffect(() => {
     // ?tablet=1 wins over whatever is stored, so the iPad can be given a
     // bookmark that always lands in tablet mode — nobody has to remember to
@@ -3225,7 +3276,11 @@ setStockShop(newSS); setStockOnline(newSO)
             <div className="flex-1 flex flex-col overflow-hidden min-w-0">
               {!headerCollapsed && (
               <div className="flex-shrink-0 px-3 pt-3 pb-1">
-              <div className="flex gap-2 items-center mb-2">
+              {/* One line that swipes. It used to wrap, and wrapping split the
+                  Lao mid-phrase — ເລືອກ / ຢືນຢັນ over two lines — which reads
+                  as a broken screen rather than a full one. */}
+              <div className="flex gap-2 items-center mb-2 overflow-x-auto"
+                style={{ flexWrap: 'nowrap', scrollbarWidth: 'none' }}>
                 <button
                   onClick={() => setTab('settings')}
                   className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-black transition-all active:scale-95 flex-shrink-0"
@@ -3234,12 +3289,12 @@ setStockShop(newSS); setStockOnline(newSO)
                 >
                   ⚙
                 </button>
-                <span className="text-xs font-black tracking-widest uppercase" style={{ color: 'var(--gray3)' }}>ລາຍການ</span>
+                <span className="text-xs font-black tracking-widest uppercase flex-shrink-0" style={{ color: 'var(--gray3)' }}>ລາຍການ</span>
                 {/* Takings for the current filter, sitting in the gap the filter
                     buttons already left empty. */}
                 <button
                   onClick={() => setMoneyScope(v => v === 'today' ? 'all' : 'today')}
-                  className="flex items-baseline gap-1.5 px-2.5 py-1 rounded-lg flex-shrink min-w-0 active:scale-95 transition-all"
+                  className="flex items-baseline gap-1.5 px-2.5 py-1 rounded-lg flex-shrink-0 whitespace-nowrap active:scale-95 transition-all"
                   style={{ background: 'var(--cream2)', border: '1.5px solid var(--cream3)' }}
                   title="ຍອດເງິນຂອງລາຍການທີ່ສະແດງຢູ່ (ບໍ່ນັບທີ່ຍົກເລີກ/ປະຕິເສດ) — ກົດເພື່ອສະຫຼັບ ມື້ນີ້ / ທັງໝົດ"
                 >
@@ -3262,7 +3317,7 @@ setStockShop(newSS); setStockOnline(newSO)
                     return pendingOnline > 0 ? (
                       <button
                         onClick={() => { setBatchOpen(true); setBatchSelected(new Set()) }}
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-black active:scale-95 transition-all"
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-black active:scale-95 transition-all flex-shrink-0 whitespace-nowrap"
                         style={{ background: '#15803d', color: 'white' }}
                       >
                         ✓ ເລືອກຢືນຢັນ
@@ -3280,7 +3335,7 @@ setStockShop(newSS); setStockOnline(newSO)
                     return openCount > 0 ? (
                       <button
                         onClick={() => { setDoneBatchOpen(true); setDoneBatchSelected(new Set()); setDoneRangeFrom(''); setDoneRangeTo(''); setDoneBatchKind('all') }}
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-black active:scale-95 transition-all"
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-black active:scale-95 transition-all flex-shrink-0 whitespace-nowrap"
                         style={{ background: 'var(--brown)', color: 'var(--cream)' }}
                       >
                         ✓ ສຳເລັດຫຼາຍໃບ
@@ -3297,7 +3352,7 @@ setStockShop(newSS); setStockOnline(newSO)
                     const on = stage === k
                     return (
                       <button key={k} onClick={() => setStage(k)}
-                        className="flex items-center gap-1.5 px-3 rounded-lg text-xs font-black border"
+                        className="flex items-center gap-1.5 px-3 rounded-lg text-xs font-black border flex-shrink-0 whitespace-nowrap"
                         style={{
                           minHeight: 44,
                           background: on ? (urgent ? '#b45309' : 'var(--brown)') : (urgent ? '#fef3c7' : 'transparent'),
@@ -3330,14 +3385,14 @@ setStockShop(newSS); setStockOnline(newSO)
                   })}
                   <button
                     onClick={() => setMainSearchCollapsed(v => !v)}
-                    className={`px-3 py-1 rounded-lg text-xs font-black border ${!mainSearchCollapsed ? 'bg-[#3d1f0a] text-[#fdf6ee] border-[#3d1f0a]' : 'border-[#e8d5c0] text-[#8a6a55]'}`}
+                    className={`px-3 py-1 rounded-lg text-xs font-black border flex-shrink-0 ${!mainSearchCollapsed ? 'bg-[#3d1f0a] text-[#fdf6ee] border-[#3d1f0a]' : 'border-[#e8d5c0] text-[#8a6a55]'}`}
                     title="ຄົ້ນຫາ: ເລກຄິວ, ຊື່, ເບີໂທ, ເມນູ"
                   >
                     🔍
                   </button>
                   <button
                     onClick={() => setCustomerSearchCollapsed(v => !v)}
-                    className={`px-3 py-1 rounded-lg text-xs font-black border ${!customerSearchCollapsed ? 'bg-[#3d1f0a] text-[#fdf6ee] border-[#3d1f0a]' : 'border-[#e8d5c0] text-[#8a6a55]'}`}
+                    className={`px-3 py-1 rounded-lg text-xs font-black border flex-shrink-0 ${!customerSearchCollapsed ? 'bg-[#3d1f0a] text-[#fdf6ee] border-[#3d1f0a]' : 'border-[#e8d5c0] text-[#8a6a55]'}`}
                     title="ຄົ້ນຫາລູກຄ້າ · Customer"
                   >
                     👤
@@ -4843,9 +4898,19 @@ setStockShop(newSS); setStockOnline(newSO)
       {/* Quick Order FAB */}
       {tab === 'orders' && !qoOpen && (
         <button
-          onClick={() => { resetQo(); setQoOpen(true) }}
-          className="fixed bottom-20 right-4 z-40 w-16 h-16 rounded-full flex items-center justify-center text-3xl active:scale-95 transition-all"
-          style={{ background: 'var(--brown)', color: 'var(--cream)', boxShadow: '0 4px 20px rgba(61,31,10,0.45)', border: '3px solid var(--cream)' }}
+          ref={fabRef}
+          onPointerDown={fabPointerDown}
+          onClick={() => { if (fabDraggedRef.current) { fabDraggedRef.current = false; return } resetQo(); setQoOpen(true) }}
+          className="fixed z-40 w-16 h-16 rounded-full flex items-center justify-center text-3xl active:scale-95"
+          style={{
+            left: fabPos.side === 'left' ? 16 : undefined,
+            right: fabPos.side === 'right' ? 16 : undefined,
+            top: fabPos.top,
+            background: 'var(--brown)', color: 'var(--cream)',
+            boxShadow: '0 4px 20px rgba(61,31,10,0.45)', border: '3px solid var(--cream)',
+            touchAction: 'none', cursor: 'grab',
+            transition: fabDragging ? 'none' : 'left .18s ease, right .18s ease, top .18s ease',
+          }}
         >
           🛒
         </button>
