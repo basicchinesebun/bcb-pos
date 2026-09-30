@@ -3484,8 +3484,8 @@ setStockShop(newSS); setStockOnline(newSO)
 
                         <div className="flex justify-between items-start mb-2">
                           <div className="flex items-center gap-2">
-                            <div className="font-serif text-2xl font-black" style={{ color: 'var(--brown)' }}>
-                              #{String(o.qnum).padStart(4,'0')}
+                            <div className="font-serif font-black" style={{ color: 'var(--brown)', fontSize: 30, letterSpacing: '-0.03em', fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>
+                              {String(o.qnum).padStart(4,'0')}
                             </div>
                             {!o.done && !o.cancelled && o.status !== 'rejected' && (
                               <button onClick={() => openEditOrder(o)} className="py-1 px-2 rounded-lg text-xs font-black" style={{ background: 'var(--cream2)', color: 'var(--brown2)' }}>✏️ ແກ້</button>
@@ -3493,8 +3493,13 @@ setStockShop(newSS); setStockOnline(newSO)
                           </div>
                           <div className="text-right">
                             <div className="text-xs font-bold" style={{ color: stale ? '#c2410c' : 'var(--gray3)' }}>{stale ? '⚠️ ' : ''}{time}</div>
-                            <span className={`tag text-xs mt-1 ${o.type === 'online' ? 'bg-orange-50 text-orange-700' : ''}`}>
-                              {o.type === 'online' ? '🌐 Online' : '🏪 Walk-in'}
+                            <span className="inline-block mt-1 px-2 py-1 rounded-lg font-black" style={{
+                              fontSize: 11.5,
+                              background: 'var(--cream2)',
+                              color: o.type === 'online' ? 'var(--brown3)' : 'var(--brown2)',
+                              border: '1px solid var(--cream3)',
+                            }}>
+                              {o.type === 'online' ? '🌐 ອອນລາຍ' : '🏪 ໜ້າຮ້ານ'}
                             </span>
                             {o.type === 'walkin' && !o.cancelled && !o.done && (
                               o.paid
@@ -3574,23 +3579,23 @@ setStockShop(newSS); setStockOnline(newSO)
                           </div>
                         )}
 
-                        {/* Items — 2 rows, flow left-to-right, scrollable */}
-                        <div style={{ display: 'grid', gridAutoFlow: 'column', gridTemplateRows: 'repeat(2, auto)', gap: 8, overflowX: 'auto', paddingBottom: 4 }} className="mb-3">
+                        {/* Items. These were 104px photo tiles on two
+                            horizontally-scrolling rows, which made a three-line
+                            order as tall as the screen and pushed ✓ ສຳເລັດ below
+                            the fold. A line each: a thumbnail big enough to
+                            recognise, the name, and the count on the right where
+                            the eye already runs down the column. */}
+                        <div className="flex flex-col gap-1 mb-3">
                           {items.map((it, ii) => {
                             const img = images[it.menuIdx]
                             return (
-                              <div key={ii} style={{ width: 104 }} className="rounded-2xl overflow-hidden border-2 border-[#e8d5c0] flex-shrink-0">
-                                <div className="relative overflow-hidden" style={{ width: 104, height: 104, background: 'var(--cream2)' }}>
-                                  {img
-                                    ? <img src={img} className="w-full h-full object-cover" alt={it.name} loading="lazy" />
-                                    : <div className="absolute inset-0 flex items-center justify-center text-4xl" style={{ background: 'var(--cream2)' }}>{EMOJIS[it.menuIdx] || '🍱'}</div>
-                                  }
-                                  <div className="absolute top-1 right-1 w-11 h-11 rounded-full flex items-center justify-center font-black shadow-md" style={{ background: 'var(--brown)', color: 'var(--cream)', fontSize: 20 }}>{it.qty}</div>
-                                </div>
-                                <div className="px-3 py-2" style={{ background: 'var(--warm-white)' }}>
-                                  <div className="text-center font-black leading-tight" style={{ color: 'var(--brown)', fontSize: 13 }}>{it.name}</div>
-                                  {it.sub > 0 && <div className="text-center font-bold mt-0.5" style={{ color: 'var(--gray3)', fontSize: 11 }}>{it.sub.toLocaleString()}</div>}
-                                </div>
+                              <div key={ii} className="flex items-center gap-2.5">
+                                {img
+                                  ? <img src={img} className="flex-shrink-0 rounded-lg object-cover" style={{ width: 36, height: 36, border: '1px solid var(--cream3)' }} alt="" loading="lazy" />
+                                  : <span className="flex-shrink-0 rounded-lg flex items-center justify-center text-lg" style={{ width: 36, height: 36, background: 'var(--cream2)', border: '1px solid var(--cream3)' }}>{EMOJIS[it.menuIdx] || '🍱'}</span>
+                                }
+                                <span className="flex-1 min-w-0 font-bold leading-tight" style={{ color: 'var(--brown)', fontSize: 14 }}>{it.name}</span>
+                                <span className="flex-shrink-0 font-black" style={{ color: 'var(--brown)', fontSize: 16, fontVariantNumeric: 'tabular-nums' }}>×{it.qty}</span>
                               </div>
                             )
                           })}
@@ -3608,8 +3613,9 @@ setStockShop(newSS); setStockOnline(newSO)
                           </div>
                         )}
 
-                        <div className="text-base font-black mb-3" style={{ color: 'var(--brown)' }}>
-                          ລວມ: {(o.total || 0).toLocaleString()} ກີບ
+                        <div className="mb-3 font-black" style={{ color: 'var(--brown)', fontSize: 19, fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.01em' }}>
+                          {(o.total || 0).toLocaleString()}
+                          <span className="font-bold ml-1.5" style={{ fontSize: 12, color: 'var(--gray3)' }}>ກີບ</span>
                         </div>
 
                         {/* Money already collected no longer matches the total
