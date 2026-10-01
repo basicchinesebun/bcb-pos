@@ -145,7 +145,7 @@ function StatusContent() {
               <span className="text-xs font-black" style={{ color: 'rgba(253,246,238,0.85)' }}>
                 {(() => {
                   const d = new Date(order.picked_up_at)
-                  return `${d.getDate()}/${d.getMonth() + 1} ${d.toLocaleTimeString('lo-LA', { hour: '2-digit', minute: '2-digit' })}`
+                  return `${d.getDate()}/${d.getMonth() + 1} ${d.toLocaleTimeString('lo-LA', { hour: '2-digit', minute: '2-digit', hour12: false })}`
                 })()}
               </span>
             </div>
@@ -260,7 +260,7 @@ function StatusContent() {
                   </div>
                   <div className="text-[10px] font-bold mt-1 px-1"
                     style={{ color: 'var(--gray3)', textAlign: msg.sender === 'customer' ? 'right' : 'left' }}>
-                    {new Date(msg.created_at).toLocaleTimeString('lo-LA', { hour: '2-digit', minute: '2-digit' })}
+                    {new Date(msg.created_at).toLocaleTimeString('lo-LA', { hour: '2-digit', minute: '2-digit', hour12: false })}
                   </div>
                 </div>
               </div>

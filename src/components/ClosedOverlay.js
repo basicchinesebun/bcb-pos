@@ -16,7 +16,7 @@ const STATUS = {
 function stamp(iso) {
   const d = new Date(iso)
   if (isNaN(d.getTime())) return ''
-  return `${d.getDate()}/${d.getMonth() + 1} ${d.toLocaleTimeString('lo-LA', { hour: '2-digit', minute: '2-digit' })}`
+  return `${d.getDate()}/${d.getMonth() + 1} ${d.toLocaleTimeString('lo-LA', { hour: '2-digit', minute: '2-digit', hour12: false })}`
 }
 
 export default function ClosedOverlay({ shopInfo = {}, branches = [], subtitle = '' }) {

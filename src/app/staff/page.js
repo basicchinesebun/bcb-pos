@@ -79,7 +79,10 @@ function parseBagLabelToPacks(label, menus) {
 function orderStamp(iso) {
   const d = new Date(iso)
   if (isNaN(d.getTime())) return '—'
-  const time = d.toLocaleTimeString('lo-LA', { hour: '2-digit', minute: '2-digit' })
+  // 24-hour, like every other time the shop writes down — pickup windows are
+  // set as 18:30, so a stamp reading 06:30 PM beside them is a reading error
+  // waiting to happen.
+  const time = d.toLocaleTimeString('lo-LA', { hour: '2-digit', minute: '2-digit', hour12: false })
   const days = Math.round((startOfDay(new Date()) - startOfDay(d)) / 86400000)
   if (days === 0) return `ມື້ນີ້ ${time}`
   if (days === 1) return `ມື້ວານ ${time}`
