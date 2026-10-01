@@ -3623,16 +3623,29 @@ setStockShop(newSS); setStockOnline(newSO)
 
                         {/* When a customer comes back claiming they never got
                             their bag, staff search the queue number — so the
-                            answer has to be on the card itself, not buried. */}
-                        {o.picked_up_at && (
-                          <div className="rounded-xl p-2 mb-2 text-xs font-black leading-5"
-                            style={o.picked_up_count > 1
-                              ? { background: '#fef2f2', color: '#b91c1c', border: '1px solid #fca5a5' }
-                              : { background: '#f0fdf4', color: '#15803d' }}>
-                            {o.picked_up_count > 1 ? '⚠️ ມອບໄປແລ້ວ ' + o.picked_up_count + ' ຄັ້ງ' : '✅ ຮັບສິນຄ້າແລ້ວ'} · {orderStamp(o.picked_up_at)}
-                            {o.picked_up_by ? ` · ${o.picked_up_by}` : ''}
-                          </div>
-                        )}
+                            answer has to be on the card itself, not buried.
+                            Stamped the way /display marks a sold-out menu: a
+                            dark wash with one solid block of colour across it,
+                            which reads from arm's length without being read. */}
+                        {o.picked_up_at && (() => {
+                          const repeat = o.picked_up_count > 1
+                          return (
+                            <div className="rounded-xl mb-2 px-3 py-2.5 flex flex-col items-center gap-1"
+                              style={{ background: repeat ? 'rgba(185,28,28,0.12)' : 'rgba(61,31,10,0.6)' }}>
+                              <span className="font-black rounded-lg"
+                                style={{
+                                  background: repeat ? 'rgba(185,28,28,0.95)' : 'rgba(21,128,61,0.95)',
+                                  color: '#fff', fontSize: 17, padding: '0.18em 0.7em', letterSpacing: '0.04em',
+                                }}>
+                                {repeat ? `ມອບໄປແລ້ວ ${o.picked_up_count} ຄັ້ງ` : 'ຮັບເຄື່ອງແລ້ວ'}
+                              </span>
+                              <span className="text-xs font-black"
+                                style={{ color: repeat ? '#b91c1c' : 'rgba(253,246,238,0.85)' }}>
+                                {orderStamp(o.picked_up_at)}{o.picked_up_by ? ` · ${o.picked_up_by}` : ''}
+                              </span>
+                            </div>
+                          )
+                        })()}
 
                         {o.cancelled && o.cancel_reason && (
                           <div className="rounded-xl p-2 mb-2 text-xs font-bold" style={{ background: '#fef2f2', color: '#b91c1c' }}>

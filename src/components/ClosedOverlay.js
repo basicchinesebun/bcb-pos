@@ -7,7 +7,7 @@ const STATUS = {
   confirmed: { label: 'ຢືນຢັນແລ້ວ',  cls: 'bg-green-50 text-green-700' },
   rejected:  { label: 'ຖືກປະຕິເສດ', cls: 'bg-red-50 text-red-600' },
   done:      { label: 'ສຳເລັດ',       cls: 'bg-blue-50 text-blue-700' },
-  pickedUp:  { label: '✅ ຮັບສິນຄ້າແລ້ວ', cls: 'bg-green-100 text-green-800' },
+  pickedUp:  { label: 'ຮັບເຄື່ອງແລ້ວ', cls: 'bg-green-100 text-green-800' },
 }
 
 // The queue number restarts, so a search for "20" brings back every #0020 the
@@ -153,9 +153,19 @@ export default function ClosedOverlay({ shopInfo = {}, branches = [], subtitle =
                       {st.label}
                     </span>
                   </div>
+                  {/* Stamped like a sold-out menu on /display: one solid block
+                      of colour, legible without being read. The customer and
+                      the counter are looking at the same evidence. */}
                   {o.picked_up_at && (
-                    <div className="text-xs font-black mb-1" style={{ color: '#15803d' }}>
-                      ຮັບເຄື່ອງເມື່ອ {stamp(o.picked_up_at)}
+                    <div className="rounded-xl my-1.5 px-3 py-2 flex flex-col items-center gap-0.5"
+                      style={{ background: 'rgba(61,31,10,0.6)' }}>
+                      <span className="font-black rounded-lg"
+                        style={{ background: 'rgba(21,128,61,0.95)', color: '#fff', fontSize: 16, padding: '0.18em 0.7em', letterSpacing: '0.04em' }}>
+                        ຮັບເຄື່ອງແລ້ວ
+                      </span>
+                      <span className="text-xs font-black" style={{ color: 'rgba(253,246,238,0.85)' }}>
+                        {stamp(o.picked_up_at)}
+                      </span>
                     </div>
                   )}
                   {c.name && (

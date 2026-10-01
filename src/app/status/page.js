@@ -132,16 +132,27 @@ function StatusContent() {
           <div className="font-serif font-black leading-none mb-3" style={{ fontSize: 80, color: 'var(--brown)' }}>
             {String(order.qnum).padStart(4, '0')}
           </div>
-          <span className={`inline-block px-5 py-2 rounded-full text-sm font-black ${statusInfo.cls}`}>
-            {statusInfo.label}
-          </span>
-          {order.picked_up_at && (
-            <div className="text-xs font-black mt-2" style={{ color: '#15803d' }}>
-              {(() => {
-                const d = new Date(order.picked_up_at)
-                return `${d.getDate()}/${d.getMonth() + 1} ${d.toLocaleTimeString('lo-LA', { hour: '2-digit', minute: '2-digit' })}`
-              })()}
+          {order.picked_up_at ? (
+            // Stamped like a sold-out menu on /display — one solid block of
+            // colour. This is the customer's receipt that the bag was handed
+            // over, and the time on it is what settles a second claim.
+            <div className="mx-5 rounded-2xl px-4 py-3 flex flex-col items-center gap-1"
+              style={{ background: 'rgba(61,31,10,0.6)' }}>
+              <span className="font-black rounded-lg"
+                style={{ background: 'rgba(21,128,61,0.95)', color: '#fff', fontSize: 20, padding: '0.18em 0.7em', letterSpacing: '0.04em' }}>
+                ຮັບເຄື່ອງແລ້ວ
+              </span>
+              <span className="text-xs font-black" style={{ color: 'rgba(253,246,238,0.85)' }}>
+                {(() => {
+                  const d = new Date(order.picked_up_at)
+                  return `${d.getDate()}/${d.getMonth() + 1} ${d.toLocaleTimeString('lo-LA', { hour: '2-digit', minute: '2-digit' })}`
+                })()}
+              </span>
             </div>
+          ) : (
+            <span className={`inline-block px-5 py-2 rounded-full text-sm font-black ${statusInfo.cls}`}>
+              {statusInfo.label}
+            </span>
           )}
         </div>
 
