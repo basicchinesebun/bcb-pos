@@ -1,7 +1,27 @@
 'use client'
 
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { supabase } from '../../lib/supabase'
+
+// Staff type a customer's name the way they heard it, not the way the customer
+// typed it into the pre-order form: no tone marks, spaces in different places,
+// English in whatever case. Searching the raw strings meant "ນາງດາ" missed
+// "ນາງ ດາ" and "ທດລອງ" missed "ທົດລອງ", which is what "ເສີຊຫາບໍ່ຄ່ອຍເຫັນ" was.
+// Both the query and the order text go through this, so the comparison is made
+// on what the two have in common.
+const LAO_THAI_MARKS = /[ัิ-ฺ็-๎ັິ-ຼ່-ໍ]/g
+// Spaces go too, so "ນາງດາ" finds "ນາງ ດາ".
+function searchNorm(s) {
+  return String(s || '')
+    .normalize('NFC')
+    .toLowerCase()
+    .replace(LAO_THAI_MARKS, '')
+    .replace(/[^\p{L}\p{N}]+/gu, '')
+}
+// Each word of the query is matched on its own, so word order never matters.
+function searchWords(s) {
+  return String(s || '').trim().split(/\s+/).map(searchNorm).filter(Boolean)
+}
 
 // Allocated by the database, not here. Reading the counter, adding one and
 // writing it back hands two customers the same queue number whenever two
@@ -293,7 +313,6 @@ export default function StaffPage() {
 
   const [cashModalOpen, setCashModalOpen] = useState(false)
   const [cashReceived, setCashReceived] = useState('')
-  const [mainSearchCollapsed, setMainSearchCollapsed] = useState(true)
   const [batchOpen, setBatchOpen] = useState(false)
   const [batchSelected, setBatchSelected] = useState(new Set())
   // Finishing a tray means a run of queue numbers comes off the board at once.
@@ -1240,32 +1259,46 @@ export default function StaffPage() {
   }
 
   // ─── Orders ───
+  // Everything printed on a card — customer name, menus, bag label — flattened
+  // once per order into one string, so a keystroke is a substring test and not a
+  // few thousand JSON.parse calls. Phone digits are kept apart because they are
+  // matched by digits, not by letters.
+  const searchIndex = useMemo(() => {
+    const m = new Map()
+    orders.forEach(o => {
+      const items = (() => {
+        try { return typeof o.items === 'string' ? JSON.parse(o.items) : o.items || [] } catch { return [] }
+      })()
+      const c = (() => {
+        try { return (typeof o.customer === 'string' ? JSON.parse(o.customer) : o.customer) || {} } catch { return {} }
+      })()
+      m.set(o.id, {
+        text: searchNorm([c.name, o.bag_label, ...items.map(it => it.name)].join(' ')),
+        phone: String(c.phone || '').replace(/\D/g, ''),
+      })
+    })
+    return m
+  }, [orders])
+
   const filteredOrders = orders.filter(o => {
     if (!search.trim() && filter !== 'all' && o.type !== filter) return false
     if (!search.trim()) return true
-    const q = search.trim().toLowerCase().replace(/\s+/g, ' ')
-    const qDigits = q.replace(/\s+/g, '')
-    const isNumeric = /^\d+$/.test(qDigits)
+    const words = searchWords(search)
+    const qDigits = search.replace(/\D/g, '')
+    const isNumeric = /^\d+$/.test(search.trim())
     const qnum = String(o.qnum || '')
-    const qnumPad = qnum.padStart(4, '0')
     // A short numeric query (typing a queue number) used to be matched as a
     // substring anywhere in qnum AND against phone digits — e.g. "56" matched
     // queue #1562 and also any customer whose phone happened to contain "56"
     // anywhere, which is nearly every phone number. Prefix-match the queue
     // number and only try it as a phone fragment once it's long enough to
     // mean a phone number, not a queue number.
-    if (isNumeric && (qnum === qDigits || qnumPad === qDigits || qnum.startsWith(qDigits))) return true
-    const items = typeof o.items === 'string' ? JSON.parse(o.items) : o.items || []
-    if (items.some(it => (it.name || '').toLowerCase().includes(q))) return true
-    if (o.customer) {
-      const c = typeof o.customer === 'string' ? JSON.parse(o.customer) : o.customer
-      if ((c.name || '').toLowerCase().replace(/\s+/g, ' ').includes(q)) return true
-      if ((!isNumeric || qDigits.length >= 3) && (c.phone || '').replace(/\s+/g, '').includes(qDigits)) return true
-    }
-    // The bag label carries the menus as the kitchen sees them, which is how
-    // an order gets described out loud at the counter.
-    if ((o.bag_label || '').toLowerCase().includes(q)) return true
-    return false
+    if (isNumeric && (qnum.padStart(4, '0') === qDigits || qnum.startsWith(qDigits))) return true
+    const idx = searchIndex.get(o.id)
+    if (!idx) return false
+    if (qDigits.length >= 3 && idx.phone.includes(qDigits)) return true
+    if (!words.length) return false
+    return words.every(w => idx.text.includes(w))
   })
   const openOrders = filteredOrders.filter(o => !o.done && !o.cancelled && o.status !== 'rejected' && o.status !== 'blocked')
   const stageOf = o => (o.status === 'pending' ? 'needs' : 'making')
@@ -3439,34 +3472,22 @@ setStockShop(newSS); setStockOnline(newSO)
                       </button>
                     )
                   })}
-                  <button
-                    onClick={() => setMainSearchCollapsed(v => {
-                      // Closing the box must also drop the query, or the list stays
-                      // filtered by text nobody can see any more.
-                      if (!v) setSearch('')
-                      return !v
-                    })}
-                    className={`px-3 py-1 rounded-lg text-xs font-black border flex-shrink-0 ${!mainSearchCollapsed ? 'bg-[#3d1f0a] text-[#fdf6ee] border-[#3d1f0a]' : 'border-[#e8d5c0] text-[#8a6a55]'}`}
-                    title="ຄົ້ນຫາ: ເລກຄິວ, ຊື່, ເບີໂທ, ເມນູ"
-                  >
-                    🔍
-                  </button>
                 </div>
               </div>
-              {!mainSearchCollapsed && (
-                <div className="relative mb-3">
-                  <input
-                    type="text"
-                    value={search}
-                    onChange={e => setSearch(e.target.value)}
-                    placeholder="ຄົ້ນຫາ: ເລກຄິວ, ຊື່, ເບີໂທ, ເມນູ..."
-                    className="input-field w-full text-sm pl-8"
-                    autoFocus
-                  />
-                  <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-sm" style={{ color: 'var(--gray3)' }}>🔍</span>
-                  {search && <button onClick={() => setSearch('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs font-black" style={{ color: 'var(--gray3)' }}>✕</button>}
-                </div>
-              )}
+              {/* The box used to be behind a 🔍 chip: one tap to open it, type,
+                  then it was never obvious it was still filtering. It is always
+                  here now and it filters as you type — nothing to confirm. */}
+              <div className="relative mb-3">
+                <input
+                  type="text"
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                  placeholder="ຄົ້ນຫາ: ຊື່ລູກຄ້າ, ເລກຄິວ, ເບີໂທ, ເມນູ..."
+                  className="input-field w-full text-sm pl-8"
+                />
+                <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-sm" style={{ color: 'var(--gray3)' }}>🔍</span>
+                {search && <button onClick={() => setSearch('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-base font-black px-1" style={{ color: 'var(--gray3)' }}>✕</button>}
+              </div>
 
               </div>
               )}{/* end fixed header */}
