@@ -40,7 +40,14 @@ export default function PwaHelper() {
     const config = PWA_CONFIG[base]
     if (!config) return
 
-    setOrCreate('manifest', { href: config.manifest })
+    // The practice shop installs to the same home screen as the real one, from
+    // the same code, so without this they land as two identical icons with the
+    // same name — and an installed app shows no address bar to tell them apart.
+    // Someone takes a real order into the practice database, or practises on
+    // the real one. The practice build gets its own name and an amber splash.
+    const isPractice = window.location.hostname.startsWith('test.')
+    const manifest = isPractice && base === '/staff' ? '/manifest-staff-test.json' : config.manifest
+    setOrCreate('manifest', { href: manifest })
     setOrCreate('apple-touch-icon', { href: config.icon })
 
     let themeMeta = document.querySelector('meta[name="theme-color"]')
@@ -49,7 +56,7 @@ export default function PwaHelper() {
       themeMeta.name = 'theme-color'
       document.head.appendChild(themeMeta)
     }
-    themeMeta.content = '#3E2723'
+    themeMeta.content = isPractice ? '#b45309' : '#3E2723'
 
     if (typeof window === 'undefined' || !('serviceWorker' in navigator)) return
     if (config.sw) {
