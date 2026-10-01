@@ -3308,18 +3308,7 @@ setStockShop(newSS); setStockOnline(newSO)
       {/* ─── ORDERS TAB ─── */}
       {tab === 'orders' && (
         <div className="flex-1 flex flex-col overflow-hidden">
-          {headerCollapsed ? (
-            <div className="flex-shrink-0 flex items-center justify-between px-4 py-1.5" style={{ background: 'var(--brown)' }}>
-              <div className="flex items-center gap-2">
-                <span className="font-serif text-sm font-black" style={{ color: 'var(--cream)' }}>{shopInfo.name}</span>
-                {pendingOnline > 0 && <span className="bg-red-500 text-white text-xs rounded-full px-2 py-0.5">{pendingOnline}</span>}
-                <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: liveStatus === 'live' ? '#22c55e' : '#f59e0b' }} />
-              </div>
-              <button onClick={() => setHeaderCollapsed(false)} className="text-xs font-black px-2 py-1 rounded-lg" style={{ color: 'var(--cream)' }}>
-                ▼ ສະແດງ
-              </button>
-            </div>
-          ) : (
+          {headerCollapsed ? null : (
           <div className="flex-shrink-0 flex items-center justify-between px-4 py-3" style={{ background: 'var(--brown)' }}>
             <div className="flex items-center gap-2">
               <div className="font-serif text-lg font-black" style={{ color: 'var(--cream)' }}>
@@ -3350,7 +3339,6 @@ setStockShop(newSS); setStockOnline(newSO)
                 🖨 {printerReady ? (usbConnected ? 'USB ✓' : btConnected ? 'BT ✓' : 'COM ✓') : 'ອຸປະກອນ'}
                 {isTablet && <span className="text-amber-300">· 📱</span>}
               </button>
-              <button onClick={() => setHeaderCollapsed(true)} title="ເຊື່ອງແຖບເທິງ" className="text-xs font-black px-3 py-2 rounded-lg border border-[rgba(253,246,238,0.35)] text-[#fdf6ee]">▲</button>
             </div>
           </div>
           )}
@@ -5108,7 +5096,6 @@ setStockShop(newSS); setStockOnline(newSO)
                 title="ລ້າງ USB ທີ່ຄ້າງ ແລ້ວເຊື່ອມໃໝ່"
                 className="text-xs font-black px-3 py-2 rounded-lg border border-[rgba(253,246,238,0.35)] text-[#fdf6ee]">🔄USB</button>}
               <button onClick={() => alert('ຕ້ອງຊອກຫາ ↺ Reset ໃນລາຍການ')} className="text-xs font-black px-3 py-2 rounded-lg border border-red-400 text-red-300">↺</button>
-              <button onClick={() => setHeaderCollapsed(true)} title="ເຊື່ອງແຖບເທິງ" className="text-xs font-black px-3 py-2 rounded-lg border border-[rgba(253,246,238,0.35)] text-[#fdf6ee]">▲</button>
             </div>
             <button onClick={() => setDeviceSheet(false)} className="w-full mt-4 py-3 rounded-xl font-black"
               style={{ background: 'var(--cream)', color: 'var(--brown)' }}>ປິດ</button>
