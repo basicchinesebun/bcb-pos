@@ -178,6 +178,19 @@ export default function StaffPage() {
   // its own printer, and must not touch either.
   const [stationMode, setStationMode] = useState('main')
   const [deviceSheet, setDeviceSheet] = useState(false)
+  // The bars above the orders are read once and then just take up room. Fold
+  // them away as soon as the list is scrolled down, and bring them back the
+  // moment it is scrolled up — so nothing has to be hunted for, and a till
+  // looking at order forty is not giving three bands to a header.
+  const lastScrollRef = useRef(0)
+  function onOrdersScroll(e) {
+    const y = e.currentTarget.scrollTop
+    const dy = y - lastScrollRef.current
+    if (Math.abs(dy) < 6) return
+    lastScrollRef.current = y
+    if (dy > 0 && y > 70) setHeaderCollapsed(true)
+    else if (dy < 0) setHeaderCollapsed(false)
+  }
   // The quick-order button sat in one corner and covered the card under it.
   // It can be dragged now, but only ever lands against the left or right edge —
   // a button parked mid-screen would cover more, not less, and would drift out
@@ -3257,7 +3270,13 @@ setStockShop(newSS); setStockOnline(newSO)
       {/* Taking orders and running the shop are different jobs an hour apart,
           and mixing them is why the selling screen carried a column of settings
           nobody reads mid-service. One switch, always in the same place. */}
-      <div className="flex-shrink-0 flex items-center gap-2 px-3 pt-2" style={{ background: 'var(--brown)' }}>
+      <div className="flex-shrink-0 flex items-center gap-2 px-3 overflow-hidden"
+        style={{
+          background: 'var(--brown)',
+          maxHeight: tab === 'orders' && headerCollapsed ? 0 : 80,
+          paddingTop: tab === 'orders' && headerCollapsed ? 0 : 8,
+          transition: 'max-height .2s ease, padding-top .2s ease',
+        }}>
         <div className="flex rounded-full p-1 gap-1" style={{ background: 'rgba(0,0,0,0.28)' }}>
           {[['orders', 'ໜ້າຂາຍ'], ['office', 'ຫຼັງຮ້ານ']].map(([m, l]) => {
             const on = m === 'orders' ? tab === 'orders' : tab !== 'orders'
@@ -3505,7 +3524,7 @@ setStockShop(newSS); setStockOnline(newSO)
               </div>
               )}{/* end fixed header */}
 
-              <div className="flex-1 overflow-y-auto px-3 pb-20">
+              <div className="flex-1 overflow-y-auto px-3 pb-20" onScroll={onOrdersScroll}>
               {/* Customer search results */}
               {customerSearch.trim() && (
                 <div className="mb-4">
