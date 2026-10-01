@@ -1277,7 +1277,9 @@ export default function StaffPage() {
         try { return (typeof o.customer === 'string' ? JSON.parse(o.customer) : o.customer) || {} } catch { return {} }
       })()
       m.set(o.id, {
-        text: searchNorm([c.name, o.bag_label, ...items.map(it => it.name)].join(' ')),
+        // "id123" is what the receipt prints. It is a word, not a number, so it
+        // cannot be confused with a queue number or a fragment of a phone.
+        text: searchNorm(['id' + o.id, c.name, o.bag_label, ...items.map(it => it.name)].join(' ')),
         phone: String(c.phone || '').replace(/\D/g, ''),
       })
     })
@@ -2869,6 +2871,15 @@ setStockShop(newSS); setStockOnline(newSO)
       ctx.fillText(String(o.qnum ?? '').padStart(4, '0'), W/2, y += Math.round(96 * s))
     })
     push(() => { ctx.font = f(18); ctx.textAlign = 'center'; ctx.fillStyle = '#000'; ctx.fillText(dateStr, W/2, y += Math.round(24 * s)) })
+    // The queue number restarts every day, so a receipt from last week carries
+    // the same #0020 as today's. This code never repeats — typing it into the
+    // till's search box lands on this one order and nothing else, which is how
+    // a customer presenting an old receipt gets answered in one step.
+    if (o.id != null) push(() => {
+      ctx.font = `700 ${Math.round(15 * s)}px Arial, Helvetica, 'DejaVu Sans', sans-serif`
+      ctx.textAlign = 'center'; ctx.fillStyle = '#000'
+      ctx.fillText('ID' + o.id, W/2, y += Math.round(20 * s))
+    })
     push(() => { y += Math.round(8 * s); dash() })
     // Item name was drawn from the left edge with no width limit while the
     // price sat right-aligned, so a long menu name ran straight under the
@@ -3532,7 +3543,7 @@ setStockShop(newSS); setStockOnline(newSO)
                   type="text"
                   value={search}
                   onChange={e => setSearch(e.target.value)}
-                  placeholder="ຄົ້ນຫາ: ຊື່ລູກຄ້າ, ເລກຄິວ, ເບີໂທ, ເມນູ..."
+                  placeholder="ຄົ້ນຫາ: ຊື່ລູກຄ້າ, ເລກຄິວ, ເບີໂທ, ເມນູ, ID ໃບບິນ..."
                   className="input-field w-full text-sm pl-8"
                 />
                 <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-sm" style={{ color: 'var(--gray3)' }}>🔍</span>
