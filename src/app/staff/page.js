@@ -1302,7 +1302,10 @@ export default function StaffPage() {
     return words.every(w => idx.text.includes(w))
   })
   const openOrders = filteredOrders.filter(o => !o.done && !o.cancelled && o.status !== 'rejected' && o.status !== 'blocked')
-  const stageOf = o => (o.status === 'pending' ? 'needs' : 'making')
+  // Three things happen to an order and the till needs to tell them apart:
+  // waiting to be accepted, in the steamer, and cooked but still on the shelf
+  // waiting for its customer. The last one is the queue the counter works.
+  const stageOf = o => o.status === 'pending' ? 'needs' : o.ready_at ? 'ready' : 'making'
   // While searching, the stage buttons stop applying and finished orders are
   // included: someone typing a queue number is looking for that one order, not
   // for whichever of today's buckets it happens to be sitting in. Without this
@@ -3479,9 +3482,9 @@ setStockShop(newSS); setStockOnline(newSO)
                   {/* Stage first, because during service it is the only
                       question: what still needs confirming, what is being made.
                       Channel comes after it, and the two narrow together. */}
-                  {[['all', 'ທັງໝົດ'], ['needs', 'ລໍຖ້າຢືນຢັນ'], ['making', 'ກຳລັງເຮັດ']].map(([k, l]) => {
+                  {[['all', 'ທັງໝົດ'], ['needs', 'ລໍຖ້າຢືນຢັນ'], ['making', 'ກຳລັງເຮັດ'], ['ready', '📦 ພ້ອມມອບ']].map(([k, l]) => {
                     const n = openOrders.filter(o => k === 'all' || stageOf(o) === k).length
-                    const urgent = k === 'needs' && n > 0
+                    const urgent = (k === 'needs' || k === 'ready') && n > 0
                     const on = stage === k
                     return (
                       <button key={k} onClick={() => setStage(k)}
@@ -3608,6 +3611,7 @@ setStockShop(newSS); setStockOnline(newSO)
                                 ? <span className="tag text-xs ml-1" style={{ background: '#f0fdf4', color: '#16a34a' }}>{o.payment_method === 'cash' ? '💵' : '📱'} ຈ່າຍແລ້ວ</span>
                                 : <span className="tag bg-orange-50 text-orange-600 text-xs ml-1">💰 ຍັງບໍ່ຈ່າຍ</span>
                             )}
+                            {!o.done && !o.cancelled && o.ready_at && <span className="tag text-xs ml-1" style={{ background: '#dcfce7', color: '#15803d' }}>🍽 ພ້ອມແລ້ວ</span>}
                             {o.done && <span className="tag bg-green-50 text-green-700 text-xs ml-1">✓ Done</span>}
                             {o.cancelled && <span className="tag bg-red-50 text-red-700 text-xs ml-1">✕ ຍົກເລີກ</span>}
                             {o.status === 'rejected' && <span className="tag bg-red-50 text-red-700 text-xs ml-1">✕ ປະຕິເສດ</span>}
@@ -3821,7 +3825,10 @@ setStockShop(newSS); setStockOnline(newSO)
                           ) : o.type === 'online' && o.status === 'pending' ? (
                             <button onClick={() => confirmOrder(o)} className="rounded-xl text-base font-black text-white" style={{ background: '#15803d', minHeight: 56 }}>✓ ຢືນຢັນ</button>
                           ) : (
-                            <button onClick={() => doneOrder(o)} className="rounded-xl text-base font-black" style={{ background: 'var(--brown)', color: 'var(--cream)', minHeight: 56 }}>📦 ມອບເຄື່ອງ</button>
+                            <button onClick={() => doneOrder(o)} className="rounded-xl text-base font-black"
+                              style={{ background: o.ready_at ? '#15803d' : 'var(--brown)', color: 'var(--cream)', minHeight: 56 }}>
+                              📦 ມອບເຄື່ອງ
+                            </button>
                           )}
                         </div>
                       </div>

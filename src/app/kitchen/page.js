@@ -55,8 +55,12 @@ export default function KitchenPage() {
   }, [])
 
   async function loadOrders() {
+    // The board is "what still has to be cooked", which is not the same as
+    // "what the customer has not collected". An order leaves here the moment
+    // the food is out of the steamer and then waits at the till to be handed
+    // over, so the filter is ready_at, not done.
     const { data } = await supabase.from('orders')
-      .select('*').eq('done', false).eq('cancelled', false).neq('status', 'rejected')
+      .select('*').is('ready_at', null).eq('done', false).eq('cancelled', false).neq('status', 'rejected')
       .order('created_at', { ascending: true })
     if (data) setOrders(data)
   }
@@ -82,10 +86,13 @@ export default function KitchenPage() {
   // round trip left the card sitting there looking unresponsive, so it got
   // tapped again — and by then the list had shifted, so the second tap landed
   // on the next order and marked someone else's food done.
+  // ✓ here means the food is ready, not that the order is finished. Marking it
+  // done was what let a customer collect the same order twice: the order left
+  // the till's board before the counter had recorded handing anything over.
   async function markDone(o) {
     setOrders(prev => prev.filter(x => x.id !== o.id))
     const { error } = await supabase.from('orders')
-      .update({ done: true, done_at: new Date().toISOString() }).eq('id', o.id)
+      .update({ ready_at: new Date().toISOString() }).eq('id', o.id)
     if (error) { await loadOrders(); alert('ບັນທຶກບໍ່ສຳເລັດ: ' + error.message); return }
     // Publish the number for the /queue board customers look at. Only the
     // staff page did this, so with the kitchen screen doing the finishing the
@@ -104,7 +111,7 @@ export default function KitchenPage() {
     setOrders(prev => prev.filter(x => !ids.includes(x.id)))
     const doneAt = new Date().toISOString()
     const { error } = await supabase.from('orders')
-      .update({ done: true, done_at: doneAt }).in('id', ids)
+      .update({ ready_at: doneAt }).in('id', ids)
     if (error) { await loadOrders(); alert('ບັນທຶກບໍ່ສຳເລັດ: ' + error.message) }
     else {
       // Publish the highest number cleared, so the board customers watch
