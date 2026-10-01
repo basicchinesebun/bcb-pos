@@ -136,7 +136,6 @@ export default function StaffPage() {
   // service; all-time is one tap away for when the question is the other one.
   const [moneyScope, setMoneyScope] = useState('today')
   const [search, setSearch] = useState('')
-  const [customerSearch, setCustomerSearch] = useState('')
   const [toast, setToast] = useState([])
   const [slipModal, setSlipModal] = useState(null)
   const [confirmModal, setConfirmModal] = useState(null) // { message, onConfirm }
@@ -269,7 +268,6 @@ export default function StaffPage() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [statsCollapsed, setStatsCollapsed] = useState(false)
   const [headerCollapsed, setHeaderCollapsed] = useState(false)
-  const [customerSearchCollapsed, setCustomerSearchCollapsed] = useState(true)
   const [displayOrderId, setDisplayOrderId] = useState(null)
   const [qtyModal, setQtyModal] = useState(null)
   const [qtyInput, setQtyInput] = useState('')
@@ -1243,7 +1241,7 @@ export default function StaffPage() {
 
   // ─── Orders ───
   const filteredOrders = orders.filter(o => {
-    if (filter !== 'all' && o.type !== filter) return false
+    if (!search.trim() && filter !== 'all' && o.type !== filter) return false
     if (!search.trim()) return true
     const q = search.trim().toLowerCase().replace(/\s+/g, ' ')
     const qDigits = q.replace(/\s+/g, '')
@@ -1262,13 +1260,24 @@ export default function StaffPage() {
     if (o.customer) {
       const c = typeof o.customer === 'string' ? JSON.parse(o.customer) : o.customer
       if ((c.name || '').toLowerCase().replace(/\s+/g, ' ').includes(q)) return true
-      if ((!isNumeric || qDigits.length >= 5) && (c.phone || '').replace(/\s+/g, '').includes(qDigits)) return true
+      if ((!isNumeric || qDigits.length >= 3) && (c.phone || '').replace(/\s+/g, '').includes(qDigits)) return true
     }
+    // The bag label carries the menus as the kitchen sees them, which is how
+    // an order gets described out loud at the counter.
+    if ((o.bag_label || '').toLowerCase().includes(q)) return true
     return false
   })
   const openOrders = filteredOrders.filter(o => !o.done && !o.cancelled && o.status !== 'rejected' && o.status !== 'blocked')
   const stageOf = o => (o.status === 'pending' ? 'needs' : 'making')
-  const activeOrders = openOrders.filter(o => stage === 'all' || stageOf(o) === stage)
+  // While searching, the stage buttons stop applying and finished orders are
+  // included: someone typing a queue number is looking for that one order, not
+  // for whichever of today's buckets it happens to be sitting in. Without this
+  // a search for a done order with ລໍຖ້າຢືນຢັນ selected found nothing, which
+  // read as "the search is broken".
+  const searching = search.trim().length > 0
+  const activeOrders = searching
+    ? filteredOrders
+    : openOrders.filter(o => stage === 'all' || stageOf(o) === stage)
   const archivedOrders = filteredOrders.filter(o => o.done || o.cancelled || o.status === 'rejected' || o.status === 'blocked')
 
   // Money for whatever the ທັງໝົດ / 🏪 / 🌐 buttons are currently showing, so
@@ -1276,7 +1285,10 @@ export default function StaffPage() {
   // blocked and cancelled orders are left out — no money ever came in for them,
   // so counting them would overstate the takings.
   const todayStamp = new Date().toDateString()
-  const filterMoney = filteredOrders.reduce((s, o) => {
+  // Money follows the ທັງໝົດ / 🏪 / 🌐 buttons only. A search must not move it —
+  // typing a queue number is a lookup, not a change of what the till is counting.
+  const channelOrders = filter === 'all' ? orders : orders.filter(o => o.type === filter)
+  const filterMoney = channelOrders.reduce((s, o) => {
     if (o.cancelled || o.status === 'rejected' || o.status === 'blocked') return s
     // Local time on purpose: the till stands in the shop, so "today" is the
     // shop's day, not UTC's — otherwise the figure would roll over at 07:00.
@@ -1285,22 +1297,6 @@ export default function StaffPage() {
   }, 0)
   const filterMoneyIcon = filter === 'walkin' ? ' 🏪' : filter === 'online' ? ' 🌐' : ''
   const filterMoneyLabel = (moneyScope === 'today' ? 'ມື້ນີ້' : 'ທັງໝົດ') + filterMoneyIcon
-
-  // ─── Customer Search ───
-  const customerSearchResults = customerSearch.trim()
-    ? orders.filter(o => {
-        const q = customerSearch.trim().toLowerCase().replace(/\s+/g, ' ')
-        const qDigits = q.replace(/\s+/g, '')
-        const isNumeric = /^\d+$/.test(qDigits)
-        const c = (() => { try { return JSON.parse(o.customer || '{}') } catch { return {} } })()
-        const qnum = String(o.qnum || '')
-        const qnumPad = qnum.padStart(4, '0')
-        if (isNumeric && (qnum === qDigits || qnumPad === qDigits || qnum.startsWith(qDigits))) return true
-        if ((c.name || '').toLowerCase().replace(/\s+/g, ' ').includes(q)) return true
-        if ((!isNumeric || qDigits.length >= 5) && (c.phone || '').replace(/\s+/g, '').includes(qDigits)) return true
-        return false
-      })
-    : []
 
   const waiting = orders.filter(o => !o.done && !o.cancelled && o.status !== 'rejected' && o.status !== 'blocked').length
   const done = orders.filter(o => o.done).length
@@ -3444,18 +3440,16 @@ setStockShop(newSS); setStockOnline(newSO)
                     )
                   })}
                   <button
-                    onClick={() => setMainSearchCollapsed(v => !v)}
+                    onClick={() => setMainSearchCollapsed(v => {
+                      // Closing the box must also drop the query, or the list stays
+                      // filtered by text nobody can see any more.
+                      if (!v) setSearch('')
+                      return !v
+                    })}
                     className={`px-3 py-1 rounded-lg text-xs font-black border flex-shrink-0 ${!mainSearchCollapsed ? 'bg-[#3d1f0a] text-[#fdf6ee] border-[#3d1f0a]' : 'border-[#e8d5c0] text-[#8a6a55]'}`}
                     title="ຄົ້ນຫາ: ເລກຄິວ, ຊື່, ເບີໂທ, ເມນູ"
                   >
                     🔍
-                  </button>
-                  <button
-                    onClick={() => setCustomerSearchCollapsed(v => !v)}
-                    className={`px-3 py-1 rounded-lg text-xs font-black border flex-shrink-0 ${!customerSearchCollapsed ? 'bg-[#3d1f0a] text-[#fdf6ee] border-[#3d1f0a]' : 'border-[#e8d5c0] text-[#8a6a55]'}`}
-                    title="ຄົ້ນຫາລູກຄ້າ · Customer"
-                  >
-                    👤
                   </button>
                 </div>
               </div>
@@ -3474,91 +3468,19 @@ setStockShop(newSS); setStockOnline(newSO)
                 </div>
               )}
 
-              {/* Customer search */}
-              {!customerSearchCollapsed && (
-                <div className="relative mb-3">
-                  <input
-                    type="text"
-                    value={customerSearch}
-                    onChange={e => setCustomerSearch(e.target.value)}
-                    placeholder="ຊື່, ເບີໂທ, ເລກຄິວ (0001)..."
-                    className="input-field w-full text-sm pl-8"
-                  />
-                  <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-sm" style={{ color: 'var(--gray3)' }}>👤</span>
-                  {customerSearch && (
-                    <button onClick={() => setCustomerSearch('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs font-black px-2 py-0.5 rounded" style={{ color: 'var(--brown)', background: 'var(--cream2)' }}>
-                      ລ້າງ · Clear
-                    </button>
-                  )}
-                </div>
-              )}
               </div>
               )}{/* end fixed header */}
 
               <div className="flex-1 px-3 pb-24">
-              {/* Customer search results */}
-              {customerSearch.trim() && (
-                <div className="mb-4">
-                  <div className="text-xs font-black tracking-widest uppercase mb-2" style={{ color: 'var(--gray3)' }}>
-                    ຜົນຄົ້ນຫາ · Results ({customerSearchResults.length})
-                  </div>
-                  {customerSearchResults.length === 0 && (
-                    <div className="text-center py-6 text-sm font-bold rounded-xl" style={{ color: 'var(--cream3)', background: 'var(--cream2)' }}>
-                      ບໍ່ພົບຜົນ
-                    </div>
-                  )}
-                  <div className="flex flex-col gap-3">
-                    {customerSearchResults.map(o => {
-                      const items = typeof o.items === 'string' ? JSON.parse(o.items) : o.items || []
-                      const cust = o.customer ? (typeof o.customer === 'string' ? JSON.parse(o.customer) : o.customer) : null
-                      const time = orderStamp(o.created_at)
-                      const stale = isFromEarlierDay(o.created_at) && !o.done && !o.cancelled
-                      const borderColor = o.cancelled || o.status === 'rejected' ? '#fca5a5' : o.status === 'blocked' ? '#c4b5fd' : o.done ? '#e8d5c0' : '#3d1f0a'
-                      return (
-                        <div key={o.id} className="rounded-2xl overflow-hidden" style={{ border: `2px solid ${borderColor}`, background: 'var(--warm-white)' }}>
-                          <div className="p-3">
-                            <div className="flex justify-between items-start mb-2">
-                              <div className="flex items-center gap-2">
-                                <div className="font-serif text-2xl font-black" style={{ color: 'var(--brown)' }}>
-                                  #{String(o.qnum).padStart(4,'0')}
-                                </div>
-                              </div>
-                              <div className="text-right">
-                                <div className="text-xs font-bold" style={{ color: stale ? '#c2410c' : 'var(--gray3)' }}>{stale ? '⚠️ ' : ''}{time}</div>
-                                <span className={`tag text-xs mt-1 ${o.type === 'online' ? 'bg-orange-50 text-orange-700' : ''}`}>
-                                  {o.type === 'online' ? '🌐 Online' : '🏪 Walk-in'}
-                                </span>
-                                {o.done && <span className="tag bg-green-50 text-green-700 text-xs ml-1">✓ Done</span>}
-                                {o.cancelled && <span className="tag bg-red-50 text-red-700 text-xs ml-1">✕ ຍົກເລີກ</span>}
-                                {o.status === 'rejected' && <span className="tag bg-red-50 text-red-700 text-xs ml-1">✕ ປະຕິເສດ</span>}
-                                {o.status === 'blocked' && <span className="tag   text-xs ml-1">🚫 ຖືກບ໋ອກ</span>}
-                                {o.status === 'confirmed' && !o.done && <span className="tag bg-green-50 text-green-700 text-xs ml-1">✓ ຢືນຢັນ</span>}
-                                {o.status === 'pending' && !o.cancelled && <span className="tag bg-yellow-50 text-yellow-700 text-xs ml-1">⏳ ລໍຖ້າ</span>}
-                              </div>
-                            </div>
-                            {cust && (
-                              <div className="rounded-xl p-2 mb-2 text-sm font-bold leading-6" style={{ background: 'var(--cream2)', color: 'var(--brown2)' }}>
-                                <div>👤 {cust.name} · 📞 {cust.phone}</div>
-                                {cust.time && <div>🕐 {cust.time}</div>}
-                              </div>
-                            )}
-                            <div className="text-sm font-bold mb-1" style={{ color: 'var(--brown2)' }}>
-                              {items.map((it, ii) => <span key={ii} className="mr-2">{it.name} ×{it.qty}</span>)}
-                            </div>
-                            <div className="text-sm font-black" style={{ color: 'var(--brown)' }}>
-                              ລວມ: {(o.total || 0).toLocaleString()} ກີບ
-                            </div>
-                          </div>
-                        </div>
-                      )
-                    })}
-                  </div>
+              {activeOrders.length === 0 && <div className="text-center py-12 text-lg font-bold" style={{ color: 'var(--cream3)' }}>{searching ? 'ບໍ່ພົບຜົນ' : 'ຍັງບໍ່ມີອໍເດີ'}</div>}
+
+              {searching && activeOrders.length > 0 && (
+                <div className="text-xs font-black tracking-widest uppercase mb-2 mt-1" style={{ color: 'var(--gray3)' }}>
+                  ຜົນຄົ້ນຫາ · Results ({activeOrders.length})
                 </div>
               )}
 
-              {!customerSearch.trim() && activeOrders.length === 0 && <div className="text-center py-12 text-lg font-bold" style={{ color: 'var(--cream3)' }}>ຍັງບໍ່ມີອໍເດີ</div>}
-
-              {!customerSearch.trim() && <div className="flex flex-col gap-3 xl:grid xl:grid-cols-2 xl:items-start xl:gap-3">
+              <div className="flex flex-col gap-3 xl:grid xl:grid-cols-2 xl:items-start xl:gap-3">
                 {activeOrders.map(o => {
                   const items = typeof o.items === 'string' ? JSON.parse(o.items) : o.items || []
                   const cust = o.customer ? (typeof o.customer === 'string' ? JSON.parse(o.customer) : o.customer) : null
@@ -3828,10 +3750,10 @@ setStockShop(newSS); setStockOnline(newSO)
                     </div>
                   )
                 })}
-              </div>}
+              </div>
 
               {/* ─── Archive ─── */}
-              {!customerSearch.trim() && archivedOrders.length > 0 && (
+              {!searching && archivedOrders.length > 0 && (
                 <div className="mt-4">
                   <button
                     onClick={() => setArchiveOpen(o => !o)}
