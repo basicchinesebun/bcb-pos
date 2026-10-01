@@ -7,6 +7,16 @@ const STATUS = {
   confirmed: { label: 'ຢືນຢັນແລ້ວ',  cls: 'bg-green-50 text-green-700' },
   rejected:  { label: 'ຖືກປະຕິເສດ', cls: 'bg-red-50 text-red-600' },
   done:      { label: 'ສຳເລັດ',       cls: 'bg-blue-50 text-blue-700' },
+  pickedUp:  { label: '✅ ຮັບສິນຄ້າແລ້ວ', cls: 'bg-green-100 text-green-800' },
+}
+
+// The queue number restarts, so a search for "20" brings back every #0020 the
+// shop has ever made — three identical-looking cards, which is no use to the
+// customer or to the counter. Every card says which day it is from.
+function stamp(iso) {
+  const d = new Date(iso)
+  if (isNaN(d.getTime())) return ''
+  return `${d.getDate()}/${d.getMonth() + 1} ${d.toLocaleTimeString('lo-LA', { hour: '2-digit', minute: '2-digit' })}`
 }
 
 export default function ClosedOverlay({ shopInfo = {}, branches = [], subtitle = '' }) {
@@ -28,7 +38,7 @@ export default function ClosedOverlay({ shopInfo = {}, branches = [], subtitle =
       setLoading(true)
       try {
         const qnum = parseInt(q)
-        const cols = 'id, qnum, status, total, customer, items, done, cancelled, created_at'
+        const cols = 'id, qnum, status, total, customer, items, done, cancelled, created_at, picked_up_at'
         if (!isNaN(qnum) && String(qnum) === q) {
           const { data } = await supabase.from('orders').select(cols)
             .eq('qnum', qnum).order('created_at', { ascending: false }).limit(10)
@@ -123,20 +133,31 @@ export default function ClosedOverlay({ shopInfo = {}, branches = [], subtitle =
           <div className="flex flex-col gap-2 mt-3">
             {results.map(o => {
               const c = (() => { try { return typeof o.customer === 'string' ? JSON.parse(o.customer) : (o.customer || {}) } catch { return {} } })()
-              const st = o.cancelled ? { label: 'ຍົກເລີກ', cls: 'bg-gray-100 text-gray-500' }
-                       : o.done      ? STATUS.done
+              const st = o.cancelled     ? { label: 'ຍົກເລີກ', cls: 'bg-gray-100 text-gray-500' }
+                       : o.picked_up_at  ? STATUS.pickedUp
+                       : o.done          ? STATUS.done
                        : STATUS[o.status] || STATUS.pending
               const items = (() => { try { return Array.isArray(o.items) ? o.items : JSON.parse(o.items || '[]') } catch { return [] } })()
               return (
                 <div key={o.id} className="rounded-2xl px-4 py-3.5" style={{ background: 'var(--warm-white)', border: '2px solid var(--cream3)' }}>
                   <div className="flex items-center justify-between mb-1">
-                    <span className="font-black text-base" style={{ color: 'var(--brown)' }}>
-                      #{String(o.qnum).padStart(4, '0')}
-                    </span>
+                    <div className="flex items-baseline gap-2">
+                      <span className="font-black text-base" style={{ color: 'var(--brown)' }}>
+                        #{String(o.qnum).padStart(4, '0')}
+                      </span>
+                      <span className="text-xs font-bold" style={{ color: 'var(--gray3)' }}>
+                        {stamp(o.created_at)}
+                      </span>
+                    </div>
                     <span className={`tag text-xs font-black px-3 py-1 rounded-full ${st.cls}`}>
                       {st.label}
                     </span>
                   </div>
+                  {o.picked_up_at && (
+                    <div className="text-xs font-black mb-1" style={{ color: '#15803d' }}>
+                      ຮັບເຄື່ອງເມື່ອ {stamp(o.picked_up_at)}
+                    </div>
+                  )}
                   {c.name && (
                     <div className="text-sm font-bold" style={{ color: 'var(--brown2)' }}>👤 {c.name}</div>
                   )}

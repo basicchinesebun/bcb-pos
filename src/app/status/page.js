@@ -109,7 +109,12 @@ function StatusContent() {
   )
 
   const c = customer()
-  const statusInfo = STATUS_MAP[order.status] || STATUS_MAP.pending
+  // Collected beats every other state: once the bag is in the customer's hand
+  // that is the only thing this page needs to say, and it is the receipt both
+  // sides can point at if the order is ever claimed twice.
+  const statusInfo = order.picked_up_at
+    ? { label: '✅ ຮັບສິນຄ້າແລ້ວ', cls: 'bg-green-100 text-green-800' }
+    : STATUS_MAP[order.status] || STATUS_MAP.pending
   const items = typeof order.items === 'string' ? JSON.parse(order.items) : (order.items || [])
 
   return (
@@ -130,6 +135,14 @@ function StatusContent() {
           <span className={`inline-block px-5 py-2 rounded-full text-sm font-black ${statusInfo.cls}`}>
             {statusInfo.label}
           </span>
+          {order.picked_up_at && (
+            <div className="text-xs font-black mt-2" style={{ color: '#15803d' }}>
+              {(() => {
+                const d = new Date(order.picked_up_at)
+                return `${d.getDate()}/${d.getMonth() + 1} ${d.toLocaleTimeString('lo-LA', { hour: '2-digit', minute: '2-digit' })}`
+              })()}
+            </div>
+          )}
         </div>
 
         {/* Now serving */}

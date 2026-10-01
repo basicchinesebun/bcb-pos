@@ -159,6 +159,7 @@ export default function StaffPage() {
   const [toast, setToast] = useState([])
   const [slipModal, setSlipModal] = useState(null)
   const [confirmModal, setConfirmModal] = useState(null) // { message, onConfirm }
+  const [pickupWarn, setPickupWarn] = useState(null) // { order, at, by, count }
   const [cancelModal, setCancelModal] = useState(null) // order being cancelled
   const [cancelReason, setCancelReason] = useState('')
   const [slipVerify, setSlipVerify] = useState({}) // orderId -> { loading, result, error }
@@ -1358,17 +1359,42 @@ export default function StaffPage() {
     // mostly-irrelevant banner. Only warn about stock that's actually low.
     .filter(m => (m.shop > 0 && m.shop <= LOW_STOCK) || (m.online > 0 && m.online <= LOW_STOCK))
 
-  async function doneOrder(o) {
-    const doneAt = new Date().toISOString()
+  // Handing the bag over is its own fact, written by the database under a row
+  // lock — not by this screen. A customer came back for a second bag on an
+  // order that had already been collected and nothing in the system could say
+  // whether they had taken it the first time, because "done" is also what the
+  // kitchen screen writes when the food comes out of the steamer.
+  //
+  // force=true is only ever passed by the staff tapping through the red warning
+  // below, and the override is counted and logged.
+  async function doneOrder(o, force = false) {
+    const { data, error } = await supabase.rpc('pickup_order', {
+      p_id: o.id,
+      p_by: activeStaffName || null,
+      p_force: force,
+    })
+    if (error) { showToast('ບັນທຶກບໍ່ສຳເລັດ: ' + error.message, 'red'); return }
+    if (data && data.ok === false) {
+      if (data.reason === 'already') { setPickupWarn({ order: o, at: data.at, by: data.by, count: data.count }); return }
+      showToast(data.reason === 'void' ? 'ໃບນີ້ຖືກຍົກເລີກແລ້ວ' : 'ບໍ່ພົບໃບນີ້', 'red')
+      await loadOrders()
+      return
+    }
+    const at = data?.at || new Date().toISOString()
+    const count = data?.count || 1
     // Optimistic update — moves card to archive immediately without waiting for realtime
-    setOrders(prev => prev.map(ord => ord.id === o.id ? { ...ord, done: true, done_at: doneAt } : ord))
-    await supabase.from('orders').update({ done: true, done_at: doneAt }).eq('id', o.id)
+    setOrders(prev => prev.map(ord => ord.id === o.id
+      ? { ...ord, done: true, done_at: ord.done_at || at, picked_up_at: at, picked_up_by: activeStaffName || ord.picked_up_by, picked_up_count: count }
+      : ord))
     // If this is the order currently up on the customer screen, take it down —
     // otherwise a finished order's total sits there until someone notices.
     if (displayOrderId === o.id) { clearDisplay(); setDisplayOrderId(null) }
     announce(o.qnum)
-    showToast(`✅ ຄິວ ${String(o.qnum).padStart(4,'0')} Done`, 'green')
-    logActivity('done_order', `#${String(o.qnum).padStart(4, '0')}`)
+    showToast(count > 1
+      ? `⚠️ ຄິວ ${String(o.qnum).padStart(4,'0')} ມອບຊ້ຳ ຄັ້ງທີ ${count}`
+      : `✅ ຄິວ ${String(o.qnum).padStart(4,'0')} ຮັບເຄື່ອງແລ້ວ`, count > 1 ? 'orange' : 'green')
+    logActivity(count > 1 ? 'pickup_repeat' : 'pickup_order',
+      `#${String(o.qnum).padStart(4, '0')}${count > 1 ? ` · ຄັ້ງທີ ${count}` : ''}`)
     // No printing here. The receipt already came out when the order was paid
     // for (markPaid / submitQuickOrder) or confirmed (confirmOrder), so
     // printing again on Done handed the customer a second copy — and since
@@ -1433,8 +1459,20 @@ export default function StaffPage() {
     setOrders(prev => prev.map(o => ids.includes(o.id) ? { ...o, done: true, done_at: doneAt } : o))
     setDoneBatchSelected(new Set())
     setDoneBatchOpen(false)
-    const { error } = await supabase.from('orders').update({ done: true, done_at: doneAt }).in('id', ids)
-    if (error) { await loadOrders(); alert('ບັນທຶກບໍ່ສຳເລັດ: ' + error.message); return }
+    // Each one goes through the same row-locked handover as a single ✓, so a
+    // bulk clear can never quietly re-hand an order that was already collected.
+    // Nothing is forced here: anything already picked up is reported instead.
+    const already = []
+    for (const o of list) {
+      const { data, error } = await supabase.rpc('pickup_order', { p_id: o.id, p_by: activeStaffName || null, p_force: false })
+      if (error) { await loadOrders(); alert('ບັນທຶກບໍ່ສຳເລັດ: ' + error.message); return }
+      if (data && data.ok === false) already.push(o)
+    }
+    if (already.length) {
+      await loadOrders()
+      showToast(`⚠️ ${already.length} ໃບຮັບໄປແລ້ວ: ${already.map(o => '#' + String(o.qnum).padStart(4,'0')).join(' ')}`, 'orange')
+      logActivity('pickup_batch_blocked', already.map(o => '#' + String(o.qnum).padStart(4,'0')).join(' '))
+    }
     // One announcement for the batch, not twenty. The board shows the highest
     // number finished, which is what a customer holding a lower one needs.
     const maxQ = Math.max(...list.map(o => o.qnum || 0))
@@ -1581,8 +1619,14 @@ export default function StaffPage() {
         }
       }
     }
-    setOrders(prev => prev.map(x => x.id === id ? { ...x, [field]: false } : x))
-    await supabase.from('orders').update({ [field]: false }).eq('id', id)
+    // Undoing a handover has to erase the handover too, or the order goes back
+    // on the board still carrying "collected at 18:42" and the next ✓ is met
+    // with the duplicate warning for a bag nobody ever took.
+    const patch = field === 'done'
+      ? { done: false, picked_up_at: null, picked_up_by: null, picked_up_count: 0 }
+      : { [field]: false }
+    setOrders(prev => prev.map(x => x.id === id ? { ...x, ...patch } : x))
+    await supabase.from('orders').update(patch).eq('id', id)
     logActivity(field === 'cancelled' ? 'undo_cancel' : 'undo_done',
       `#${String(o?.qnum ?? '').padStart(4, '0')}`)
   }
@@ -3573,6 +3617,19 @@ setStockShop(newSS); setStockOnline(newSO)
                           </div>
                         </div>
 
+                        {/* When a customer comes back claiming they never got
+                            their bag, staff search the queue number — so the
+                            answer has to be on the card itself, not buried. */}
+                        {o.picked_up_at && (
+                          <div className="rounded-xl p-2 mb-2 text-xs font-black leading-5"
+                            style={o.picked_up_count > 1
+                              ? { background: '#fef2f2', color: '#b91c1c', border: '1px solid #fca5a5' }
+                              : { background: '#f0fdf4', color: '#15803d' }}>
+                            {o.picked_up_count > 1 ? '⚠️ ມອບໄປແລ້ວ ' + o.picked_up_count + ' ຄັ້ງ' : '✅ ຮັບສິນຄ້າແລ້ວ'} · {orderStamp(o.picked_up_at)}
+                            {o.picked_up_by ? ` · ${o.picked_up_by}` : ''}
+                          </div>
+                        )}
+
                         {o.cancelled && o.cancel_reason && (
                           <div className="rounded-xl p-2 mb-2 text-xs font-bold" style={{ background: '#fef2f2', color: '#b91c1c' }}>
                             📝 {o.cancel_reason}
@@ -3764,7 +3821,7 @@ setStockShop(newSS); setStockOnline(newSO)
                           ) : o.type === 'online' && o.status === 'pending' ? (
                             <button onClick={() => confirmOrder(o)} className="rounded-xl text-base font-black text-white" style={{ background: '#15803d', minHeight: 56 }}>✓ ຢືນຢັນ</button>
                           ) : (
-                            <button onClick={() => doneOrder(o)} className="rounded-xl text-base font-black" style={{ background: 'var(--brown)', color: 'var(--cream)', minHeight: 56 }}>✓ ສຳເລັດ</button>
+                            <button onClick={() => doneOrder(o)} className="rounded-xl text-base font-black" style={{ background: 'var(--brown)', color: 'var(--cream)', minHeight: 56 }}>📦 ມອບເຄື່ອງ</button>
                           )}
                         </div>
                       </div>
@@ -5862,6 +5919,53 @@ setStockShop(newSS); setStockOnline(newSO)
               error={pinError} setError={setPinError}
               onCancel={() => { setPinMode(null); setPinInput(''); setPinError(''); setPinStep(1); setPinNew('') }}
             />
+          </div>
+        </div>
+      )}
+
+      {/* Already collected. This is the screen that answers "did they already
+          take it?" — the question that could not be answered when a customer
+          collected the same order twice. It states when, and by whom, and
+          handing it over again takes a deliberate second tap. */}
+      {pickupWarn && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-5"
+          style={{ background: 'rgba(61,31,10,0.75)' }}
+          onClick={() => setPickupWarn(null)}>
+          <div className="w-full max-w-sm rounded-3xl overflow-hidden shadow-2xl"
+            style={{ background: 'var(--warm-white)' }}
+            onClick={e => e.stopPropagation()}>
+            <div className="px-6 py-5 text-center" style={{ background: '#b91c1c' }}>
+              <div className="text-3xl mb-1">⚠️</div>
+              <div className="font-serif text-xl font-black" style={{ color: '#fff' }}>
+                ໃບນີ້ຮັບເຄື່ອງໄປແລ້ວ
+              </div>
+            </div>
+            <div className="px-6 py-5 text-center">
+              <div className="font-serif text-4xl font-black mb-3" style={{ color: 'var(--brown)' }}>
+                #{String(pickupWarn.order?.qnum ?? '').padStart(4, '0')}
+              </div>
+              <div className="rounded-2xl px-4 py-3 text-sm font-black leading-7"
+                style={{ background: '#fef2f2', color: '#991b1b' }}>
+                <div>🕐 ຮັບເມື່ອ: {orderStamp(pickupWarn.at)}</div>
+                {pickupWarn.by && <div>👤 ຜູ້ມອບ: {pickupWarn.by}</div>}
+                {pickupWarn.count > 1 && <div>🔁 ມອບມາແລ້ວ {pickupWarn.count} ຄັ້ງ</div>}
+              </div>
+              <div className="mt-3 text-xs font-bold leading-5" style={{ color: 'var(--gray3)' }}>
+                ຖ້າລູກຄ້າຍັງບໍ່ໄດ້ຮັບແທ້ ຈຶ່ງກົດ “ມອບອີກຄັ້ງ” — ລະບົບຈະບັນທຶກໄວ້
+              </div>
+            </div>
+            <div className="px-6 pb-6 flex gap-3">
+              <button onClick={() => setPickupWarn(null)}
+                className="flex-1 py-3.5 rounded-2xl font-black text-sm border-2"
+                style={{ borderColor: 'var(--brown)', color: 'var(--brown)', background: 'var(--cream2)' }}>
+                ປິດ
+              </button>
+              <button onClick={() => { const o = pickupWarn.order; setPickupWarn(null); doneOrder(o, true) }}
+                className="flex-1 py-3.5 rounded-2xl font-black text-sm text-white"
+                style={{ background: '#b91c1c' }}>
+                ມອບອີກຄັ້ງ
+              </button>
+            </div>
           </div>
         </div>
       )}
