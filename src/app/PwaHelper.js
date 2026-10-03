@@ -25,12 +25,16 @@ const PWA_CONFIG = {
   // The worker itself only answers navigations under /staff; the customer pages
   // keep their own workers (a narrower scope wins) or go straight to the
   // network as before.
-  '/staff':    { manifest: '/manifest-staff.json',    sw: '/sw-staff-offline.js', scope: '/', icon: '/icon-staff-192.png' },
-  '/kitchen':  { manifest: '/manifest-kitchen.json',  sw: '/sw-kitchen.js',  icon: '/icon-kitchen-192.png' },
+  '/staff':    { manifest: '/manifest-staff.json',    sw: '/sw-shop-offline.js', scope: '/', icon: '/icon-staff-192.png' },
+  // The same worker as /staff, at the same scope. sw-kitchen.js cached the
+  // page's icon and nothing else, so with the line down the kitchen board
+  // would not open — and a shop that can still take orders but cannot see
+  // them in the kitchen has stopped just the same.
+  '/kitchen':  { manifest: '/manifest-kitchen.json',  sw: '/sw-shop-offline.js', scope: '/', icon: '/icon-kitchen-192.png' },
   // The customer board is installed on the till's second screen and left
   // running all day, so it asks for fullscreen rather than standalone — there
   // is no address bar or tab strip for a stray touch to land on.
-  '/display':  { manifest: '/manifest-display.json',  sw: '/sw-display.js',  icon: '/icon-display-192.png' },
+  '/display':  { manifest: '/manifest-display.json',  sw: '/sw-shop-offline.js', scope: '/', icon: '/icon-display-192.png' },
 }
 
 function setOrCreate(rel, attrs) {

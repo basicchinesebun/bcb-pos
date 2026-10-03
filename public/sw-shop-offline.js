@@ -1,4 +1,4 @@
-// Lets the till open with no internet at all.
+// Lets the shop's own screens open with no internet at all.
 //
 // A storm here takes the line out for the rest of the day. The till can go on
 // selling from its leased queue numbers and stock, but only if the page will
@@ -21,10 +21,17 @@
 // The filename is new on purpose: a device still carrying the old sw-staff.js
 // unregisters it (that file is now a no-op) and picks this one up instead.
 
-const CACHE = 'bcb-staff-v3';
-// Without the trailing slash: '/staff/' 308-redirects here, and a redirected
-// response cannot be cached — which is why the first attempt cached nothing.
-const SHELL = '/staff';
+const CACHE = 'bcb-shop-v4';
+// Without a trailing slash: '/staff/' 308-redirects to '/staff', and a
+// redirected response cannot be cached — which is why the first attempt
+// cached nothing at all.
+//
+// All four screens, not just the till. The kitchen board cached its icon and
+// nothing else, so during an outage it would not open — and a shop that can
+// take orders but cannot see them in the kitchen is still a shop that has
+// stopped.
+const SHELLS = ['/staff', '/kitchen', '/display', '/queue'];
+const SHELL = SHELLS[0];
 
 // Caching the shell alone was not enough: the page is useless without the
 // JavaScript it loads, and those files were only cached once they had been
@@ -33,14 +40,18 @@ const SHELL = '/staff';
 // its no-connection page. Read the shell at install time and pull in every
 // /_next file it references, so one online visit is all it takes.
 async function precacheShell(cache) {
-  const res = await fetch(SHELL, { credentials: 'same-origin' });
-  if (!res || !res.ok || res.redirected) return;
-  const html = await res.clone().text();
-  await cache.put(SHELL, res);
   const urls = new Set();
-  const re = /(?:src|href)="(\/_next\/[^"]+)"/g;
-  let m;
-  while ((m = re.exec(html)) !== null) urls.add(m[1]);
+  for (const shell of SHELLS) {
+    try {
+      const res = await fetch(shell, { credentials: 'same-origin' });
+      if (!res || !res.ok || res.redirected) continue;
+      const html = await res.clone().text();
+      await cache.put(shell, res);
+      const re = /(?:src|href)="(\/_next\/[^"]+)"/g;
+      let m;
+      while ((m = re.exec(html)) !== null) urls.add(m[1]);
+    } catch (_) { /* one screen failing must not cost the others theirs */ }
+  }
   await Promise.all([...urls].map(u => cache.add(u).catch(() => { })));
 }
 
@@ -94,10 +105,11 @@ self.addEventListener('fetch', event => {
   // Pages: always try the line first, so a new deploy lands as soon as there is
   // one. The cache is the fallback, never the source of truth.
   //
-  // Only the till's own pages. This worker is registered at scope '/' so it can
-  // see /_next/static, which puts every customer page in its reach too — those
-  // are left exactly as they were, going straight to the network.
-  if (req.mode === 'navigate' && url.pathname.startsWith('/staff')) {
+  // Only the shop's own screens. This worker is registered at scope '/' so it
+  // can see /_next/static, which puts the customer-facing order pages in its
+  // reach too — those are left exactly as they were, going to the network.
+  const forUs = SHELLS.some(s => url.pathname === s || url.pathname.startsWith(s + '/'));
+  if (req.mode === 'navigate' && forUs) {
     event.respondWith(
       fetch(req)
         .then(res => {
@@ -110,8 +122,10 @@ self.addEventListener('fetch', event => {
         // /staff and /staff/ are the same page to a person and two different
         // keys to the cache, so try the request itself, then the shell.
         .catch(() => caches.match(req, { ignoreSearch: true })
+          // Fall back to this screen's own shell before anything else: the
+          // kitchen must not be handed the till.
+          .then(hit => hit || caches.match(SHELLS.find(s => url.pathname.startsWith(s)) || SHELL))
           .then(hit => hit || caches.match(SHELL))
-          .then(hit => hit || caches.match('/staff/'))
           .then(hit => hit || new Response(
             '<meta charset=utf-8><body style="font-family:sans-serif;padding:2rem;text-align:center">'
             + '<h2>ຍັງບໍ່ທັນເກັບໜ້ານີ້ໄວ້</h2><p>ເປີດຄັ້ງໜຶ່ງຕອນມີອິນເຕີເນັດກ່ອນ</p>',

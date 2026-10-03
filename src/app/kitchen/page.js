@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../../lib/supabase'
+import { pendingOrders, queueOp, flushOps, flushOutbox } from '../../lib/offline'
 
 const EMOJIS = ['🥟','🍫','🍵','🧁','🍞','🥐','🍮']
 const CARD_W = 'min(360px, calc(100vw - 24px))'
@@ -37,9 +38,37 @@ export default function KitchenPage() {
       if (!configOkRef.current) loadConfig()
     }, 5000)
     const configRefresh = setInterval(loadConfig, 300000)
+    // On the Windows build the till is in the same program and does the
+    // syncing, but the kitchen board is also run on a tablet of its own —
+    // there, nothing else would ever send up what was pressed during an
+    // outage. Flush on the way back in, and on reconnect.
+    const flush = async () => {
+      if (!navigator.onLine || !supabase) return
+      try {
+        await flushOutbox(supabase)
+        await flushOps(supabase, async (kind, p) => {
+          let id = p.id
+          if (typeof id === 'string' && id.startsWith('offline:')) {
+            if (!p.client_id) return true
+            const { data: row } = await supabase.from('orders')
+              .select('id').eq('client_id', p.client_id).maybeSingle()
+            if (!row) return false
+            id = row.id
+          }
+          if (kind !== 'update') return true    // pickups belong to the till
+          const { error } = await supabase.from('orders').update(p.patch).eq('id', id)
+          return !error
+        })
+        await loadOrders()
+      } catch (_) { }
+    }
+    flush()
+    window.addEventListener('online', flush)
+
     const onVisible = () => {
       if (document.visibilityState !== 'visible') return
       loadOrders()
+      flush()
       if (!configOkRef.current) loadConfig()
     }
     document.addEventListener('visibilitychange', onVisible)
@@ -51,6 +80,7 @@ export default function KitchenPage() {
       clearInterval(configRefresh)
       document.removeEventListener('visibilitychange', onVisible)
       window.removeEventListener('focus', onVisible)
+      window.removeEventListener('online', flush)
     }
   }, [])
 
@@ -62,7 +92,28 @@ export default function KitchenPage() {
     const { data } = await supabase.from('orders')
       .select('*').is('ready_at', null).eq('done', false).eq('cancelled', false).neq('status', 'rejected')
       .order('created_at', { ascending: true })
-    if (data) setOrders(data)
+
+    // Sales taken while the line was down have not reached the server, so the
+    // kitchen would never see them — the till keeps taking orders and the
+    // board stays empty. They are sitting in this device's outbox, so read
+    // them straight from there and put them on the board.
+    //
+    // That only works where the kitchen screen and the till are the same
+    // machine, which is what the Windows build gives the shop: one program,
+    // one store, both screens on the menu. On a separate kitchen device with
+    // no network there is nothing to carry them across, and nothing can be.
+    let queued = []
+    try {
+      queued = (await pendingOrders()).map(o => ({
+        ...o,
+        id: 'offline:' + o.client_id,
+        offline: true,
+        ready_at: null, done: false, cancelled: false,
+      }))
+    } catch (_) { }
+
+    if (data) setOrders([...data, ...queued])
+    else if (queued.length) setOrders(queued)
   }
 
   // Menu names and photos were fetched once, at mount, and never again. When
@@ -70,16 +121,48 @@ export default function KitchenPage() {
   // board ran all day with no photos: orders kept arriving, because those are
   // polled, so nothing looked broken enough for anyone to reload it.
   const configOkRef = useRef(false)
-  async function loadConfig() {
-    const { data, error } = await supabase.from('shop_config').select('*')
-    if (error || !data) return
-    const cfg = {}
-    data.forEach(r => { cfg[r.key] = r.value })
+  // The board is no use without the menu names and the photos, and with the
+  // line down neither would arrive — so keep the last good copy on disk, and
+  // fall back to the snapshot the Windows installer carries. A kitchen that
+  // opens to a blank board during an outage may as well not open.
+  function applyConfig(cfg) {
     if (cfg.shop_info) try { setShopInfo(JSON.parse(cfg.shop_info)) } catch { }
     let menuCount = 0
     if (cfg.menus) try { const m = JSON.parse(cfg.menus); setMenus(m); menuCount = m.length } catch { }
     if (cfg.menu_images) try { setImages(JSON.parse(cfg.menu_images)) } catch { }
     configOkRef.current = menuCount > 0
+    return menuCount > 0
+  }
+
+  function loadCachedConfig() {
+    try {
+      const raw = localStorage.getItem('bcb_kitchen_config')
+      return raw ? applyConfig(JSON.parse(raw)) : false
+    } catch { return false }
+  }
+
+  async function loadSeedConfig() {
+    try {
+      const res = await fetch('/offline-seed.json', { cache: 'no-store' })
+      if (!res.ok) return false
+      const seed = await res.json()
+      if (!Array.isArray(seed.rows)) return false
+      const cfg = {}
+      seed.rows.forEach(r => { cfg[r.key] = r.value })
+      return applyConfig(cfg)
+    } catch { return false }
+  }
+
+  async function loadConfig() {
+    const { data, error } = await supabase.from('shop_config').select('*')
+    if (error || !data) {
+      if (!configOkRef.current && !loadCachedConfig()) await loadSeedConfig()
+      return
+    }
+    const cfg = {}
+    data.forEach(r => { cfg[r.key] = r.value })
+    try { localStorage.setItem('bcb_kitchen_config', JSON.stringify(cfg)) } catch { }
+    applyConfig(cfg)
   }
 
   // Take the card off the board first, then tell the server. Waiting for the
@@ -91,8 +174,15 @@ export default function KitchenPage() {
   // the till's board before the counter had recorded handing anything over.
   async function markDone(o) {
     setOrders(prev => prev.filter(x => x.id !== o.id))
+    const readyAt = new Date().toISOString()
+    // With no line the ✓ has to be remembered rather than sent, or the card
+    // comes straight back on the next poll and the cook presses it again.
+    if (!navigator.onLine || String(o.id).startsWith('offline:')) {
+      await queueOp('update', { id: o.id, client_id: o.client_id, patch: { ready_at: readyAt } })
+      return
+    }
     const { error } = await supabase.from('orders')
-      .update({ ready_at: new Date().toISOString() }).eq('id', o.id)
+      .update({ ready_at: readyAt }).eq('id', o.id)
     if (error) { await loadOrders(); alert('ບັນທຶກບໍ່ສຳເລັດ: ' + error.message); return }
     // Publish the number for the /queue board customers look at. Only the
     // staff page did this, so with the kitchen screen doing the finishing the
@@ -110,6 +200,13 @@ export default function KitchenPage() {
     const ids = list.map(o => o.id)
     setOrders(prev => prev.filter(x => !ids.includes(x.id)))
     const doneAt = new Date().toISOString()
+    if (!navigator.onLine || ids.some(i => String(i).startsWith('offline:'))) {
+      for (const o of list) {
+        await queueOp('update', { id: o.id, client_id: o.client_id, patch: { ready_at: doneAt } })
+      }
+      setBulkBusy(false); setBulkOpen(false); setBulkSel(new Set())
+      return
+    }
     const { error } = await supabase.from('orders')
       .update({ ready_at: doneAt }).in('id', ids)
     if (error) { await loadOrders(); alert('ບັນທຶກບໍ່ສຳເລັດ: ' + error.message) }
@@ -125,6 +222,11 @@ export default function KitchenPage() {
 
   async function markCancel(o) {
     setOrders(prev => prev.filter(x => x.id !== o.id))
+    if (!navigator.onLine || String(o.id).startsWith('offline:')) {
+      // The stock goes back through the till's sync, which owns the reserve.
+      await queueOp('update', { id: o.id, client_id: o.client_id, patch: { cancelled: true } })
+      return
+    }
     const { error } = await supabase.from('orders').update({ cancelled: true }).eq('id', o.id)
     if (error) { await loadOrders(); alert('ບັນທຶກບໍ່ສຳເລັດ: ' + error.message); return }
     // Cancelling here used to stop at the order row, so the buns came off the
