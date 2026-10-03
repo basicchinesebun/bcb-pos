@@ -6,15 +6,26 @@ import { usePathname } from 'next/navigation'
 const PWA_CONFIG = {
   '/order':    { manifest: '/manifest-order.json',    sw: '/sw-order.js',    icon: '/icon-order-192.png' },
   '/preorder': { manifest: '/manifest-preorder.json', sw: '/sw-preorder.js', icon: '/icon-preorder-192.png' },
-  // No service worker here on purpose. sw-staff.js is a self-destruct: on
-  // activate it clears the caches, unregisters itself and then navigates every
-  // open client — a reload. But this helper re-registers it on every page load,
-  // so it installed, activated, reloaded the page, and installed again. The
-  // till never got far enough to finish fetching shop_config, which is why it
-  // sat on "connection slow" with no error to show: the request was cancelled
-  // by the next reload rather than failing. Keep the manifest so the page still
-  // installs to the home screen, and drop the worker.
-  '/staff':    { manifest: '/manifest-staff.json',    sw: null,              icon: '/icon-staff-192.png' },
+  // sw-staff.js is NOT this worker. That one was a self-destruct: on activate
+  // it cleared the caches, unregistered itself and navigated every open client
+  // — a reload — while this helper re-registered it on every page load. It
+  // installed, reloaded, installed again, and each reload cancelled the till's
+  // shop_config request, so the screen reported a slow connection it never had.
+  // The file at that name is now a no-op that only unregisters itself.
+  //
+  // sw-staff-offline.js is a new file under a new name, so a device carrying
+  // the old one drops it and picks this up. It never navigates a client, and
+  // it only ever caches this origin's own GET responses. Without a worker the
+  // till cannot open at all once the line is down, which is the whole point.
+  //
+  // Its scope is '/' and not '/staff', because the page's own code lives at
+  // /_next/static/ — outside /staff — and a worker cannot see a request outside
+  // its scope. Scoped to /staff it would cache the shell and none of the
+  // JavaScript that shell loads, which offline is the same as caching nothing.
+  // The worker itself only answers navigations under /staff; the customer pages
+  // keep their own workers (a narrower scope wins) or go straight to the
+  // network as before.
+  '/staff':    { manifest: '/manifest-staff.json',    sw: '/sw-staff-offline.js', scope: '/', icon: '/icon-staff-192.png' },
   '/kitchen':  { manifest: '/manifest-kitchen.json',  sw: '/sw-kitchen.js',  icon: '/icon-kitchen-192.png' },
   // The customer board is installed on the till's second screen and left
   // running all day, so it asks for fullscreen rather than standalone — there
@@ -60,7 +71,7 @@ export default function PwaHelper() {
 
     if (typeof window === 'undefined' || !('serviceWorker' in navigator)) return
     if (config.sw) {
-      navigator.serviceWorker.register(config.sw, { scope: base }).catch(() => { })
+      navigator.serviceWorker.register(config.sw, { scope: config.scope || base }).catch(() => { })
       return
     }
     // Clear out any worker a previous visit left registered for this page.
