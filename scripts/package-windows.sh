@@ -16,6 +16,21 @@ OUT="desktop-build/dist"
 echo "==> exporting the site"
 ./scripts/build-desktop.sh > /dev/null
 
+# Stamp the installer with the build it carries, so a fresh install knows what
+# it is running. Without it the till reads its own build as unknown, decides
+# the published one is newer, and downloads 2.7 MB it already has on its very
+# first launch.
+if [ -f public/desktop/manifest.json ]; then
+  node -e "
+const fs=require('fs');
+const b=JSON.parse(fs.readFileSync('public/desktop/manifest.json','utf8')).build;
+const p='out-desktop/offline-seed.json';
+const s=JSON.parse(fs.readFileSync(p,'utf8'));
+s.build=b; fs.writeFileSync(p, JSON.stringify(s));
+console.log('==> installer carries build', b);
+"
+fi
+
 echo "==> staging"
 rm -rf "$STAGE" "$OUT"
 mkdir -p "$STAGE"
