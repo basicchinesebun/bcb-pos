@@ -47,6 +47,30 @@ else
   exit 1
 fi
 
+# Bake the shop's settings and a reserved block of queue numbers into the
+# bundle. Without this the installed till opens perfectly and then cannot be
+# unlocked, because the staff PIN only exists in Supabase.
+#
+# The practice shop is the default on purpose. Seeding reserves real queue
+# numbers on whichever database it is pointed at, and a .exe built by accident
+# must not burn five hundred of the real shop's. Building one for the real
+# shop is deliberate: SEED_ENV=live ./scripts/build-desktop.sh
+SEED_ENV="${SEED_ENV:-test}"
+if [ "$SEED_ENV" = "live" ]; then
+  SEED_FILE=".env.local"
+else
+  SEED_FILE=".env.test-shop"
+fi
+if [ ! -f "$SEED_FILE" ]; then
+  echo "ERROR: $SEED_FILE not found — cannot read the database to seed from" >&2
+  exit 1
+fi
+echo "==> seeding from $SEED_FILE ($SEED_ENV)"
+set -a
+. "./$SEED_FILE"
+set +a
+node scripts/make-seed.mjs out-desktop/offline-seed.json
+
 echo
 echo "exported to out-desktop/"
 ls out-desktop | head -20

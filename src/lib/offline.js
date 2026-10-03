@@ -111,6 +111,17 @@ export async function leaseQnums(supabase, count = 120) {
   return lease
 }
 
+// Take on the block the Windows installer was built with. Used once, on a till
+// that has never had a connection and so has never been able to ask for one.
+export async function adoptQnumLease(lease) {
+  if (!lease || typeof lease.from !== 'number') return null
+  const existing = await getQnumLease()
+  if (existing) return existing
+  const adopted = { from: lease.from, to: lease.to, next: lease.next ?? lease.from }
+  await metaPut('qnum_lease', adopted)
+  return adopted
+}
+
 // Take the next number from the block. Returns null when the block is spent —
 // the caller must then refuse the sale rather than invent a number, because an
 // invented one would collide with a real order.
@@ -147,6 +158,35 @@ export async function leaseStock(supabase, target, key = 'stock_shop') {
   await metaPut('stock_held', held)
   await metaPut('stock_sold_offline', (await metaGet('stock_sold_offline')) || {})
   return { held, stock: data.stock }
+}
+
+// A till installed from a USB stick at a shop with no internet cannot ask for
+// a stock lease, so it starts from the shelf counts baked into the installer
+// and treats them as its own. The flag matters: this stock was never taken off
+// the server's shelf, so when the line finally arrives the sales have to be
+// deducted normally rather than a lease being handed back — otherwise the shop
+// would be credited with buns it has already sold.
+export async function adoptSeedStock(stockArray) {
+  if (!Array.isArray(stockArray)) return null
+  if (await metaGet('stock_seeded')) return await getHeldStock()
+  const existing = await getHeldStock()
+  if (Object.values(existing).some(v => v > 0)) return existing
+  const held = {}
+  stockArray.forEach((qty, i) => { held[i] = Number(qty) || 0 })
+  await metaPut('stock_held', held)
+  await metaPut('stock_sold_offline', {})
+  await metaPut('stock_seeded', true)
+  return held
+}
+
+export function isStockSeeded() {
+  return metaGet('stock_seeded').then(v => !!v)
+}
+
+export async function clearStockSeeded() {
+  await metaPut('stock_seeded', false)
+  await metaPut('stock_held', {})
+  await metaPut('stock_sold_offline', {})
 }
 
 // Sell out of what the device is holding. All-or-nothing, exactly like

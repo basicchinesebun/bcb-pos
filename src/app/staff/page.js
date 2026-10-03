@@ -4,7 +4,8 @@ import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { supabase } from '../../lib/supabase'
 import {
   deviceId, uuid, leaseQnums, nextLeasedQnum, getQnumLease,
-  leaseStock, takeHeldStock, getHeldStock, getOfflineSold, settleStockLease,
+  leaseStock, takeHeldStock, getHeldStock, getOfflineSold, settleStockLease, adoptQnumLease,
+  adoptSeedStock, isStockSeeded, clearStockSeeded,
   queueOrder, flushOutbox, pendingCount,
 } from '../../lib/offline'
 
@@ -187,6 +188,9 @@ export default function StaffPage() {
   const [heldStock, setHeldStock] = useState({})
   const [qnumLease, setQnumLease] = useState(null)
   const [outboxCount, setOutboxCount] = useState(0)
+  // Running on settings baked into the installer, not on anything the shop
+  // has confirmed since. Worth saying so until the first sync lands.
+  const [seededFromBundle, setSeededFromBundle] = useState(false)
   const [syncing, setSyncing] = useState(false)
   const [liveStatus, setLiveStatus] = useState('connecting') // 'live' | 'connecting' | 'error'
   const [loading, setLoading] = useState(true)
@@ -1163,7 +1167,9 @@ export default function StaffPage() {
     // healthy. Fetch it first, on its own.
     // Straight in from the last known config if there is one, so the till is
     // usable while the network is still thinking about it.
-    loadCachedConfig()
+    // Cache first, then the snapshot the Windows installer carries, then the
+    // network. On a browser there is no snapshot and nothing changes.
+    if (!loadCachedConfig()) await loadSeedConfig()
     await loadConfig()
     setLoading(false)
     // The board only needs what is still open plus the last few days. Fetch
@@ -1208,6 +1214,11 @@ export default function StaffPage() {
   // reserve back up to size ready for the next outage.
   async function syncOffline() {
     if (!supabase) return
+    // Everything below needs the server. Running it with no line was not merely
+    // wasted: it reached the branch that retires the installer's seeded stock
+    // and wiped the shelf a never-online till had just been given, leaving it
+    // unable to sell anything at all.
+    if (!navigator.onLine) return
     // The sync that runs at mount is usually still in flight when shop_config
     // arrives and the menus become known. Dropping that second call left the
     // till holding no stock at all: it had skipped the reserve the first time
@@ -1217,6 +1228,16 @@ export default function StaffPage() {
     syncingRef.current = true
     setSyncing(true)
     try {
+      // navigator.onLine only says a cable is plugged in. On the shop's till it
+      // reads true with the router up and the line to the world down, which is
+      // most of what an outage here looks like. Prove the server is actually
+      // reachable before touching anything that depends on it — the seeded
+      // stock in particular is retired on the strength of this, and retiring it
+      // for an answer that never came left a never-online till with an empty
+      // shelf and no way to sell.
+      const { error: reachErr } = await supabase.rpc('sweep_expired_leases')
+      if (reachErr) throw new Error('server unreachable: ' + reachErr.message)
+
       const res = await flushOutbox(supabase)
       if (res.pushed) {
         showToast(`☁️ ສົ່ງອໍເດີທີ່ຄ້າງ ${res.pushed} ໃບແລ້ວ`, 'green')
@@ -1229,15 +1250,25 @@ export default function StaffPage() {
       // actually sold out of it. Otherwise just top the reserve up, which takes
       // the difference and leaves what is already held alone.
       const sold = await getOfflineSold()
-      if (Object.values(sold).some(v => v > 0)) {
+      if (await isStockSeeded()) {
+        // This till started from the installer's shelf counts, which the server
+        // never set aside. So deduct what was actually sold, the same way any
+        // ordinary sale does, instead of handing a lease back — returning one
+        // would credit the shop with buns that are already in customers' bags.
+        if (Object.values(sold).some(v => v > 0)) {
+          const { error } = await supabase.rpc('deduct_stock', { p_key: 'stock_shop', p_deltas: sold })
+          if (error) { console.error('seeded stock settle failed:', error); return }
+          logActivity('seed_stock_settled', Object.entries(sold).map(([i, q]) => `${menusRef.current[i]?.lo || i}×${q}`).join(' '))
+        }
+        await clearStockSeeded()
+      } else if (Object.values(sold).some(v => v > 0)) {
         const settled = await settleStockLease(supabase, 'stock_shop')
         if (settled?.stock) setStockShop(settled.stock)
       }
-      // A till that is switched off, reinstalled or simply never comes back
-      // would otherwise hold its slice of the shelf for ever, and the shop
-      // would slowly read empty with full trays in front of it. Anything past
-      // its expiry goes back; this is cheap and keeps the shop self-healing.
-      await supabase.rpc('sweep_expired_leases')
+      // (The reachability probe above is also the sweep: a till that is
+      // switched off, reinstalled or simply never comes back would otherwise
+      // hold its slice of the shelf for ever, and the shop would slowly read
+      // empty with full trays in front of it.)
 
       // Only reserve once the menus are known. Before shop_config lands there
       // is no way to tell how many menus there are, and reserving against a
@@ -1330,6 +1361,45 @@ export default function StaffPage() {
     } catch { return false }
   }
 
+  // The Windows build carries a snapshot of the shop's settings, written into
+  // the bundle when the installer was made. It is only ever read on a till that
+  // has no cache and no line — a fresh install at a shop whose internet is
+  // down, which is exactly the case the desktop build exists for. Without it
+  // the till opens, serves its own pages, and then cannot be unlocked, because
+  // the staff PIN lives only in Supabase.
+  //
+  // It also carries a block of queue numbers reserved on the server at
+  // packaging time, so a till that has never been online still hands out
+  // numbers that are genuinely its own.
+  async function loadSeedConfig() {
+    try {
+      const res = await fetch('/offline-seed.json', { cache: 'no-store' })
+      if (!res.ok) return false
+      const seed = await res.json()
+      if (!seed || !Array.isArray(seed.rows) || !seed.rows.length) return false
+      loadConfig(seed.rows)
+      try { localStorage.setItem('bcb_staff_config', JSON.stringify(seed.rows)) } catch { }
+      // Adopt the identity the installer was built with, so the reserved block
+      // belongs to this device and the server can account for it later.
+      // Overwrite even an id this device gave itself a moment ago: the block
+      // below was reserved against the installer's id, and nothing has been
+      // sold yet, so there is nothing to orphan.
+      try {
+        if (seed.device_id && !(await getQnumLease())) {
+          localStorage.setItem('bcb_device_id', seed.device_id)
+        }
+      } catch { }
+      if (seed.qnum_lease) setQnumLease(await adoptQnumLease(seed.qnum_lease))
+      // And the shelf, so a till that has never been online can actually sell.
+      const seedStock = seed.rows.find(r => r.key === 'stock_shop')
+      if (seedStock) {
+        try { setHeldStock(await adoptSeedStock(JSON.parse(seedStock.value)) || {}) } catch { }
+      }
+      setSeededFromBundle(true)
+      return true
+    } catch { return false }
+  }
+
   async function loadConfig(cachedRows) {
     if (!supabase) return
     // Rows handed in come from the cache: apply them without asking the network.
@@ -1372,6 +1442,9 @@ export default function StaffPage() {
     }
     try { localStorage.setItem('bcb_staff_config', JSON.stringify(data || [])) } catch { }
     applyConfigRows(data)
+    // Real settings have landed, so the installer's snapshot is no longer what
+    // the screen is showing.
+    setSeededFromBundle(false)
   }
 
   function applyConfigRows(data) {
@@ -3569,6 +3642,11 @@ setStockShop(newSS); setStockOnline(newSO)
           </div>
         )
       })()}
+      {seededFromBundle && (
+        <div className="px-3 py-2 text-xs font-black" style={{ background: '#fef3c7', color: '#92400e' }}>
+          📦 ກຳລັງໃຊ້ຂໍ້ມູນທີ່ຕິດມາກັບໂປຣແກຣມ (ເມນູ ລາຄາ ສະຕັອກ) — ຈະອັບເດດເອງເມື່ອຕໍ່ເນັດໄດ້
+        </div>
+      )}
       {isOnline && outboxCount > 0 && (
         <div className="px-3 py-2 text-xs font-black" style={{ background: '#fef3c7', color: '#92400e' }}>
           ☁️ ກຳລັງສົ່ງອໍເດີທີ່ຂາຍຕອນອອບລາຍ {outboxCount} ໃບ{syncing ? '...' : ''}
