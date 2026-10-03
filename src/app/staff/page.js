@@ -140,6 +140,8 @@ export default function StaffPage() {
   const [prices, setPrices] = useState([])
   const [costs, setCosts] = useState([])
   const [stockShop, setStockShop] = useState([])
+  // syncOffline runs from a timer and cannot close over this.
+  const stockShopRef = useRef([])
   const [stockOnline, setStockOnline] = useState([])
   const [images, setImages] = useState({})
   const [imgPreviews, setImgPreviews] = useState({})
@@ -1176,10 +1178,20 @@ export default function StaffPage() {
   // with no line to the database. It comes off stock_shop, which only this
   // shop's own tills draw from — the online channel sells out of stock_online
   // and is untouched by it.
+  // The most of any one menu a single device will set aside, and the most of
+  // what is actually on the shelf it may take.
+  //
+  // A flat number was wrong. Every device that opens this page reserves — the
+  // till, a second station, the owner's phone — and at twenty each, three of
+  // them empty a shelf of forty while the trays are full. Taking a share of
+  // what is there instead means each new device gets a smaller slice and the
+  // shelf is never cleared, however many people have the page open.
   const OFFLINE_BUFFER = 20
+  const OFFLINE_SHARE = 0.4
   const syncingRef = useRef(false)
   const resyncRef = useRef(false)
   useEffect(() => { menusRef.current = menus }, [menus])
+  useEffect(() => { stockShopRef.current = stockShop }, [stockShop])
 
   // The first sync runs at mount, before shop_config has arrived, so it sees an
   // empty menu list and reserves stock for one menu instead of all of them.
@@ -1232,8 +1244,15 @@ export default function StaffPage() {
       // guess sets aside one product and leaves the rest unsellable offline.
       const count = menusRef.current?.length || 0
       if (count > 0) {
+        const shelf = stockShopRef.current || []
+        const held = await getHeldStock()
         const target = {}
-        for (let i = 0; i < count; i++) target[i] = OFFLINE_BUFFER
+        for (let i = 0; i < count; i++) {
+          // What this menu amounts to in total right now: what is on the shelf
+          // plus what this device is already holding of it.
+          const total = (Number(shelf[i]) || 0) + (Number(held[i]) || 0)
+          target[i] = Math.min(OFFLINE_BUFFER, Math.floor(total * OFFLINE_SHARE))
+        }
         const leased = await leaseStock(supabase, target, 'stock_shop')
         if (leased) {
           setHeldStock(leased.held || {})
