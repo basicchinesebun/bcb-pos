@@ -11,7 +11,7 @@
 // or are wiped between launches — and IndexedDB is where offline sales live.
 // A fixed loopback origin gives the storage somewhere stable to live.
 
-const { app, BrowserWindow, shell, Menu, dialog } = require('electron')
+const { app, BrowserWindow, shell, Menu, dialog, session } = require('electron')
 const http = require('http')
 const fs = require('fs')
 const path = require('path')
@@ -89,6 +89,64 @@ function startServer() {
   })
 }
 
+// The receipt printer, the cash drawer and the customer display all reach the
+// hardware through WebUSB, Web Serial and Web Bluetooth. In a browser the user
+// picks the device from a chooser the browser draws. Electron draws no chooser
+// at all: it raises an event and waits, and if nothing answers, requestDevice()
+// hangs or comes back empty — so in the packaged app the printer buttons would
+// simply do nothing, with no error to explain why.
+//
+// The till has one printer and one drawer, so answering with the first device
+// offered is the right behaviour, and the choice is remembered so a reconnect
+// does not change which one it is.
+const ORIGIN = `http://${HOST}:${PORT}`
+const remembered = { usb: null, serial: null, bluetooth: null }
+
+function isOurs(url) {
+  try { return new URL(url).origin === ORIGIN } catch (_) { return false }
+}
+
+function wireDeviceAccess(ses) {
+  // Everything here is the shop's own hardware, reached from the app's own
+  // pages served off loopback. Nothing else is allowed near it.
+  ses.setPermissionCheckHandler((wc, permission, origin) =>
+    ['usb', 'serial', 'hid', 'bluetooth'].includes(permission) && isOurs(origin || (wc && wc.getURL())))
+  ses.setPermissionRequestHandler((wc, permission, callback) =>
+    callback(['usb', 'serial', 'hid', 'bluetooth', 'clipboard-read', 'clipboard-sanitized-write'].includes(permission)
+      && isOurs(wc.getURL())))
+  ses.setDevicePermissionHandler(details => isOurs(details.origin))
+}
+
+function wireDeviceChoosers(wc) {
+  wc.session.on('select-usb-device', (event, details, callback) => {
+    event.preventDefault()
+    const keep = details.deviceList.find(d => d.deviceId === remembered.usb)
+    const pick = keep || details.deviceList[0]
+    remembered.usb = pick ? pick.deviceId : null
+    callback(pick ? pick.deviceId : undefined)
+  })
+  wc.session.on('select-serial-port', (event, portList, webContents, callback) => {
+    event.preventDefault()
+    const keep = portList.find(p => p.portId === remembered.serial)
+    const pick = keep || portList[0]
+    remembered.serial = pick ? pick.portId : null
+    callback(pick ? pick.portId : '')
+  })
+  // Bluetooth scanning calls back repeatedly as devices appear. Answer with
+  // the first one that has a name — an unnamed beacon is not the printer —
+  // and leave it alone afterwards.
+  wc.on('select-bluetooth-device', (event, deviceList, callback) => {
+    event.preventDefault()
+    const keep = deviceList.find(d => d.deviceId === remembered.bluetooth)
+    const pick = keep || deviceList.find(d => d.deviceName) || deviceList[0]
+    if (pick) { remembered.bluetooth = pick.deviceId; callback(pick.deviceId) }
+    // No callback when there is nothing yet: the scan carries on and this
+    // fires again. Calling back with '' here would cancel it outright.
+  })
+  // A device unplugged mid-service must not keep being offered.
+  wc.session.on('usb-device-revoked', (e, d) => { if (d && d.device && d.device.deviceId === remembered.usb) remembered.usb = null })
+}
+
 let win = null
 
 function createWindow() {
@@ -107,6 +165,7 @@ function createWindow() {
     },
   })
 
+  wireDeviceChoosers(win.webContents)
   win.once('ready-to-show', () => win.show())
   win.loadURL(`http://${HOST}:${PORT}${START}`)
 
@@ -164,6 +223,7 @@ if (!app.requestSingleInstanceLock()) {
       app.quit()
       return
     }
+    wireDeviceAccess(session.defaultSession)
     buildMenu()
     createWindow()
     app.on('activate', () => {

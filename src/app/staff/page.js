@@ -6,7 +6,7 @@ import {
   deviceId, uuid, leaseQnums, nextLeasedQnum, getQnumLease,
   leaseStock, takeHeldStock, getHeldStock, getOfflineSold, settleStockLease, adoptQnumLease,
   adoptSeedStock, isStockSeeded, clearStockSeeded,
-  queueOrder, flushOutbox, pendingCount,
+  queueOrder, flushOutbox, pendingCount, queueOp, pendingOpCount, flushOps,
 } from '../../lib/offline'
 
 // Staff type a customer's name the way they heard it, not the way the customer
@@ -843,7 +843,7 @@ export default function StaffPage() {
       ...(qoName.trim() ? { customer: JSON.stringify({ name: qoName.trim() }) } : {}),
     }
     await queueOrder(row)
-    setOutboxCount(await pendingCount())
+    setOutboxCount(await pendingCount() + await pendingOpCount())
     setHeldStock(taken.held)
 
     // Show it on this till straight away. It is a real sale — the money is in
@@ -945,7 +945,14 @@ export default function StaffPage() {
   async function markPaid(o, method) {
     const patch = { paid: true, payment_method: method, paid_amount: o.total || 0, status: 'confirmed' }
     setOrders(prev => prev.map(ord => ord.id === o.id ? { ...ord, ...patch } : ord))
-    await supabase.from('orders').update(patch).eq('id', o.id)
+    // Money changing hands does not wait for the internet. Record it and let
+    // the sync carry it up; the drawer, the receipt and the kitchen slip all
+    // happen either way.
+    if (!navigator.onLine) {
+      setOutboxCount(await queueOp('update', { id: o.id, client_id: o.client_id, patch }))
+    } else {
+      await supabase.from('orders').update(patch).eq('id', o.id)
+    }
     setPayingId(null)
     showToast(`💰 #${String(o.qnum).padStart(4,'0')} ຮັບເງິນ + ສົ່ງຄົວແລ້ວ`, 'green')
     logActivity('mark_paid', `#${String(o.qnum).padStart(4, '0')} · ${method}`)
@@ -1244,7 +1251,43 @@ export default function StaffPage() {
         logActivity('offline_sync', `${res.pushed} ໃບ`)
         await loadOrders('recent')
       }
-      setOutboxCount(await pendingCount())
+      // Replay what was done to existing orders while the line was down, in
+      // the order it was done. An order created offline is referenced by the
+      // id this screen gave it, so resolve that to the real row first — the
+      // outbox push above has just created it.
+      const ops = await flushOps(supabase, async (kind, p) => {
+        let id = p.id
+        if (typeof id === 'string' && id.startsWith('offline:')) {
+          if (!p.client_id) return true          // nothing to point at; drop it
+          const { data: row } = await supabase.from('orders')
+            .select('id').eq('client_id', p.client_id).maybeSingle()
+          if (!row) return false                  // the sale has not landed yet
+          id = row.id
+        }
+        if (kind === 'pickup') {
+          const { data, error } = await supabase.rpc('pickup_order', {
+            p_id: id, p_by: p.by || null, p_force: !!p.force,
+          })
+          if (error) return false
+          // A refusal is an answer, not a failure to deliver: the order was
+          // already collected, or is cancelled. Replaying it for ever would
+          // block everything queued behind it.
+          if (data && data.ok === false && data.reason === 'already') {
+            showToast(`⚠️ #${String(data.qnum ?? '').padStart(4,'0')} ຖືກມອບໄປແລ້ວກ່ອນໜ້ານີ້`, 'orange')
+          }
+          return true
+        }
+        if (kind === 'update') {
+          const { error } = await supabase.from('orders').update(p.patch).eq('id', id)
+          return !error
+        }
+        return true   // unknown kind: do not wedge the queue on it
+      })
+      if (ops.done) {
+        showToast(`☁️ ສົ່ງລາຍການທີ່ຄ້າງ ${ops.done} ລາຍການ`, 'green')
+        await loadOrders('recent')
+      }
+      setOutboxCount(await pendingCount() + await pendingOpCount())
 
       // Settling hands the whole reserve back, so only do it when something was
       // actually sold out of it. Otherwise just top the reserve up, which takes
@@ -1662,6 +1705,28 @@ export default function StaffPage() {
   // force=true is only ever passed by the staff tapping through the red warning
   // below, and the override is counted and logged.
   async function doneOrder(o, force = false) {
+    // Handing the bag over is the one thing that absolutely cannot wait for a
+    // connection: the customer is standing at the counter. Offline the till
+    // checks what it knows — it can still see on the card whether this order
+    // has already been collected — records the handover, and sends it up with
+    // everything else. The database still has the final say when it arrives,
+    // and will report a duplicate then rather than never.
+    if (!navigator.onLine) {
+      if (o.picked_up_at && !force) {
+        setPickupWarn({ order: o, at: o.picked_up_at, by: o.picked_up_by, count: o.picked_up_count || 1 })
+        return
+      }
+      const at = new Date().toISOString()
+      const count = (o.picked_up_count || 0) + 1
+      setOrders(prev => prev.map(ord => ord.id === o.id
+        ? { ...ord, done: true, done_at: ord.done_at || at, picked_up_at: ord.picked_up_at || at, picked_up_by: activeStaffName || ord.picked_up_by, picked_up_count: count }
+        : ord))
+      setOutboxCount(await queueOp('pickup', { id: o.id, client_id: o.client_id, by: activeStaffName || null, force }))
+      if (displayOrderId === o.id) { clearDisplay(); setDisplayOrderId(null) }
+      announce(o.qnum)
+      showToast(`📴 ຄິວ ${String(o.qnum).padStart(4,'0')} ຮັບເຄື່ອງແລ້ວ (ຈະສົ່ງເມື່ອມີເນັດ)`, 'orange')
+      return
+    }
     const { data, error } = await supabase.rpc('pickup_order', {
       p_id: o.id,
       p_by: activeStaffName || null,
@@ -1705,7 +1770,11 @@ export default function StaffPage() {
     // staff mark it done (and the queue gets announced) once it's actually
     // ready, exactly like every other order type already works.
     setOrders(prev => prev.map(ord => ord.id === o.id ? { ...ord, status: 'confirmed' } : ord))
-    await supabase.from('orders').update({ status: 'confirmed' }).eq('id', o.id)
+    if (!navigator.onLine) {
+      setOutboxCount(await queueOp('update', { id: o.id, client_id: o.client_id, patch: { status: 'confirmed' } }))
+    } else {
+      await supabase.from('orders').update({ status: 'confirmed' }).eq('id', o.id)
+    }
     showToast(`🍳 ສົ່ງຄົວ #${String(o.qnum).padStart(4,'0')}`, 'green')
     logActivity('confirm_order', `#${String(o.qnum).padStart(4, '0')}`)
     if (shouldAutoprint(o)) setTimeout(() => smartPrint(o), 300)
@@ -1778,7 +1847,11 @@ export default function StaffPage() {
 
   async function confirmWalkin(o) {
     setOrders(prev => prev.map(ord => ord.id === o.id ? { ...ord, status: 'confirmed' } : ord))
-    await supabase.from('orders').update({ status: 'confirmed' }).eq('id', o.id)
+    if (!navigator.onLine) {
+      setOutboxCount(await queueOp('update', { id: o.id, client_id: o.client_id, patch: { status: 'confirmed' } }))
+    } else {
+      await supabase.from('orders').update({ status: 'confirmed' }).eq('id', o.id)
+    }
     showToast(`🍳 ສົ່ງຄົວ #${String(o.qnum).padStart(4,'0')}`, 'green')
     if (shouldAutoprint(o)) setTimeout(() => smartPrint(o), 300)
   }

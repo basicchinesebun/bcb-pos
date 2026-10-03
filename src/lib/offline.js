@@ -15,9 +15,10 @@
 // while offline, and to hand back the part of the reserve that went unsold.
 
 const DB_NAME = 'bcb-offline'
-const DB_VERSION = 1
+const DB_VERSION = 2
 const OUTBOX = 'outbox'   // orders written offline, waiting to be pushed
 const META = 'meta'       // device id, queue-number block, stock held
+const OPS = 'ops'         // things done to existing orders while offline
 
 let dbPromise = null
 
@@ -30,6 +31,9 @@ function openDb() {
       const db = req.result
       if (!db.objectStoreNames.contains(OUTBOX)) db.createObjectStore(OUTBOX, { keyPath: 'client_id' })
       if (!db.objectStoreNames.contains(META)) db.createObjectStore(META)
+      // Keyed by an auto-incrementing number because replay order matters:
+      // confirming an order and then handing it over are not interchangeable.
+      if (!db.objectStoreNames.contains(OPS)) db.createObjectStore(OPS, { keyPath: 'seq', autoIncrement: true })
     }
     req.onsuccess = () => resolve(req.result)
     req.onerror = () => reject(req.error)
@@ -242,6 +246,44 @@ export async function pendingCount() {
 // Push everything that was written offline. client_id carries a unique index,
 // so a push that runs twice — a flaky line is exactly when that happens —
 // lands on the same row instead of creating a second order.
+// ─── Things done to orders while offline ───
+//
+// A new sale is not the only thing that happens during a day-long outage:
+// orders still get sent to the kitchen, paid for and handed over. Those all
+// wrote straight to the server, so offline they simply failed. They are
+// recorded here instead and replayed in the order they were made — confirming
+// an order and then handing it over are not interchangeable.
+
+export async function queueOp(kind, payload) {
+  await tx(OPS, 'readwrite', s => s.put({ kind, payload, at: new Date().toISOString() }))
+  return pendingOpCount()
+}
+
+export function pendingOps() {
+  return tx(OPS, 'readonly', s => s.getAll()).then(r => r || [])
+}
+
+export async function pendingOpCount() {
+  return (await pendingOps()).length
+}
+
+// `apply` is given (kind, payload) and returns true when the server accepted
+// it. Anything it refuses outright is dropped rather than retried for ever —
+// an order cancelled on another till is not going to start accepting a
+// handover on the next attempt.
+export async function flushOps(supabase, apply) {
+  const all = (await pendingOps()).sort((a, b) => a.seq - b.seq)
+  let done = 0, failed = 0
+  for (const op of all) {
+    let ok = false
+    try { ok = await apply(op.kind, op.payload) } catch (_) { ok = false }
+    if (!ok) { failed++; break }   // keep order: stop at the first one that will not go
+    await tx(OPS, 'readwrite', s => s.delete(op.seq))
+    done++
+  }
+  return { done, failed }
+}
+
 export async function flushOutbox(supabase) {
   const all = await pendingOrders()
   if (!all.length) return { pushed: 0, failed: 0 }
