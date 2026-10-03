@@ -58,3 +58,13 @@ Global CSS variables and utility classes (`.btn-primary`, `.btn-outline`, `.card
 - Web Speech Synthesis for queue number announcements
 - JSON export/import for full data backups
 - Daily/custom-range sales reports with per-menu breakdown
+
+## Talking to the owner
+
+Keep replies short. The owner reads these on a phone, often mid-service, and
+has asked more than once for less text — long answers are tiring to read and
+the point gets lost in them.
+
+- Lead with the answer. Detail only if asked.
+- A few lines beats a table; a table beats paragraphs.
+- Say what they should do next, not everything that was done.
