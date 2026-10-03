@@ -1178,6 +1178,7 @@ export default function StaffPage() {
   // and is untouched by it.
   const OFFLINE_BUFFER = 20
   const syncingRef = useRef(false)
+  const resyncRef = useRef(false)
   useEffect(() => { menusRef.current = menus }, [menus])
 
   // The first sync runs at mount, before shop_config has arrived, so it sees an
@@ -1194,7 +1195,13 @@ export default function StaffPage() {
   // sold offline, tell the database what came out of the reserve, and take the
   // reserve back up to size ready for the next outage.
   async function syncOffline() {
-    if (!supabase || syncingRef.current) return
+    if (!supabase) return
+    // The sync that runs at mount is usually still in flight when shop_config
+    // arrives and the menus become known. Dropping that second call left the
+    // till holding no stock at all: it had skipped the reserve the first time
+    // for want of a menu list, and never got asked again. Remember the request
+    // and honour it when the one in progress finishes.
+    if (syncingRef.current) { resyncRef.current = true; return }
     syncingRef.current = true
     setSyncing(true)
     try {
@@ -1239,6 +1246,7 @@ export default function StaffPage() {
     } finally {
       syncingRef.current = false
       setSyncing(false)
+      if (resyncRef.current) { resyncRef.current = false; setTimeout(syncOffline, 0) }
     }
   }
 
