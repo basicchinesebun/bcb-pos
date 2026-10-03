@@ -37,13 +37,19 @@ function openDb() {
   return dbPromise
 }
 
+// Resolves with the request's own result. The first version decided whether it
+// had a result by testing `result !== undefined`, and so returned the raw
+// IDBRequest whenever a key was simply missing — which is every key on a till's
+// first run. getHeldStock() then handed back a request object instead of {},
+// every lookup on it read 0, and an offline sale reported the shelf empty with
+// twenty buns reserved. Ask the request whether it is a request instead.
 function tx(store, mode, fn) {
   return openDb().then(db => new Promise((resolve, reject) => {
     const t = db.transaction(store, mode)
-    const s = t.objectStore(store)
     let out
-    try { out = fn(s) } catch (e) { reject(e); return }
-    t.oncomplete = () => resolve(out && out.result !== undefined ? out.result : out)
+    try { out = fn(t.objectStore(store)) } catch (e) { reject(e); return }
+    const isRequest = out && typeof IDBRequest !== 'undefined' && out instanceof IDBRequest
+    t.oncomplete = () => resolve(isRequest ? out.result : out)
     t.onerror = () => reject(t.error)
     t.onabort = () => reject(t.error)
   }))
@@ -90,7 +96,12 @@ export async function leaseQnums(supabase, count = 120) {
   const { data, error } = await supabase.rpc('lease_qnums', {
     p_device: deviceId(), p_count: count, p_key: 'next_queue_walkin', p_hours: 36,
   })
-  if (error || !data?.ok) return existing
+  if (error || !data?.ok) {
+    // Worth saying out loud: with no block in hand the till cannot sell at all
+    // once the line drops, and that is not something to discover during a storm.
+    console.error('leaseQnums failed:', error || data)
+    return existing
+  }
   // A block that still has numbers left is kept and the new one queued behind
   // it, so numbers are handed out in order and none are skipped.
   const lease = (existing && left > 0 && existing.to + 1 === data.from)
