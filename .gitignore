@@ -6,3 +6,11 @@ out/
 
 # Practice-shop env files, pasted into Vercel by hand. Never committed.
 .env.test-shop
+
+# Windows desktop build. out-desktop is the exported site, desktop-build/dist
+# holds Electron itself — 372 MB of binaries that are rebuilt by
+# scripts/package-windows.sh and must never be committed.
+.next-desktop/
+out-desktop/
+desktop-build/
+.api-parked/
