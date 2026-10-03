@@ -1343,7 +1343,12 @@ export default function StaffPage() {
       // An explicit fetch error (e.g. Supabase quota/plan restriction) means we
       // genuinely don't know staff_pin — same failure mode as a timeout, so
       // don't let it silently look like "no PIN configured".
-      setConfigStalled(true)
+      //
+      // Unless the cache already answered the question. Stalling on top of a
+      // config we are holding put the whole shop behind "connection slow" for
+      // an outage it was built to trade through — the numbers and the stock
+      // were reserved and ready, and nobody could get past the PIN screen.
+      if (!configLoadedRef.current) setConfigStalled(true)
       return
     }
     try { localStorage.setItem('bcb_staff_config', JSON.stringify(data || [])) } catch { }
