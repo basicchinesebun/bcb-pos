@@ -15,7 +15,7 @@ import {
 // "ນາງ ດາ" and "ທດລອງ" missed "ທົດລອງ", which is what "ເສີຊຫາບໍ່ຄ່ອຍເຫັນ" was.
 // Both the query and the order text go through this, so the comparison is made
 // on what the two have in common.
-const LAO_THAI_MARKS = /[ัิ-ฺ็-๎ັິ-ຼ່-ໍ]/g
+const LAO_THAI_MARKS = new RegExp('[\\u0E31\\u0E34-\\u0E3A\\u0E47-\\u0E4E\\u0EB1\\u0EB4-\\u0EBC\\u0EC8-\\u0ECD]', 'g')
 // Spaces go too, so "ນາງດາ" finds "ນາງ ດາ".
 function searchNorm(s) {
   return String(s || '')
@@ -80,6 +80,16 @@ function parseBagLabelToPacks(label, menus) {
     if (Object.keys(pack).length) packs.push(pack)
   }
   return packs.length ? packs : [{}]
+}
+
+// The shop's day, not UTC's. Vientiane is seven hours ahead, so a sale taken
+// at half past midnight is "yesterday" to toISOString() — and the sales report
+// bucketed by UTC while the open-orders summary printed next to it bucketed by
+// local time, so the two disagreed about which day a late sale belonged to.
+function localDayStr(d) {
+  const x = d instanceof Date ? d : new Date(d)
+  if (isNaN(x.getTime())) return ''
+  return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`
 }
 
 function orderStamp(iso) {
@@ -180,8 +190,8 @@ export default function StaffPage() {
 
   const [archiveOpen, setArchiveOpen] = useState(false)
   const [expandedArchive, setExpandedArchive] = useState(new Set())
-  const [salesDateFrom, setSalesDateFrom] = useState(new Date().toISOString().split('T')[0])
-  const [salesDateTo, setSalesDateTo] = useState(new Date().toISOString().split('T')[0])
+  const [salesDateFrom, setSalesDateFrom] = useState(localDayStr(new Date()))
+  const [salesDateTo, setSalesDateTo] = useState(localDayStr(new Date()))
   const [isOnline, setIsOnline] = useState(true)
   // How much of the shelf and how many queue numbers this till is holding
   // against the line going down, and how many sales are waiting to be pushed.
@@ -1525,7 +1535,7 @@ export default function StaffPage() {
     if (cfg.blocked_ips) try { setBlockedIps(JSON.parse(cfg.blocked_ips)) } catch (_) {}
     if (cfg.blocked_fp) try { setBlockedFp(JSON.parse(cfg.blocked_fp)) } catch (_) {}
 
-    // ถ້າຍັງບໍ່ມີຂໍ້ມູນໃນ Supabase ໃຫ້ save default ຂຶ້ນໄປກ່ອນ
+    // ຖ້າຍັງບໍ່ມີຂໍ້ມູນໃນ Supabase ໃຫ້ save default ຂຶ້ນໄປກ່ອນ
     if (!cfg.menus) {
       supabase.from('shop_config').upsert([
         { key: 'menus', value: JSON.stringify(DEFAULT_MENUS) },
@@ -1673,10 +1683,10 @@ export default function StaffPage() {
   const done = orders.filter(o => o.done).length
   const pendingOnline = orders.filter(o => o.type === 'online' && o.status === 'pending' && !o.cancelled).length
 
-  const todayStr = new Date().toISOString().split('T')[0]
+  const todayStr = localDayStr(new Date())
   const todayMenuCount = {}
   orders.filter(o => !o.cancelled && o.status !== 'rejected' && o.status !== 'blocked').forEach(o => {
-    const oDate = new Date(o.created_at).toISOString().split('T')[0]
+    const oDate = localDayStr(o.created_at)
     if (oDate !== todayStr) return
     const items = typeof o.items === 'string' ? JSON.parse(o.items) : o.items || []
     items.forEach(it => { todayMenuCount[it.menuIdx] = (todayMenuCount[it.menuIdx] || 0) + it.qty })
@@ -3503,7 +3513,12 @@ setStockShop(newSS); setStockOnline(newSO)
   // ─── Sales ───
   const salesOrders = orders.filter(o => {
     if (!o.done) return false
-    const d = new Date(o.done_at || o.created_at).toISOString().split('T')[0]
+    // A cancelled, rejected or blocked order is not a sale, whatever its done
+    // flag says — an order handed over and then cancelled keeps done = true.
+    // Every other figure on this screen already excludes them, so the sales
+    // report was the one place that could overstate the takings.
+    if (o.cancelled || o.status === 'rejected' || o.status === 'blocked') return false
+    const d = localDayStr(o.done_at || o.created_at)
     return d >= salesDateFrom && d <= salesDateTo
   })
   const salesTotal = salesOrders.reduce((s, o) => s + (o.total || 0), 0)
@@ -3529,10 +3544,7 @@ setStockShop(newSS); setStockOnline(newSO)
   // shift it reads 0 while the day's money is sitting in orders still being
   // worked on. Summarise what is still open beside it, on the same date range,
   // so the takings are visible before anything is closed off.
-  const localDay = iso => {
-    const d = new Date(iso)
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-  }
+  const localDay = localDayStr
   const openSalesOrders = orders.filter(o => {
     if (o.done || o.cancelled || o.status === 'rejected' || o.status === 'blocked') return false
     const d = localDay(o.created_at)
@@ -3553,7 +3565,7 @@ setStockShop(newSS); setStockOnline(newSO)
 
   function setSalesRangePreset(preset) {
     const today = new Date()
-    const toStr = d => d.toISOString().split('T')[0]
+    const toStr = localDayStr
     if (preset === 'today') { setSalesDateFrom(toStr(today)); setSalesDateTo(toStr(today)) }
     else if (preset === 'yesterday') {
       const y = new Date(today); y.setDate(y.getDate() - 1)
@@ -3575,7 +3587,7 @@ setStockShop(newSS); setStockOnline(newSO)
       const dt = new Date(o.done_at || o.created_at)
       rows.push([
         String(o.qnum).padStart(4, '0'),
-        dt.toISOString().split('T')[0],
+        localDayStr(dt),
         dt.toLocaleTimeString('lo-LA', { hour: '2-digit', minute: '2-digit' }),
         o.type === 'online' ? 'Online' : 'Walk-in',
         items.map(it => `${it.name} x${it.qty}`).join('; '),
@@ -3819,8 +3831,8 @@ setStockShop(newSS); setStockOnline(newSO)
                 style={{ flexWrap: 'nowrap', scrollbarWidth: 'none' }}>
                 <button
                   onClick={() => setTab('settings')}
-                  className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-black transition-all active:scale-95 flex-shrink-0"
-                  style={{ background: 'var(--cream2)', color: 'var(--brown2)', border: '1.5px solid var(--cream3)' }}
+                  className="flex items-center justify-center gap-1 px-3 rounded-lg text-xs font-black transition-all active:scale-95 flex-shrink-0"
+                  style={{ background: 'var(--cream2)', color: 'var(--brown2)', border: '1.5px solid var(--cream3)', minHeight: 36, minWidth: 36 }}
                   title="ຕັ້ງຄ່າ"
                 >
                   ⚙
@@ -3993,7 +4005,7 @@ setStockShop(newSS); setStockOnline(newSO)
                               {String(o.qnum).padStart(4,'0')}
                             </div>
                             {!o.done && !o.cancelled && o.status !== 'rejected' && (
-                              <button onClick={() => openEditOrder(o)} className="py-1 px-2 rounded-lg text-xs font-black" style={{ background: 'var(--cream2)', color: 'var(--brown2)' }}>✏️ ແກ້</button>
+                              <button onClick={() => openEditOrder(o)} className="px-3 rounded-lg text-xs font-black flex items-center" style={{ background: 'var(--cream2)', color: 'var(--brown2)', minHeight: 36 }}>✏️ ແກ້</button>
                             )}
                           </div>
                           <div className="text-right">
@@ -6672,7 +6684,7 @@ setStockShop(newSS); setStockOnline(newSO)
                 <div className="text-xs font-black mb-1" style={{ color: 'var(--gray3)' }}>ເຫດຜົນ</div>
                 <textarea
                   value={cancelReason} onChange={e => setCancelReason(e.target.value)}
-                  placeholder="ເຊັ່น: ລູກຄ້າສັ່ງຜິດ, ຂອງໝົດ, ຍົກເລີກເອງ..."
+                  placeholder="ເຊັ່ນ: ລູກຄ້າສັ່ງຜິດ, ຂອງໝົດ, ຍົກເລີກເອງ..."
                   className="input-field w-full text-sm" rows={2}
                 />
               </div>
