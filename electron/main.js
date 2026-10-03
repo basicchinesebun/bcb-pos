@@ -15,12 +15,21 @@ const { app, BrowserWindow, shell, Menu, dialog, session } = require('electron')
 const http = require('http')
 const fs = require('fs')
 const path = require('path')
-const { pathToFileURL } = require('url')
+const { checkForUpdate, resolveSiteRoot, currentBuild } = require('./updater')
 
 const PORT = 47814              // fixed: the storage origin must not move
 const HOST = '127.0.0.1'
-const ROOT = path.join(__dirname, '..', 'site')
+const BUNDLED_ROOT = path.join(__dirname, '..', 'site')
+// Where the shop's own code is served from: a downloaded update if one has been
+// installed, otherwise the copy that shipped inside the program. Decided once,
+// at launch, so an update landing mid-service cannot change the files under a
+// page that is already open.
+let ROOT = BUNDLED_ROOT
 const START = '/staff/'
+
+// Where updates come from. The practice site serves the same files the browser
+// version runs on, so there is nothing extra to host.
+const UPDATE_BASE = process.env.BCB_UPDATE_URL || 'https://test.basicchinesebun.com/'
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -148,6 +157,39 @@ function wireDeviceChoosers(wc) {
 }
 
 let win = null
+let updateReady = null
+
+async function runUpdateCheck(announce) {
+  const res = await checkForUpdate({
+    baseUrl: UPDATE_BASE,
+    userData: app.getPath('userData'),
+    bundledRoot: BUNDLED_ROOT,
+    onLog: m => console.log('updater:', m),
+  })
+  if (res.status === 'updated') {
+    updateReady = res.build
+    if (win) {
+      // Said in the page rather than in a dialog: a modal in front of a queue
+      // of customers is worse than the problem it is reporting.
+      win.webContents.executeJavaScript(
+        `window.dispatchEvent(new CustomEvent('bcb-update-ready',{detail:${JSON.stringify(res.build)}}))`
+      ).catch(() => { })
+    }
+    if (announce) {
+      dialog.showMessageBox(win, {
+        type: 'info', buttons: ['ຕົກລົງ'],
+        message: 'ມີເວີຊັນໃໝ່ແລ້ວ',
+        detail: 'ດາວໂຫຼດແລ້ວ — ຈະໃຊ້ໄດ້ເມື່ອເປີດໂປຣແກຣມໃໝ່ຄັ້ງຕໍ່ໄປ',
+      })
+    }
+  } else if (announce) {
+    dialog.showMessageBox(win, {
+      type: res.status === 'current' ? 'info' : 'warning', buttons: ['ຕົກລົງ'],
+      message: res.status === 'current' ? 'ໃຊ້ເວີຊັນຫຼ້າສຸດຢູ່ແລ້ວ' : 'ກວດຫາເວີຊັນໃໝ່ບໍ່ໄດ້',
+      detail: res.status === 'current' ? '' : 'ອາດຈະບໍ່ມີອິນເຕີເນັດ — ໂປຣແກຣມຍັງໃຊ້ໄດ້ຕາມປົກກະຕິ',
+    })
+  }
+}
 
 function createWindow() {
   win = new BrowserWindow({
@@ -197,6 +239,8 @@ function buildMenu() {
         { label: 'ຈໍລູກຄ້າ (Display)', click: () => win && win.loadURL(`http://${HOST}:${PORT}/display/`) },
         { label: 'ບອດຄິວ (Queue)', click: () => win && win.loadURL(`http://${HOST}:${PORT}/queue/`) },
         { type: 'separator' },
+        { label: 'ກວດຫາເວີຊັນໃໝ່', click: () => runUpdateCheck(true) },
+        { type: 'separator' },
         { label: 'ເຄື່ອງມືນັກພັດທະນາ', accelerator: 'F12', click: () => win && win.webContents.toggleDevTools() },
         { type: 'separator' },
         { role: 'quit', label: 'ອອກ' },
@@ -223,9 +267,19 @@ if (!app.requestSingleInstanceLock()) {
       app.quit()
       return
     }
+    // Pick the copy to serve before anything is served, so the files cannot
+    // change under a page that is already open.
+    ROOT = resolveSiteRoot(app.getPath('userData'), BUNDLED_ROOT)
+    console.log('serving', ROOT, '| build', currentBuild(app.getPath('userData'), BUNDLED_ROOT))
+
     wireDeviceAccess(session.defaultSession)
     buildMenu()
     createWindow()
+
+    // Look for a new build a few seconds in, once the till is already usable.
+    // It installs beside the running copy and takes effect at the next launch;
+    // nothing is interrupted, and with no line it simply does nothing.
+    setTimeout(() => runUpdateCheck(false), 8000)
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) createWindow()
     })

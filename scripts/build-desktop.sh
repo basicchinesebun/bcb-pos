@@ -65,6 +65,11 @@ if [ ! -f "$SEED_FILE" ]; then
   echo "ERROR: $SEED_FILE not found — cannot read the database to seed from" >&2
   exit 1
 fi
+# The update bundle lives under public/, so it is copied into every export.
+# Left there, each release would carry the previous release inside it and the
+# download would double in size every time.
+rm -rf out-desktop/desktop
+
 echo "==> seeding from $SEED_FILE ($SEED_ENV)"
 set -a
 . "./$SEED_FILE"
