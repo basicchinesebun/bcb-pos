@@ -21,13 +21,31 @@
 // The filename is new on purpose: a device still carrying the old sw-staff.js
 // unregisters it (that file is now a no-op) and picks this one up instead.
 
-const CACHE = 'bcb-staff-v1';
-const SHELL = '/staff';
+const CACHE = 'bcb-staff-v2';
+const SHELL = '/staff/';
+
+// Caching the shell alone was not enough: the page is useless without the
+// JavaScript it loads, and those files were only cached once they had been
+// fetched through this worker — which does not happen until the *second*
+// online visit. Turn the wifi off after the first one and the browser showed
+// its no-connection page. Read the shell at install time and pull in every
+// /_next file it references, so one online visit is all it takes.
+async function precacheShell(cache) {
+  const res = await fetch(SHELL, { credentials: 'same-origin' });
+  if (!res || !res.ok || res.redirected) return;
+  const html = await res.clone().text();
+  await cache.put(SHELL, res);
+  const urls = new Set();
+  const re = /(?:src|href)="(\/_next\/[^"]+)"/g;
+  let m;
+  while ((m = re.exec(html)) !== null) urls.add(m[1]);
+  await Promise.all([...urls].map(u => cache.add(u).catch(() => { })));
+}
 
 self.addEventListener('install', event => {
   event.waitUntil(
     caches.open(CACHE)
-      .then(c => c.addAll([SHELL]).catch(() => { }))
+      .then(c => precacheShell(c).catch(() => { }))
       .then(() => self.skipWaiting())
   );
 });
@@ -87,7 +105,15 @@ self.addEventListener('fetch', event => {
           }
           return res;
         })
-        .catch(() => caches.match(req).then(hit => hit || caches.match(SHELL)))
+        // /staff and /staff/ are the same page to a person and two different
+        // keys to the cache, so try the request itself, then the shell.
+        .catch(() => caches.match(req, { ignoreSearch: true })
+          .then(hit => hit || caches.match(SHELL))
+          .then(hit => hit || caches.match('/staff'))
+          .then(hit => hit || new Response(
+            '<meta charset=utf-8><body style="font-family:sans-serif;padding:2rem;text-align:center">'
+            + '<h2>ຍັງບໍ່ທັນເກັບໜ້ານີ້ໄວ້</h2><p>ເປີດຄັ້ງໜຶ່ງຕອນມີອິນເຕີເນັດກ່ອນ</p>',
+            { headers: { 'Content-Type': 'text/html; charset=utf-8' } })))
     );
   }
 });
