@@ -1214,13 +1214,24 @@ export default function StaffPage() {
         const settled = await settleStockLease(supabase, 'stock_shop')
         if (settled?.stock) setStockShop(settled.stock)
       }
-      const target = {}
-      const count = Math.max(menusRef.current?.length || 0, 1)
-      for (let i = 0; i < count; i++) target[i] = OFFLINE_BUFFER
-      const leased = await leaseStock(supabase, target, 'stock_shop')
-      if (leased) {
-        setHeldStock(leased.held || {})
-        if (Array.isArray(leased.stock)) setStockShop(leased.stock)
+      // A till that is switched off, reinstalled or simply never comes back
+      // would otherwise hold its slice of the shelf for ever, and the shop
+      // would slowly read empty with full trays in front of it. Anything past
+      // its expiry goes back; this is cheap and keeps the shop self-healing.
+      await supabase.rpc('sweep_expired_leases')
+
+      // Only reserve once the menus are known. Before shop_config lands there
+      // is no way to tell how many menus there are, and reserving against a
+      // guess sets aside one product and leaves the rest unsellable offline.
+      const count = menusRef.current?.length || 0
+      if (count > 0) {
+        const target = {}
+        for (let i = 0; i < count; i++) target[i] = OFFLINE_BUFFER
+        const leased = await leaseStock(supabase, target, 'stock_shop')
+        if (leased) {
+          setHeldStock(leased.held || {})
+          if (Array.isArray(leased.stock)) setStockShop(leased.stock)
+        }
       }
       setQnumLease(await leaseQnums(supabase, 120))
     } catch (e) {
