@@ -1180,6 +1180,16 @@ export default function StaffPage() {
   const syncingRef = useRef(false)
   useEffect(() => { menusRef.current = menus }, [menus])
 
+  // The first sync runs at mount, before shop_config has arrived, so it sees an
+  // empty menu list and reserves stock for one menu instead of all of them.
+  // Run it again the moment the menus are actually known.
+  const leasedForMenusRef = useRef(0)
+  useEffect(() => {
+    if (!menus.length || leasedForMenusRef.current === menus.length) return
+    leasedForMenusRef.current = menus.length
+    if (navigator.onLine) syncOffline()
+  }, [menus.length])
+
   // Everything that has to happen when there is a connection: push what was
   // sold offline, tell the database what came out of the reserve, and take the
   // reserve back up to size ready for the next outage.
