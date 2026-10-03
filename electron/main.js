@@ -226,6 +226,65 @@ function createWindow() {
 
 // A short menu, because the window hides the bar by default: staff need a
 // reload they can reach when a screen gets stuck, and nothing else.
+// The kitchen screen and the customer display are usually a second monitor on
+// an HDMI lead off the same machine — which is also the arrangement that makes
+// an outage survivable, because one machine means one store of offline sales
+// for both screens to read.
+//
+// So they open as windows of their own, to be dragged across and left there,
+// rather than replacing the till in the only window. Where each one was put is
+// remembered, so it comes back on the right monitor the next morning.
+const extraWins = new Map()
+
+function screenWindow(key, route, title) {
+  const existing = extraWins.get(key)
+  if (existing && !existing.isDestroyed()) {
+    if (existing.isMinimized()) existing.restore()
+    existing.focus()
+    return existing
+  }
+  let bounds = null
+  try {
+    const saved = JSON.parse(fs.readFileSync(path.join(app.getPath('userData'), `win-${key}.json`), 'utf8'))
+    // Only honour it if that monitor is still attached, or the window would
+    // open on a screen that is not there and look as if it never opened.
+    const { screen } = require('electron')
+    const fits = screen.getAllDisplays().some(d =>
+      saved.x >= d.bounds.x - 50 && saved.x < d.bounds.x + d.bounds.width &&
+      saved.y >= d.bounds.y - 50 && saved.y < d.bounds.y + d.bounds.height)
+    if (fits) bounds = saved
+  } catch (_) { }
+
+  const w = new BrowserWindow({
+    ...(bounds || { width: 1280, height: 800 }),
+    title,
+    backgroundColor: '#3d1f0a',
+    autoHideMenuBar: true,
+    webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true },
+  })
+  // The page sets its own <title>, and all of them say "Basic Chinese Bun" —
+  // which on a two-monitor till means two identical taskbar buttons and no way
+  // to tell which is which when dragging one across.
+  w.on('page-title-updated', e => e.preventDefault())
+  wireDeviceChoosers(w.webContents)
+  w.loadURL(`http://${HOST}:${PORT}${route}`)
+  if (bounds && bounds.fullScreen) w.setFullScreen(true)
+
+  const remember = () => {
+    try {
+      const b = w.getBounds()
+      fs.writeFileSync(path.join(app.getPath('userData'), `win-${key}.json`),
+        JSON.stringify({ ...b, fullScreen: w.isFullScreen() }))
+    } catch (_) { }
+  }
+  w.on('moved', remember)
+  w.on('resized', remember)
+  w.on('close', remember)
+  w.on('closed', () => extraWins.delete(key))
+  extraWins.set(key, w)
+  return w
+}
+
 function buildMenu() {
   Menu.setApplicationMenu(Menu.buildFromTemplate([
     {
@@ -235,9 +294,11 @@ function buildMenu() {
         { label: 'ເຕັມຈໍ', accelerator: 'F11', click: () => win && win.setFullScreen(!win.isFullScreen()) },
         { type: 'separator' },
         { label: 'ໜ້າຂາຍ (Staff)', click: () => win && win.loadURL(`http://${HOST}:${PORT}/staff/`) },
-        { label: 'ໜ້າຄົວ (Kitchen)', click: () => win && win.loadURL(`http://${HOST}:${PORT}/kitchen/`) },
-        { label: 'ຈໍລູກຄ້າ (Display)', click: () => win && win.loadURL(`http://${HOST}:${PORT}/display/`) },
-        { label: 'ບອດຄິວ (Queue)', click: () => win && win.loadURL(`http://${HOST}:${PORT}/queue/`) },
+        { type: 'separator' },
+        { label: 'ເປີດໜ້າຄົວ ຈໍທີ 2', accelerator: 'F2', click: () => screenWindow('kitchen', '/kitchen/', 'ໜ້າຄົວ · Kitchen') },
+        { label: 'ເປີດຈໍລູກຄ້າ', accelerator: 'F3', click: () => screenWindow('display', '/display/', 'ຈໍລູກຄ້າ · Display') },
+        { label: 'ເປີດບອດຄິວ', accelerator: 'F4', click: () => screenWindow('queue', '/queue/', 'ບອດຄິວ · Queue') },
+        { label: 'ເຕັມຈໍ ໜ້າຕ່າງນີ້', click: () => { const w = BrowserWindow.getFocusedWindow(); if (w) w.setFullScreen(!w.isFullScreen()) } },
         { type: 'separator' },
         { label: 'ກວດຫາເວີຊັນໃໝ່', click: () => runUpdateCheck(true) },
         { type: 'separator' },
@@ -285,5 +346,8 @@ if (!app.requestSingleInstanceLock()) {
     })
   })
 
+  // Closing the till quits; the kitchen window closing on its own does not,
+  // and nor does the till being closed while a second screen is still up —
+  // app.quit() here already waits for every window to go.
   app.on('window-all-closed', () => app.quit())
 }
