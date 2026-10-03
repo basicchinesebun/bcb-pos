@@ -2,6 +2,11 @@
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { supabase } from '../../lib/supabase'
+import {
+  deviceId, uuid, leaseQnums, nextLeasedQnum, getQnumLease,
+  leaseStock, takeHeldStock, getHeldStock, getOfflineSold, settleStockLease,
+  queueOrder, flushOutbox, pendingCount,
+} from '../../lib/offline'
 
 // Staff type a customer's name the way they heard it, not the way the customer
 // typed it into the pre-order form: no tone marks, spaces in different places,
@@ -129,6 +134,9 @@ export default function StaffPage() {
   const [pinError, setPinError] = useState('')
   const [orders, setOrders] = useState([])
   const [menus, setMenus] = useState([])
+  // syncOffline runs from a mount-time effect and from a timer, so it cannot
+  // close over `menus` — it would still be the empty array from first render.
+  const menusRef = useRef([])
   const [prices, setPrices] = useState([])
   const [costs, setCosts] = useState([])
   const [stockShop, setStockShop] = useState([])
@@ -172,6 +180,12 @@ export default function StaffPage() {
   const [salesDateFrom, setSalesDateFrom] = useState(new Date().toISOString().split('T')[0])
   const [salesDateTo, setSalesDateTo] = useState(new Date().toISOString().split('T')[0])
   const [isOnline, setIsOnline] = useState(true)
+  // How much of the shelf and how many queue numbers this till is holding
+  // against the line going down, and how many sales are waiting to be pushed.
+  const [heldStock, setHeldStock] = useState({})
+  const [qnumLease, setQnumLease] = useState(null)
+  const [outboxCount, setOutboxCount] = useState(0)
+  const [syncing, setSyncing] = useState(false)
   const [liveStatus, setLiveStatus] = useState('connecting') // 'live' | 'connecting' | 'error'
   const [loading, setLoading] = useState(true)
   const [configStalled, _setConfigStalled] = useState(false)
@@ -430,16 +444,24 @@ export default function StaffPage() {
     window.speechSynthesis.onvoiceschanged = loadVoices
     loadVoices()
 
-    const onOnline = () => setIsOnline(true)
+    const onOnline = () => { setIsOnline(true); syncOffline() }
     const onOffline = () => setIsOnline(false)
     window.addEventListener('online', onOnline)
     window.addEventListener('offline', onOffline)
+
+    // Top the reserves up on the way in, and keep topping them up while the
+    // line is good. A storm here takes the internet out for the rest of the
+    // day, so the till has to be carrying its block of numbers and its slice
+    // of the shelf before that happens, not after.
+    syncOffline()
+    const leaseTimer = setInterval(() => { if (navigator.onLine) syncOffline() }, 5 * 60 * 1000)
 
     return () => {
       supabase.removeChannel(ch)
       clearInterval(poll)
       clearTimeout(timer)
       clearInterval(heal)
+      clearInterval(leaseTimer)
       window.removeEventListener('online', onOnline)
       window.removeEventListener('offline', onOffline)
     }
@@ -743,39 +765,111 @@ export default function StaffPage() {
     }
   }
 
+  // What is being sold, worked out from the cart alone. Pulled out of
+  // submitQuickOrder so the offline path sells exactly the same thing by the
+  // same rules — a second copy of this arithmetic would drift, and the two
+  // would disagree about what the customer bought.
+  function buildQuickOrder() {
+    const effSel = qoBagMode === 'bags'
+      ? qoBagPacks.reduce((acc, bag) => { Object.entries(bag).forEach(([idx, qty]) => { if (qty > 0) acc[idx] = (acc[idx] || 0) + qty }); return acc }, {})
+      : qoSelected
+    const items = Object.entries(effSel).map(([i, qty]) => ({ menuIdx: +i, name: menus[+i]?.lo || '', qty, price: prices[+i] || 0, sub: (prices[+i] || 0) * qty }))
+    // Number the bags after dropping the empty ones. Numbering first and
+    // filtering after meant emptying a middle bag left the rest carrying
+    // their original numbers, so the kitchen saw "bag 1, bag 3" and went
+    // looking for a bag 2 that had never been packed.
+    const bagTexts = qoBagPacks
+      .map(b => Object.entries(b).filter(([, q]) => q > 0).map(([idx, q]) => `${menus[+idx]?.lo || ''} ×${q}`).join(', '))
+      .filter(Boolean)
+    // Outside bag mode the order is what was selected, while the label is
+    // built from what was packed — and those can disagree. Order #0027 was
+    // charged for 7 items with only 5 in bags, so two of them appeared on no
+    // packing list at all and the customer would have gone home short. Show
+    // the remainder rather than letting it vanish.
+    const bagged = qoBagPacks.reduce((acc, bag) => {
+      Object.entries(bag).forEach(([idx, qty]) => { if (qty > 0) acc[idx] = (acc[idx] || 0) + qty })
+      return acc
+    }, {})
+    const leftover = Object.entries(effSel)
+      .map(([i, q]) => [i, q - (bagged[i] || 0)])
+      .filter(([, short]) => short > 0)
+      .map(([i, short]) => `${menus[+i]?.lo || ''} ×${short}`)
+      .join(', ')
+    const groups = bagTexts.map((t, i) => `ຖົງ ${i + 1}: ${t}`)
+    if (leftover) groups.push(`⚠️ ຍັງບໍ່ໄດ້ແຍກຖົງ: ${leftover}`)
+    const packingLabel = groups.join(' | ')
+    const total = Object.entries(effSel).reduce((s, [i, q]) => s + (prices[+i] || 0) * q, 0)
+    return { effSel, items, packingLabel, total }
+  }
+
+  // No line to the database. The queue number comes out of the block this till
+  // leased while it still had one, the buns come out of the slice of the shelf
+  // it is holding, and the order goes into the outbox to be pushed when the
+  // connection returns. Nothing here is a guess, so there is nothing to
+  // reconcile later — only to deliver.
+  async function submitQuickOrderOffline(paymentMethod) {
+    const { effSel, items, packingLabel, total } = buildQuickOrder()
+    if (!items.length) { alert('ຍັງບໍ່ໄດ້ເລືອກເມນູ'); return }
+
+    const taken = await takeHeldStock(effSel)
+    if (!taken.ok) {
+      const short = Object.entries(taken.short)
+        .map(([i, left]) => `${menus[+i]?.lo || ''} (ເຫຼືອ ${left})`).join('\n')
+      alert(`ສະຕັອກທີ່ຈອງໄວ້ບໍ່ພໍ:\n${short}\n\nຕ້ອງລໍຖ້າເນັດກັບມາກ່ອນ`)
+      return
+    }
+
+    const qnumData = await nextLeasedQnum()
+    if (qnumData == null) {
+      // Putting the buns straight back, because no number means no sale.
+      await leaseStockRollback(effSel)
+      alert('ເລກຄິວທີ່ຈອງໄວ້ໝົດແລ້ວ\nຕ້ອງລໍຖ້າເນັດກັບມາກ່ອນຈຶ່ງຂາຍຕໍ່ໄດ້')
+      return
+    }
+
+    const row = {
+      client_id: uuid(),
+      qnum: qnumData, type: 'walkin', status: 'confirmed',
+      items: JSON.stringify(items), total, bag_label: packingLabel,
+      done: false, cancelled: false, paid: true, payment_method: paymentMethod,
+      paid_amount: total,
+      created_at: new Date().toISOString(),
+      ...(qoName.trim() ? { customer: JSON.stringify({ name: qoName.trim() }) } : {}),
+    }
+    await queueOrder(row)
+    setOutboxCount(await pendingCount())
+    setHeldStock(taken.held)
+
+    // Show it on this till straight away. It is a real sale — the money is in
+    // the drawer and the buns are gone — it simply has not reached the server.
+    setOrders(prev => [{ ...row, id: 'offline:' + row.client_id, offline: true }, ...prev])
+
+    // Same closing flow as an online sale — ticket, queue number, receipt — so
+    // staff never have to work a different till during an outage.
+    const received = paymentMethod === 'cash' ? qoCashReceivedRef.current : 0
+    setQoTicket({ items, total, method: paymentMethod, received, change: received > 0 ? received - total : 0 })
+    setQoQnum(qnumData); setQoStep(3)
+    showToast(`📴 ຄິວ ${String(qnumData).padStart(4,'0')} ບັນທຶກແບບອອບລາຍ`, 'orange')
+    writeDisplay({ items, total, method: paymentMethod, qnum: qnumData })
+    if (paymentMethod === 'cash' && settings.autoKickDrawer !== false) kickDrawer({ auto: true })
+    if (shouldAutoprint({ type: 'walkin' })) setTimeout(() => smartPrint(row), 300)
+  }
+
+  // Hand buns back to this till's own reserve — used when a sale falls over
+  // after the stock was taken but before the order was written.
+  async function leaseStockRollback(effSel) {
+    const giveBack = {}
+    Object.entries(effSel).forEach(([i, q]) => { giveBack[i] = -q })
+    const back = await takeHeldStock(giveBack)
+    if (back.ok) setHeldStock(back.held)
+  }
+
   async function submitQuickOrder(paymentMethod) {
     setQoSubmitting(true)
     try {
+      if (!navigator.onLine) { await submitQuickOrderOffline(paymentMethod); return }
       const qnumData = await nextWalkinQnum()
-      const effSel = qoBagMode === 'bags'
-        ? qoBagPacks.reduce((acc, bag) => { Object.entries(bag).forEach(([idx, qty]) => { if (qty > 0) acc[idx] = (acc[idx] || 0) + qty }); return acc }, {})
-        : qoSelected
-      const items = Object.entries(effSel).map(([i, qty]) => ({ menuIdx: +i, name: menus[+i]?.lo || '', qty, price: prices[+i] || 0, sub: (prices[+i] || 0) * qty }))
-      // Number the bags after dropping the empty ones. Numbering first and
-      // filtering after meant emptying a middle bag left the rest carrying
-      // their original numbers, so the kitchen saw "bag 1, bag 3" and went
-      // looking for a bag 2 that had never been packed.
-      const bagTexts = qoBagPacks
-        .map(b => Object.entries(b).filter(([, q]) => q > 0).map(([idx, q]) => `${menus[+idx]?.lo || ''} ×${q}`).join(', '))
-        .filter(Boolean)
-      // Outside bag mode the order is what was selected, while the label is
-      // built from what was packed — and those can disagree. Order #0027 was
-      // charged for 7 items with only 5 in bags, so two of them appeared on no
-      // packing list at all and the customer would have gone home short. Show
-      // the remainder rather than letting it vanish.
-      const bagged = qoBagPacks.reduce((acc, bag) => {
-        Object.entries(bag).forEach(([idx, qty]) => { if (qty > 0) acc[idx] = (acc[idx] || 0) + qty })
-        return acc
-      }, {})
-      const leftover = Object.entries(effSel)
-        .map(([i, q]) => [i, q - (bagged[i] || 0)])
-        .filter(([, short]) => short > 0)
-        .map(([i, short]) => `${menus[+i]?.lo || ''} ×${short}`)
-        .join(', ')
-      const groups = bagTexts.map((t, i) => `ຖົງ ${i + 1}: ${t}`)
-      if (leftover) groups.push(`⚠️ ຍັງບໍ່ໄດ້ແຍກຖົງ: ${leftover}`)
-      const packingLabel = groups.join(' | ')
-      const total = Object.entries(effSel).reduce((s, [i, q]) => s + (prices[+i] || 0) * q, 0)
+      const { effSel, items, packingLabel, total } = buildQuickOrder()
       // Take the stock first and let the database decide. The second station
       // and the customers' own phones are selling off the same shelf, so this
       // device's copy of the counts is out of date the moment it is read.
@@ -785,13 +879,19 @@ export default function StaffPage() {
       if (takeErr) throw takeErr
       if (!taken?.ok) {
         if (Array.isArray(taken?.stock)) setStockShop(taken.stock)
-        const soldOut = Object.entries(taken?.short || {})
-          .map(([i, left]) => `${menus[+i]?.lo || ''} (ເຫຼືອ ${left})`)
-          .join('\n')
-        alert(`ສະຕັອກບໍ່ພໍ:\n${soldOut}\n\nຍັງບໍ່ໄດ້ບັນທຶກອໍເດີ`)
-        return
-      }
-      if (Array.isArray(taken.stock)) setStockShop(taken.stock)
+        // The shelf is short, but this till is holding a reserve against the
+        // line dropping and those buns are physically here. Sell them rather
+        // than turning a customer away in front of a full tray.
+        const fromReserve = await takeHeldStock(effSel)
+        if (!fromReserve.ok) {
+          const soldOut = Object.entries(taken?.short || {})
+            .map(([i, left]) => `${menus[+i]?.lo || ''} (ເຫຼືອ ${left})`)
+            .join('\n')
+          alert(`ສະຕັອກບໍ່ພໍ:\n${soldOut}\n\nຍັງບໍ່ໄດ້ບັນທຶກອໍເດີ`)
+          return
+        }
+        setHeldStock(fromReserve.held)
+      } else if (Array.isArray(taken.stock)) setStockShop(taken.stock)
 
       const { error } = await supabase.from('orders').insert({
         qnum: qnumData, type: 'walkin', status: 'confirmed',
@@ -1069,6 +1169,56 @@ export default function StaffPage() {
     // it for the sales tab, which nobody is looking at in the first second.
     await loadOrders('recent')
     loadOrders('full').catch(() => { })
+  }
+
+  // ─── Offline ───
+  // How many of each menu this till keeps set aside so it can go on selling
+  // with no line to the database. It comes off stock_shop, which only this
+  // shop's own tills draw from — the online channel sells out of stock_online
+  // and is untouched by it.
+  const OFFLINE_BUFFER = 20
+  const syncingRef = useRef(false)
+  useEffect(() => { menusRef.current = menus }, [menus])
+
+  // Everything that has to happen when there is a connection: push what was
+  // sold offline, tell the database what came out of the reserve, and take the
+  // reserve back up to size ready for the next outage.
+  async function syncOffline() {
+    if (!supabase || syncingRef.current) return
+    syncingRef.current = true
+    setSyncing(true)
+    try {
+      const res = await flushOutbox(supabase)
+      if (res.pushed) {
+        showToast(`☁️ ສົ່ງອໍເດີທີ່ຄ້າງ ${res.pushed} ໃບແລ້ວ`, 'green')
+        logActivity('offline_sync', `${res.pushed} ໃບ`)
+        await loadOrders('recent')
+      }
+      setOutboxCount(await pendingCount())
+
+      // Settling hands the whole reserve back, so only do it when something was
+      // actually sold out of it. Otherwise just top the reserve up, which takes
+      // the difference and leaves what is already held alone.
+      const sold = await getOfflineSold()
+      if (Object.values(sold).some(v => v > 0)) {
+        const settled = await settleStockLease(supabase, 'stock_shop')
+        if (settled?.stock) setStockShop(settled.stock)
+      }
+      const target = {}
+      const count = Math.max(menusRef.current?.length || 0, 1)
+      for (let i = 0; i < count; i++) target[i] = OFFLINE_BUFFER
+      const leased = await leaseStock(supabase, target, 'stock_shop')
+      if (leased) {
+        setHeldStock(leased.held || {})
+        if (Array.isArray(leased.stock)) setStockShop(leased.stock)
+      }
+      setQnumLease(await leaseQnums(supabase, 120))
+    } catch (e) {
+      console.error('syncOffline:', e)
+    } finally {
+      syncingRef.current = false
+      setSyncing(false)
+    }
   }
 
   async function loadOrders(scope = 'full') {
@@ -3338,7 +3488,29 @@ setStockShop(newSS); setStockOnline(newSO)
         ))}
       </div>
 
-      {!isOnline && <div className="bg-red-700 text-white text-center py-2 text-sm font-black">⚠ ບໍ່ມີອິນເຕີເນັດ</div>}
+      {/* Offline is no longer a dead end: the till says what it is still able
+          to do and how much is waiting to go up, so nobody has to guess
+          whether it is safe to keep selling. */}
+      {!isOnline && (() => {
+        const numsLeft = qnumLease ? qnumLease.to - qnumLease.next + 1 : 0
+        const bunsLeft = Object.values(heldStock).reduce((s, v) => s + (Number(v) || 0), 0)
+        const canSell = numsLeft > 0 && bunsLeft > 0
+        return (
+          <div className="px-3 py-2 text-xs font-black leading-5"
+            style={{ background: canSell ? '#b45309' : '#b91c1c', color: '#fff' }}>
+            <div className="text-sm">📴 ບໍ່ມີອິນເຕີເນັດ — {canSell ? 'ຂາຍຕໍ່ໄດ້ປົກກະຕິ' : 'ຂາຍຕໍ່ບໍ່ໄດ້ແລ້ວ'}</div>
+            <div style={{ opacity: 0.9 }}>
+              ເລກຄິວທີ່ຈອງໄວ້ {numsLeft} · ສິນຄ້າທີ່ຈອງໄວ້ {bunsLeft} ຊິ້ນ
+              {outboxCount > 0 ? ` · ລໍຖ້າສົ່ງ ${outboxCount} ໃບ` : ''}
+            </div>
+          </div>
+        )
+      })()}
+      {isOnline && outboxCount > 0 && (
+        <div className="px-3 py-2 text-xs font-black" style={{ background: '#fef3c7', color: '#92400e' }}>
+          ☁️ ກຳລັງສົ່ງອໍເດີທີ່ຂາຍຕອນອອບລາຍ {outboxCount} ໃບ{syncing ? '...' : ''}
+        </div>
+      )}
       {lowStockMenus.length > 0 && tab !== 'chat' && (
         <div className="px-3 py-2 text-xs font-black flex items-start gap-2" style={{ background: '#fef3c7', color: '#92400e' }}>
           <span className="flex-shrink-0">⚠</span>
