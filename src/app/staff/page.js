@@ -6,7 +6,7 @@ import {
   deviceId, uuid, leaseQnums, nextLeasedQnum, getQnumLease,
   leaseStock, takeHeldStock, getHeldStock, getOfflineSold, settleStockLease, adoptQnumLease,
   adoptSeedStock, isStockSeeded, clearStockSeeded,
-  queueOrder, flushOutbox, pendingCount, queueOp, pendingOpCount, flushOps,
+  queueOrder, flushOutbox, pendingCount, pendingOrders, queueOp, pendingOpCount, flushOps,
 } from '../../lib/offline'
 
 // Staff type a customer's name the way they heard it, not the way the customer
@@ -854,6 +854,7 @@ export default function StaffPage() {
     }
     await queueOrder(row)
     setOutboxCount(await pendingCount() + await pendingOpCount())
+    publishPendingToLan()
     setHeldStock(taken.held)
 
     // Show it on this till straight away. It is a real sale — the money is in
@@ -1196,6 +1197,22 @@ export default function StaffPage() {
     loadOrders('full').catch(() => { })
   }
 
+  // The kitchen board may be a tablet on the shop's wifi, reading from the
+  // Windows app rather than from Supabase — that is what makes it work during
+  // an outage, when there is a router but no internet. It cannot see this
+  // window's storage, so hand the orders to the app and let it serve them.
+  // Does nothing in a browser, which is the usual case.
+  async function publishPendingToLan() {
+    try {
+      const orders = await pendingOrders()
+      await fetch('/local/pending', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orders }),
+      })
+    } catch (_) { /* not running inside the desktop app */ }
+  }
+
   // ─── Offline ───
   // How many of each menu this till keeps set aside so it can go on selling
   // with no line to the database. It comes off stock_shop, which only this
@@ -1298,6 +1315,7 @@ export default function StaffPage() {
         await loadOrders('recent')
       }
       setOutboxCount(await pendingCount() + await pendingOpCount())
+      publishPendingToLan()
 
       // Settling hands the whole reserve back, so only do it when something was
       // actually sold out of it. Otherwise just top the reserve up, which takes

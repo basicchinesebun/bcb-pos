@@ -102,9 +102,19 @@ export default function KitchenPage() {
     // machine, which is what the Windows build gives the shop: one program,
     // one store, both screens on the menu. On a separate kitchen device with
     // no network there is nothing to carry them across, and nothing can be.
+    // On a tablet the board is served by the till's own machine over the shop
+    // wifi, so the offline sales come from there rather than from storage this
+    // device does not share.
+    let raw = []
+    try {
+      const res = await fetch('/local/pending', { cache: 'no-store' })
+      if (res.ok) raw = (await res.json()).orders || []
+    } catch (_) { }
+    if (!raw.length) { try { raw = await pendingOrders() } catch (_) { } }
+
     let queued = []
     try {
-      queued = (await pendingOrders()).map(o => ({
+      queued = raw.map(o => ({
         ...o,
         id: 'offline:' + o.client_id,
         offline: true,

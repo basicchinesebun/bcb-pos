@@ -19,6 +19,16 @@ const { checkForUpdate, resolveSiteRoot, currentBuild } = require('./updater')
 
 const PORT = 47814              // fixed: the storage origin must not move
 const HOST = '127.0.0.1'
+// Opening the server to the shop's wifi lets a tablet be the kitchen board
+// with no cable and no internet — the router alone is enough. It sends text,
+// not a picture of a screen, so it stays quick on a weak signal where screen
+// mirroring would stutter.
+//
+// Off by default: this serves the shop's own order board, and it should be a
+// decision to put that on the network rather than something that happens
+// because the app was installed.
+const LAN_FLAG = () => path.join(app.getPath('userData'), 'lan-enabled')
+const lanEnabled = () => { try { return fs.existsSync(LAN_FLAG()) } catch (_) { return false } }
 const BUNDLED_ROOT = path.join(__dirname, '..', 'site')
 // Where the shop's own code is served from: a downloaded update if one has been
 // installed, otherwise the copy that shipped inside the program. Decided once,
@@ -77,7 +87,15 @@ function resolveFile(urlPath) {
 function startServer() {
   return new Promise((resolve, reject) => {
     const server = http.createServer((req, res) => {
-      const file = resolveFile(req.url || '/')
+      const url = req.url || '/'
+
+      // Orders taken while the line is down live in the till window's own
+      // storage, which a tablet across the room cannot reach. The till posts
+      // them here and this hands them on, so the kitchen board works over the
+      // shop's wifi with no internet behind it.
+      if (url.startsWith('/local/')) { handleLocal(req, res, url); return }
+
+      const file = resolveFile(url)
       if (!file) {
         res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' })
         res.end('not found')
@@ -94,7 +112,10 @@ function startServer() {
       fs.createReadStream(file).pipe(res)
     })
     server.on('error', reject)
-    server.listen(PORT, HOST, () => resolve(server))
+    // 0.0.0.0 reaches every interface, so the tablet can find it; 127.0.0.1
+    // keeps it to this machine. Either way the till itself uses the loopback
+    // address, so the origin its storage lives under never changes.
+    server.listen(PORT, lanEnabled() ? '0.0.0.0' : HOST, () => resolve(server))
   })
 }
 
@@ -158,6 +179,46 @@ function wireDeviceChoosers(wc) {
 
 let win = null
 let updateReady = null
+
+// What the till last said it was holding. Kept in memory only: it is a copy of
+// something already saved on disk in the till's own storage, and a stale copy
+// surviving a restart would be worse than none.
+let localRelay = { orders: [], at: null }
+
+function handleLocal(req, res, url) {
+  const send = (code, body) => {
+    res.writeHead(code, {
+      'Content-Type': 'application/json; charset=utf-8',
+      'Cache-Control': 'no-store',
+      // Only this app's own pages, wherever they are being viewed from.
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Headers': 'Content-Type',
+      'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
+    })
+    res.end(JSON.stringify(body))
+  }
+  if (req.method === 'OPTIONS') return send(204, {})
+
+  if (url === '/local/pending' && req.method === 'GET') {
+    return send(200, localRelay)
+  }
+  if (url === '/local/pending' && req.method === 'POST') {
+    let raw = ''
+    req.on('data', c => {
+      raw += c
+      if (raw.length > 2e6) { req.destroy(); }      // nothing legitimate is this big
+    })
+    req.on('end', () => {
+      try {
+        const body = JSON.parse(raw || '{}')
+        localRelay = { orders: Array.isArray(body.orders) ? body.orders : [], at: new Date().toISOString() }
+        send(200, { ok: true, count: localRelay.orders.length })
+      } catch (e) { send(400, { ok: false, error: e.message }) }
+    })
+    return
+  }
+  send(404, { ok: false })
+}
 
 async function runUpdateCheck(announce) {
   const res = await checkForUpdate({
@@ -285,6 +346,48 @@ function screenWindow(key, route, title) {
   return w
 }
 
+// The addresses a tablet on the shop's wifi can use. Loopback and anything
+// that is not an ordinary IPv4 address is no use to another machine.
+function lanAddresses() {
+  const out = []
+  const ifaces = require('os').networkInterfaces()
+  Object.values(ifaces).forEach(list => (list || []).forEach(i => {
+    if (i.family === 'IPv4' && !i.internal) out.push(i.address)
+  }))
+  return out
+}
+
+function showLanAddress() {
+  const addrs = lanAddresses()
+  dialog.showMessageBox(win, {
+    type: 'info', buttons: ['ຕົກລົງ'],
+    message: addrs.length ? 'ເປີດໃນແທັບເລັດ' : 'ຍັງບໍ່ໄດ້ຕໍ່ WiFi',
+    detail: addrs.length
+      ? addrs.map(a => `ໜ້າຄົວ:   http://${a}:${PORT}/kitchen/\nບອດຄິວ:  http://${a}:${PORT}/queue/`).join('\n\n')
+        + '\n\nແທັບເລັດຕ້ອງຢູ່ WiFi ອັນດຽວກັນ (ບໍ່ຕ້ອງມີອິນເຕີເນັດ)'
+      : 'ຕໍ່ຄອມພິວເຕີເຂົ້າ WiFi ຂອງຮ້ານກ່ອນ',
+  })
+}
+
+function toggleLan() {
+  const on = lanEnabled()
+  try {
+    if (on) fs.unlinkSync(LAN_FLAG())
+    else fs.writeFileSync(LAN_FLAG(), new Date().toISOString())
+  } catch (e) {
+    dialog.showErrorBox('ບໍ່ສຳເລັດ', e.message)
+    return
+  }
+  // The server is already listening on one address or the other, and a socket
+  // cannot be moved between them — so this takes effect on the next start.
+  dialog.showMessageBox(win, {
+    type: 'info', buttons: ['ຕົກລົງ'],
+    message: on ? 'ປິດການໃຊ້ຜ່ານ WiFi ແລ້ວ' : 'ເປີດການໃຊ້ຜ່ານ WiFi ແລ້ວ',
+    detail: 'ຈະມີຜົນເມື່ອເປີດໂປຣແກຣມໃໝ່ຄັ້ງຕໍ່ໄປ',
+  })
+  buildMenu()
+}
+
 function buildMenu() {
   Menu.setApplicationMenu(Menu.buildFromTemplate([
     {
@@ -299,6 +402,9 @@ function buildMenu() {
         { label: 'ເປີດຈໍລູກຄ້າ', accelerator: 'F3', click: () => screenWindow('display', '/display/', 'ຈໍລູກຄ້າ · Display') },
         { label: 'ເປີດບອດຄິວ', accelerator: 'F4', click: () => screenWindow('queue', '/queue/', 'ບອດຄິວ · Queue') },
         { label: 'ເຕັມຈໍ ໜ້າຕ່າງນີ້', click: () => { const w = BrowserWindow.getFocusedWindow(); if (w) w.setFullScreen(!w.isFullScreen()) } },
+        { type: 'separator' },
+        { label: lanEnabled() ? 'ປິດການໃຊ້ຜ່ານ WiFi' : 'ເປີດໃຫ້ແທັບເລັດເຂົ້າຜ່ານ WiFi', click: toggleLan },
+        { label: 'ທີ່ຢູ່ສຳລັບແທັບເລັດ', click: showLanAddress, enabled: lanEnabled() },
         { type: 'separator' },
         { label: 'ກວດຫາເວີຊັນໃໝ່', click: () => runUpdateCheck(true) },
         { type: 'separator' },
