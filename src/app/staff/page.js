@@ -825,13 +825,13 @@ export default function StaffPage() {
   // reconcile later — only to deliver.
   async function submitQuickOrderOffline(paymentMethod) {
     const { effSel, items, packingLabel, total } = buildQuickOrder()
-    if (!items.length) { alert('ຍັງບໍ່ໄດ້ເລືອກເມນູ'); return }
+    if (!items.length) { showToast('ຍັງບໍ່ໄດ້ເລືອກເມນູ', 'orange'); return }
 
     const taken = await takeHeldStock(effSel)
     if (!taken.ok) {
       const short = Object.entries(taken.short)
         .map(([i, left]) => `${menus[+i]?.lo || ''} (ເຫຼືອ ${left})`).join('\n')
-      alert(`ສະຕັອກທີ່ຈອງໄວ້ບໍ່ພໍ:\n${short}\n\nຕ້ອງລໍຖ້າເນັດກັບມາກ່ອນ`)
+      showToast(`ສະຕັອກທີ່ຈອງໄວ້ບໍ່ພໍ: ${short.replace(/\n/g, ', ')}`, 'red')
       return
     }
 
@@ -839,10 +839,20 @@ export default function StaffPage() {
     if (qnumData == null) {
       // Putting the buns straight back, because no number means no sale.
       await leaseStockRollback(effSel)
-      alert('ເລກຄິວທີ່ຈອງໄວ້ໝົດແລ້ວ\nຕ້ອງລໍຖ້າເນັດກັບມາກ່ອນຈຶ່ງຂາຍຕໍ່ໄດ້')
+      showToast('ເລກຄິວທີ່ຈອງໄວ້ໝົດແລ້ວ — ຕ້ອງລໍຖ້າເນັດກ່ອນ', 'red')
       return
     }
 
+    await finishOfflineSale(paymentMethod, qnumData, { effSel, items, packingLabel, total })
+    setHeldStock(taken.held)
+  }
+
+  // Writing the sale down and closing the counter. Shared, because a sale can
+  // reach this point two ways: with no connection at all, or with a connection
+  // that handed out a queue number and then stopped answering — and in the
+  // second case the number is already spent, so it must be used rather than
+  // the whole sale started again.
+  async function finishOfflineSale(paymentMethod, qnumData, { items, packingLabel, total }) {
     const row = {
       client_id: uuid(),
       qnum: qnumData, type: 'walkin', status: 'confirmed',
@@ -855,7 +865,6 @@ export default function StaffPage() {
     await queueOrder(row)
     setOutboxCount(await pendingCount() + await pendingOpCount())
     publishPendingToLan()
-    setHeldStock(taken.held)
 
     // Show it on this till straight away. It is a real sale — the money is in
     // the drawer and the buns are gone — it simply has not reached the server.
@@ -881,18 +890,58 @@ export default function StaffPage() {
     if (back.ok) setHeldStock(back.held)
   }
 
+  // The counter cannot wait on a request that may never come back. Six seconds
+  // is already a long time with somebody holding out a note.
+  function withTimeout(promise, ms = 6000, what = 'request') {
+    return Promise.race([
+      promise,
+      new Promise((_, reject) => setTimeout(() => reject(new Error(`timeout: ${what}`)), ms)),
+    ])
+  }
+
   async function submitQuickOrder(paymentMethod) {
     setQoSubmitting(true)
     try {
+      // navigator.onLine is true whenever a cable or a wifi association exists,
+      // which during a storm here means the shop router is up and the line to
+      // the world is down. The sale then went to the server, hung, and ended in
+      // a blocking alert — the till frozen mid-payment with the offline machinery
+      // sitting there unused, in precisely the outage it was built for.
+      //
+      // So the server is tried, not trusted. Anything slow or broken drops
+      // through to the offline path, which sells from this till's own reserve.
       if (!navigator.onLine) { await submitQuickOrderOffline(paymentMethod); return }
-      const qnumData = await nextWalkinQnum()
+
+      let qnumData
+      try {
+        qnumData = await withTimeout(nextWalkinQnum(), 6000, 'queue number')
+      } catch (e) {
+        console.warn('online sale unavailable, selling offline:', e.message)
+        await submitQuickOrderOffline(paymentMethod)
+        return
+      }
       const { effSel, items, packingLabel, total } = buildQuickOrder()
       // Take the stock first and let the database decide. The second station
       // and the customers' own phones are selling off the same shelf, so this
       // device's copy of the counts is out of date the moment it is read.
-      const { data: taken, error: takeErr } = await supabase.rpc('take_stock', {
-        p_key: 'stock_shop', p_deltas: effSel,
-      })
+      let taken, takeErr
+      try {
+        ({ data: taken, error: takeErr } = await withTimeout(
+          supabase.rpc('take_stock', { p_key: 'stock_shop', p_deltas: effSel }), 6000, 'stock'))
+      } catch (e) {
+        // The queue number is already spent, so this sale cannot simply be
+        // handed to the offline path — it would take a second one and leave a
+        // gap. Sell it against this till's reserve under the number we have.
+        console.warn('stock check unavailable, selling from the reserve:', e.message)
+        const res = await takeHeldStock(effSel)
+        if (!res.ok) {
+          showToast('ສະຕັອກທີ່ຈອງໄວ້ບໍ່ພໍ — ລໍຖ້າເນັດກ່ອນ', 'red')
+          return
+        }
+        setHeldStock(res.held)
+        await finishOfflineSale(paymentMethod, qnumData, { effSel, items, packingLabel, total })
+        return
+      }
       if (takeErr) throw takeErr
       if (!taken?.ok) {
         if (Array.isArray(taken?.stock)) setStockShop(taken.stock)
@@ -3750,9 +3799,14 @@ setStockShop(newSS); setStockOnline(newSO)
           📦 ກຳລັງໃຊ້ຂໍ້ມູນທີ່ຕິດມາກັບໂປຣແກຣມ (ເມນູ ລາຄາ ສະຕັອກ) — ຈະອັບເດດເອງເມື່ອຕໍ່ເນັດໄດ້
         </div>
       )}
+      {/* "Sending" while the server is unreachable is a lie the staff can see
+          through, and it is the router-up-internet-down case that makes it
+          happen. Say which it is. */}
       {isOnline && outboxCount > 0 && (
         <div className="px-3 py-2 text-xs font-black" style={{ background: '#fef3c7', color: '#92400e' }}>
-          ☁️ ກຳລັງສົ່ງອໍເດີທີ່ຂາຍຕອນອອບລາຍ {outboxCount} ໃບ{syncing ? '...' : ''}
+          {syncing
+            ? `☁️ ກຳລັງສົ່ງອໍເດີທີ່ຂາຍຕອນອອບລາຍ ${outboxCount} ລາຍການ...`
+            : `⏳ ລໍຖ້າເນັດເພື່ອສົ່ງ ${outboxCount} ລາຍການ — ຂາຍຕໍ່ໄດ້ປົກກະຕິ`}
         </div>
       )}
       {lowStockMenus.length > 0 && tab !== 'chat' && (
