@@ -1314,8 +1314,18 @@ export default function StaffPage() {
   async function loadConfig(cachedRows) {
     if (!supabase) return
     // Rows handed in come from the cache: apply them without asking the network.
+    //
+    // And count that as config being loaded. The cache only exists because an
+    // earlier visit fetched it successfully, so it carries a real staff_pin —
+    // but the PIN gate waits on configLoadedRef, which this path never set. The
+    // till therefore sat behind "connection slow" with a perfectly good copy of
+    // its own settings on disk, which with the line down for the day is the
+    // whole shop stopped. The network load still runs and still wins.
     if (cachedRows) {
       applyConfigRows(cachedRows)
+      configLoadedRef.current = true
+      setConfigStalled(false)
+      setLoading(false)
       return
     }
     // Supabase's client has no timeout of its own, so a request that hangs
