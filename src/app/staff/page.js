@@ -3588,7 +3588,7 @@ setStockShop(newSS); setStockOnline(newSO)
       rows.push([
         String(o.qnum).padStart(4, '0'),
         localDayStr(dt),
-        dt.toLocaleTimeString('lo-LA', { hour: '2-digit', minute: '2-digit' }),
+        dt.toLocaleTimeString('lo-LA', { hour: '2-digit', minute: '2-digit', hour12: false }),
         o.type === 'online' ? 'Online' : 'Walk-in',
         items.map(it => `${it.name} x${it.qty}`).join('; '),
         o.total || 0,
@@ -5267,7 +5267,7 @@ setStockShop(newSS); setStockOnline(newSO)
                         <span className="flex-shrink-0 text-[10px] font-black px-1.5 py-0.5 rounded-full" style={{ background: '#f59e0b', color: 'white' }}>ລໍພະນັກງານ</span>
                       ) : (
                         <span className="text-[10px] font-bold flex-shrink-0" style={{ color: 'var(--gray3)' }}>
-                          {new Date(c.lastAt).toLocaleTimeString('lo-LA', { hour: '2-digit', minute: '2-digit' })}
+                          {new Date(c.lastAt).toLocaleTimeString('lo-LA', { hour: '2-digit', minute: '2-digit', hour12: false })}
                         </span>
                       )}
                     </div>
@@ -5357,7 +5357,7 @@ setStockShop(newSS); setStockOnline(newSO)
                       </div>
                       <div className="text-[10px] font-bold mt-1 px-1"
                         style={{ color: 'var(--gray3)', textAlign: isStaffSide ? 'right' : 'left' }}>
-                        {new Date(msg.created_at).toLocaleTimeString('lo-LA', { hour: '2-digit', minute: '2-digit' })}
+                        {new Date(msg.created_at).toLocaleTimeString('lo-LA', { hour: '2-digit', minute: '2-digit', hour12: false })}
                       </div>
                     </div>
                   </div>

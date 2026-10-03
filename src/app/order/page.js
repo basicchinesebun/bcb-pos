@@ -863,7 +863,7 @@ export default function OrderPage() {
                 </div>
                 <div className="flex justify-between text-xs font-bold mt-3 px-1" style={{ color: 'var(--gray3)' }}>
                   <span>ລວມ: {totalPrice.toLocaleString()} ກີບ</span>
-                  <span>{new Date().toLocaleTimeString('lo-LA', { hour: '2-digit', minute: '2-digit' })}</span>
+                  <span>{new Date().toLocaleTimeString('lo-LA', { hour: '2-digit', minute: '2-digit', hour12: false })}</span>
                 </div>
               </div>
               <div className="text-center py-4 px-4" style={{ background: '#3d1f0a' }}>

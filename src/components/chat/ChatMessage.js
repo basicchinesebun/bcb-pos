@@ -2,7 +2,7 @@
 
 export default function ChatMessage({ msg }) {
   const isCustomer = msg.role === 'customer'
-  const timeStr = new Date(msg.ts).toLocaleTimeString('lo-LA', { hour: '2-digit', minute: '2-digit' })
+  const timeStr = new Date(msg.ts).toLocaleTimeString('lo-LA', { hour: '2-digit', minute: '2-digit', hour12: false })
 
   return (
     <div className={`flex ${isCustomer ? 'justify-end' : 'justify-start'} mb-3`}>

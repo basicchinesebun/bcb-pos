@@ -517,7 +517,7 @@ function OrderCard({ o, onDone, onAskCancel, menus, images }) {
   const [busy, setBusy] = useState(false)
   const items = typeof o.items === 'string' ? JSON.parse(o.items) : o.items || []
   const cust  = o.customer ? (typeof o.customer === 'string' ? JSON.parse(o.customer) : o.customer) : null
-  const time  = new Date(o.created_at).toLocaleTimeString('lo-LA', { hour: '2-digit', minute: '2-digit' })
+  const time  = new Date(o.created_at).toLocaleTimeString('lo-LA', { hour: '2-digit', minute: '2-digit', hour12: false })
   const mins  = Math.floor((Date.now() - new Date(o.created_at)) / 60000)
   const isUrgent = mins >= 10
   const bags  = parseBagLabel(o.bag_label)
