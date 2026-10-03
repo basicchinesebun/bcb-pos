@@ -21,8 +21,10 @@
 // The filename is new on purpose: a device still carrying the old sw-staff.js
 // unregisters it (that file is now a no-op) and picks this one up instead.
 
-const CACHE = 'bcb-staff-v2';
-const SHELL = '/staff/';
+const CACHE = 'bcb-staff-v3';
+// Without the trailing slash: '/staff/' 308-redirects here, and a redirected
+// response cannot be cached — which is why the first attempt cached nothing.
+const SHELL = '/staff';
 
 // Caching the shell alone was not enough: the page is useless without the
 // JavaScript it loads, and those files were only cached once they had been
@@ -109,7 +111,7 @@ self.addEventListener('fetch', event => {
         // keys to the cache, so try the request itself, then the shell.
         .catch(() => caches.match(req, { ignoreSearch: true })
           .then(hit => hit || caches.match(SHELL))
-          .then(hit => hit || caches.match('/staff'))
+          .then(hit => hit || caches.match('/staff/'))
           .then(hit => hit || new Response(
             '<meta charset=utf-8><body style="font-family:sans-serif;padding:2rem;text-align:center">'
             + '<h2>ຍັງບໍ່ທັນເກັບໜ້ານີ້ໄວ້</h2><p>ເປີດຄັ້ງໜຶ່ງຕອນມີອິນເຕີເນັດກ່ອນ</p>',
