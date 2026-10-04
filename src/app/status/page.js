@@ -236,7 +236,7 @@ function StatusContent() {
                   </div>
                   <div className="text-[10px] font-bold mt-1 px-1"
                     style={{ color: 'var(--gray3)', textAlign: msg.sender === 'customer' ? 'right' : 'left' }}>
-                    {new Date(msg.created_at).toLocaleTimeString('lo-LA', { hour: '2-digit', minute: '2-digit' })}
+                    {new Date(msg.created_at).toLocaleTimeString('lo-LA', { hour: '2-digit', minute: '2-digit', hour12: false })}
                   </div>
                 </div>
               </div>

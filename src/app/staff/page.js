@@ -56,10 +56,21 @@ function parseBagLabelToPacks(label, menus) {
   return packs.length ? packs : [{}]
 }
 
+// The shop's day, not UTC's. Vientiane is seven hours ahead, so a sale taken
+// after midnight is "yesterday" to toISOString() — and the sales report
+// bucketed by UTC while the open-orders summary printed directly beside it
+// bucketed by local time, so the two disagreed about which day a late sale
+// belonged to.
+function localDayStr(d) {
+  const x = d instanceof Date ? d : new Date(d)
+  if (isNaN(x.getTime())) return ''
+  return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`
+}
+
 function orderStamp(iso) {
   const d = new Date(iso)
   if (isNaN(d.getTime())) return '—'
-  const time = d.toLocaleTimeString('lo-LA', { hour: '2-digit', minute: '2-digit' })
+  const time = d.toLocaleTimeString('lo-LA', { hour: '2-digit', minute: '2-digit', hour12: false })
   const days = Math.round((startOfDay(new Date()) - startOfDay(d)) / 86400000)
   if (days === 0) return `ມື້ນີ້ ${time}`
   if (days === 1) return `ມື້ວານ ${time}`
@@ -147,8 +158,8 @@ export default function StaffPage() {
 
   const [archiveOpen, setArchiveOpen] = useState(false)
   const [expandedArchive, setExpandedArchive] = useState(new Set())
-  const [salesDateFrom, setSalesDateFrom] = useState(new Date().toISOString().split('T')[0])
-  const [salesDateTo, setSalesDateTo] = useState(new Date().toISOString().split('T')[0])
+  const [salesDateFrom, setSalesDateFrom] = useState(localDayStr(new Date()))
+  const [salesDateTo, setSalesDateTo] = useState(localDayStr(new Date()))
   const [isOnline, setIsOnline] = useState(true)
   const [liveStatus, setLiveStatus] = useState('connecting') // 'live' | 'connecting' | 'error'
   const [loading, setLoading] = useState(true)
@@ -528,7 +539,7 @@ export default function StaffPage() {
       const newItems = Object.entries(editItems)
         .filter(([, qty]) => qty > 0)
         .map(([i, qty]) => ({ menuIdx: +i, name: menus[+i]?.lo || '', qty, price: prices[+i] || 0, sub: (prices[+i] || 0) * qty }))
-      if (newItems.length === 0) { alert('ຕ້ອງມີສິນຄ້າຢ່າງໜ້ອຍ 1 ລາຍການ'); setEditSaving(false); return }
+      if (newItems.length === 0) { showToast('ຕ້ອງມີສິນຄ້າຢ່າງໜ້ອຍ 1 ລາຍການ', 'orange'); setEditSaving(false); return }
       const newTotal = newItems.reduce((s, it) => s + it.sub, 0)
       const stockKey = editOrder.type === 'online' ? 'stock_online' : 'stock_shop'
       // Send only what changed, and let the database do the arithmetic. This
@@ -580,7 +591,7 @@ export default function StaffPage() {
           const soldOut = Object.entries(taken?.short || {})
             .map(([i, left]) => `${menus[+i]?.lo || ''} (ເຫຼືອ ${left})`)
             .join('\n')
-          alert(`ສະຕັອກບໍ່ພໍ:\n${soldOut}\n\nຍັງບໍ່ໄດ້ແກ້ໄຂອໍເດີ`)
+          showToast(`ສະຕັອກບໍ່ພໍ: ${soldOut.replace(/\n/g, ', ')} — ຍັງບໍ່ໄດ້ແກ້ໄຂ`, 'red')
           setEditSaving(false)
           return
         }
@@ -603,7 +614,7 @@ export default function StaffPage() {
       logActivity('edit_order', `#${String(editOrder.qnum).padStart(4, '0')} → ${newTotal.toLocaleString()}`)
       setEditOrder(null)
       showToast(`✏️ #${String(editOrder.qnum).padStart(4, '0')} ແກ້ໄຂແລ້ວ`, 'green')
-    } catch (e) { alert('❌ ' + (e.message || 'error')) }
+    } catch (e) { showToast('❌ ' + (e.message || 'error'), 'red') }
     finally { setEditSaving(false) }
   }
 
@@ -716,7 +727,7 @@ export default function StaffPage() {
         const soldOut = Object.entries(taken?.short || {})
           .map(([i, left]) => `${menus[+i]?.lo || ''} (ເຫຼືອ ${left})`)
           .join('\n')
-        alert(`ສະຕັອກບໍ່ພໍ:\n${soldOut}\n\nຍັງບໍ່ໄດ້ບັນທຶກອໍເດີ`)
+        showToast(`ສະຕັອກບໍ່ພໍ: ${soldOut.replace(/\n/g, ', ')} — ຍັງບໍ່ໄດ້ບັນທຶກ`, 'red')
         return
       }
       if (Array.isArray(taken.stock)) setStockShop(taken.stock)
@@ -757,7 +768,7 @@ export default function StaffPage() {
         }
         setTimeout(() => smartPrint(printObj), 300)
       }
-    } catch (e) { alert('❌ ' + (e.message || 'error')) }
+    } catch (e) { showToast('❌ ' + (e.message || 'error'), 'red') }
     finally { setQoSubmitting(false) }
   }
 
@@ -1184,10 +1195,10 @@ export default function StaffPage() {
   const done = orders.filter(o => o.done).length
   const pendingOnline = orders.filter(o => o.type === 'online' && o.status === 'pending' && !o.cancelled).length
 
-  const todayStr = new Date().toISOString().split('T')[0]
+  const todayStr = localDayStr(new Date())
   const todayMenuCount = {}
   orders.filter(o => !o.cancelled && o.status !== 'rejected' && o.status !== 'blocked').forEach(o => {
-    const oDate = new Date(o.created_at).toISOString().split('T')[0]
+    const oDate = localDayStr(o.created_at)
     if (oDate !== todayStr) return
     const items = typeof o.items === 'string' ? JSON.parse(o.items) : o.items || []
     items.forEach(it => { todayMenuCount[it.menuIdx] = (todayMenuCount[it.menuIdx] || 0) + it.qty })
@@ -1283,7 +1294,7 @@ export default function StaffPage() {
     setDoneBatchSelected(new Set())
     setDoneBatchOpen(false)
     const { error } = await supabase.from('orders').update({ done: true, done_at: doneAt }).in('id', ids)
-    if (error) { await loadOrders(); alert('ບັນທຶກບໍ່ສຳເລັດ: ' + error.message); return }
+    if (error) { await loadOrders(); showToast('ບັນທຶກບໍ່ສຳເລັດ: ' + error.message, 'red'); return }
     // One announcement for the batch, not twenty. The board shows the highest
     // number finished, which is what a customer holding a lower one needs.
     const maxQ = Math.max(...list.map(o => o.qnum || 0))
@@ -1422,7 +1433,7 @@ export default function StaffPage() {
           const short = Object.entries(taken?.short || {})
             .map(([i, left]) => `${menus[+i]?.lo || ''} (ເຫຼືອ ${left})`)
             .join('\n')
-          alert(`ສະຕັອກບໍ່ພໍຈະກູ້ອໍເດີນີ້ຄືນ:\n${short || 'ບໍ່ສາມາດກວດສະຕັອກໄດ້'}\n\nຕ້ອງເພີ່ມສະຕັອກກ່ອນ`)
+          showToast(`ສະຕັອກບໍ່ພໍຈະກູ້ຄືນ: ${(short || 'ກວດບໍ່ໄດ້').replace(/\n/g, ', ')}`, 'red')
           return
         }
         if (Array.isArray(taken.stock)) {
@@ -2958,7 +2969,12 @@ setStockShop(newSS); setStockOnline(newSO)
   // ─── Sales ───
   const salesOrders = orders.filter(o => {
     if (!o.done) return false
-    const d = new Date(o.done_at || o.created_at).toISOString().split('T')[0]
+    // A cancelled, rejected or blocked order is not a sale, whatever its done
+    // flag says — an order handed over and then cancelled keeps done = true.
+    // Every other figure on this screen already excludes them, so the sales
+    // report was the one place that could overstate the takings.
+    if (o.cancelled || o.status === 'rejected' || o.status === 'blocked') return false
+    const d = localDayStr(o.done_at || o.created_at)
     return d >= salesDateFrom && d <= salesDateTo
   })
   const salesTotal = salesOrders.reduce((s, o) => s + (o.total || 0), 0)
@@ -2984,10 +3000,7 @@ setStockShop(newSS); setStockOnline(newSO)
   // shift it reads 0 while the day's money is sitting in orders still being
   // worked on. Summarise what is still open beside it, on the same date range,
   // so the takings are visible before anything is closed off.
-  const localDay = iso => {
-    const d = new Date(iso)
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-  }
+  const localDay = localDayStr
   const openSalesOrders = orders.filter(o => {
     if (o.done || o.cancelled || o.status === 'rejected' || o.status === 'blocked') return false
     const d = localDay(o.created_at)
@@ -3008,7 +3021,7 @@ setStockShop(newSS); setStockOnline(newSO)
 
   function setSalesRangePreset(preset) {
     const today = new Date()
-    const toStr = d => d.toISOString().split('T')[0]
+    const toStr = localDayStr
     if (preset === 'today') { setSalesDateFrom(toStr(today)); setSalesDateTo(toStr(today)) }
     else if (preset === 'yesterday') {
       const y = new Date(today); y.setDate(y.getDate() - 1)
@@ -3030,8 +3043,8 @@ setStockShop(newSS); setStockOnline(newSO)
       const dt = new Date(o.done_at || o.created_at)
       rows.push([
         String(o.qnum).padStart(4, '0'),
-        dt.toISOString().split('T')[0],
-        dt.toLocaleTimeString('lo-LA', { hour: '2-digit', minute: '2-digit' }),
+        localDayStr(dt),
+        dt.toLocaleTimeString('lo-LA', { hour: '2-digit', minute: '2-digit', hour12: false }),
         o.type === 'online' ? 'Online' : 'Walk-in',
         items.map(it => `${it.name} x${it.qty}`).join('; '),
         o.total || 0,
@@ -4307,8 +4320,8 @@ setStockShop(newSS); setStockOnline(newSO)
                                     {!alreadyBlocked && (
                                       <button
                                         onClick={() => blockUser(o)}
-                                        className="mt-1 px-3 py-1 rounded-lg text-xs font-black text-white"
-                                        style={{ background: '#7c3aed' }}
+                                        className="mt-1 px-3 rounded-lg text-xs font-black text-white inline-flex items-center"
+                                        style={{ background: '#7c3aed', minHeight: 36 }}
                                       >
                                         🚫 Block ຜູ້ໃຊ້ນີ້
                                       </button>
@@ -4743,7 +4756,7 @@ setStockShop(newSS); setStockOnline(newSO)
                         <span className="flex-shrink-0 text-[10px] font-black px-1.5 py-0.5 rounded-full" style={{ background: '#f59e0b', color: 'white' }}>ລໍພະນັກງານ</span>
                       ) : (
                         <span className="text-[10px] font-bold flex-shrink-0" style={{ color: 'var(--gray3)' }}>
-                          {new Date(c.lastAt).toLocaleTimeString('lo-LA', { hour: '2-digit', minute: '2-digit' })}
+                          {new Date(c.lastAt).toLocaleTimeString('lo-LA', { hour: '2-digit', minute: '2-digit', hour12: false })}
                         </span>
                       )}
                     </div>
@@ -4833,7 +4846,7 @@ setStockShop(newSS); setStockOnline(newSO)
                       </div>
                       <div className="text-[10px] font-bold mt-1 px-1"
                         style={{ color: 'var(--gray3)', textAlign: isStaffSide ? 'right' : 'left' }}>
-                        {new Date(msg.created_at).toLocaleTimeString('lo-LA', { hour: '2-digit', minute: '2-digit' })}
+                        {new Date(msg.created_at).toLocaleTimeString('lo-LA', { hour: '2-digit', minute: '2-digit', hour12: false })}
                       </div>
                     </div>
                   </div>

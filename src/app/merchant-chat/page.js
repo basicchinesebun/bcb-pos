@@ -159,7 +159,7 @@ export default function MerchantChatPage() {
       c.id !== convoId ? c : {
         ...c,
         lastMsg: text,
-        time: new Date().toLocaleTimeString('lo-LA', { hour: '2-digit', minute: '2-digit' }),
+        time: new Date().toLocaleTimeString('lo-LA', { hour: '2-digit', minute: '2-digit', hour12: false }),
         messages: [...c.messages, { id: Date.now(), role: 'shop', text, ts: Date.now() }],
       }
     ))

@@ -17,6 +17,16 @@ export default function KitchenPage() {
   const [bulkOpen, setBulkOpen] = useState(false)
   const [bulkSel, setBulkSel] = useState(new Set())
   const [bulkBusy, setBulkBusy] = useState(false)
+  // The board had only alert() to report a failed save, and a modal on the
+  // kitchen screen stops the board dead until somebody with clean hands walks
+  // over to dismiss it. Say it and let it fade.
+  const [toast, setToast] = useState(null)
+  const toastTimer = useRef(null)
+  function showToast(msg) {
+    setToast(msg)
+    clearTimeout(toastTimer.current)
+    toastTimer.current = setTimeout(() => setToast(null), 5000)
+  }
 
   useEffect(() => {
     if (!supabase) return
@@ -86,7 +96,7 @@ export default function KitchenPage() {
     setOrders(prev => prev.filter(x => x.id !== o.id))
     const { error } = await supabase.from('orders')
       .update({ done: true, done_at: new Date().toISOString() }).eq('id', o.id)
-    if (error) { await loadOrders(); alert('ບັນທຶກບໍ່ສຳເລັດ: ' + error.message); return }
+    if (error) { await loadOrders(); showToast('ບັນທຶກບໍ່ສຳເລັດ: ' + error.message); return }
     // Publish the number for the /queue board customers look at. Only the
     // staff page did this, so with the kitchen screen doing the finishing the
     // board never advanced — current_queue had never once been written.
@@ -105,7 +115,7 @@ export default function KitchenPage() {
     const doneAt = new Date().toISOString()
     const { error } = await supabase.from('orders')
       .update({ done: true, done_at: doneAt }).in('id', ids)
-    if (error) { await loadOrders(); alert('ບັນທຶກບໍ່ສຳເລັດ: ' + error.message) }
+    if (error) { await loadOrders(); showToast('ບັນທຶກບໍ່ສຳເລັດ: ' + error.message) }
     else {
       // Publish the highest number cleared, so the board customers watch
       // jumps straight to where the counter actually is.
@@ -119,7 +129,7 @@ export default function KitchenPage() {
   async function markCancel(o) {
     setOrders(prev => prev.filter(x => x.id !== o.id))
     const { error } = await supabase.from('orders').update({ cancelled: true }).eq('id', o.id)
-    if (error) { await loadOrders(); alert('ບັນທຶກບໍ່ສຳເລັດ: ' + error.message); return }
+    if (error) { await loadOrders(); showToast('ບັນທຶກບໍ່ສຳເລັດ: ' + error.message); return }
     // Cancelling here used to stop at the order row, so the buns came off the
     // stock when the order was placed and never went back on. The shelf then
     // held more than the till believed and the menu read ໝົດ with trays still
@@ -171,6 +181,15 @@ export default function KitchenPage() {
   return (
     <div className="min-h-dvh flex flex-col" style={{ background: 'var(--cream)' }}>
 
+      {/* Sits over everything and clears itself. Nothing on this board should
+          ever need a tap to get out of the way — the cook's hands are busy. */}
+      {toast && (
+        <div className="fixed left-1/2 -translate-x-1/2 z-[80] px-5 py-3 rounded-2xl font-black text-sm shadow-2xl"
+          style={{ top: 'calc(1rem + env(safe-area-inset-top, 0px))', background: '#b91c1c', color: '#fff', maxWidth: '90vw' }}>
+          {toast}
+        </div>
+      )}
+
       {/* Header */}
       <div style={{ background: 'var(--brown)', flexShrink: 0 }}>
         <div className="flex items-center justify-between px-4 py-3">
@@ -200,8 +219,11 @@ export default function KitchenPage() {
         <div className="flex px-4 pb-2 gap-2">
           {TABS.map(t => (
             <button key={t.key} onClick={() => setFilter(t.key)}
-              className="px-3 py-1 rounded-full text-xs font-black transition-colors"
+              className="px-4 rounded-full text-xs font-black transition-colors flex items-center"
               style={{
+                // 24px tall was a mis-tap waiting to happen, and the cook is
+                // reaching for these with flour on their hands.
+                minHeight: 40,
                 background: filter === t.key ? 'var(--cream)' : 'rgba(253,246,238,0.15)',
                 color: filter === t.key ? 'var(--brown)' : 'rgba(253,246,238,0.8)',
               }}>
@@ -408,7 +430,7 @@ function OrderCard({ o, onDone, onAskCancel, menus, images }) {
   const [busy, setBusy] = useState(false)
   const items = typeof o.items === 'string' ? JSON.parse(o.items) : o.items || []
   const cust  = o.customer ? (typeof o.customer === 'string' ? JSON.parse(o.customer) : o.customer) : null
-  const time  = new Date(o.created_at).toLocaleTimeString('lo-LA', { hour: '2-digit', minute: '2-digit' })
+  const time  = new Date(o.created_at).toLocaleTimeString('lo-LA', { hour: '2-digit', minute: '2-digit', hour12: false })
   const mins  = Math.floor((Date.now() - new Date(o.created_at)) / 60000)
   const isUrgent = mins >= 10
   const bags  = parseBagLabel(o.bag_label)
