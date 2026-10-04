@@ -14,3 +14,7 @@ out/
 out-desktop/
 desktop-build/
 .api-parked/
+
+# Capacitor's generated Android project, from the test branch's app build.
+# Recreated by `npx cap add android`; nothing on this branch needs it.
+/android/
