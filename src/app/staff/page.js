@@ -2733,7 +2733,32 @@ setStockShop(newSS); setStockOnline(newSO)
         await releaseAllUsb()
         await new Promise(r => setTimeout(r, 500))
         return await usbSendNow(data, chunkSize)
-      } catch { throw first }
+      } catch (second) {
+        // Still nothing. The counter keeps a spare printer for exactly this,
+        // and the browser already holds permission for every printer that has
+        // ever been connected here — so work through the others rather than
+        // leaving staff to notice a receipt that never came out and go hunting
+        // through a settings screen mid-queue.
+        const current = usbDeviceRef.current
+        let others = []
+        try { others = (await navigator.usb.getDevices()).filter(d => d !== current) } catch (_) { }
+        for (const spare of others) {
+          try {
+            usbDeviceRef.current = spare
+            await releaseAllUsb()
+            await new Promise(r => setTimeout(r, 300))
+            const out = await usbSendNow(data, chunkSize)
+            // It worked, so this is the printer now: the next receipt should
+            // not have to fail its way back here again.
+            showToast('🖨 ສະຫຼັບໄປໃຊ້ເຄື່ອງພິມສຳຮອງແລ້ວ', 'orange')
+            logActivity('printer_failover', spare.productName || 'spare')
+            rememberPrinter(spare)
+            return out
+          } catch (_) { /* try the next one */ }
+        }
+        usbDeviceRef.current = current
+        throw first
+      }
     }
   }
 
@@ -2765,6 +2790,28 @@ setStockShop(newSS); setStockOnline(newSO)
     }
   }
 
+  // Which printer last actually printed something. Without it the silent
+  // adopt takes whichever device the browser lists first, which after a
+  // failover is still the one that died — so every reload went back to the
+  // broken printer and failed its way across again.
+  function rememberPrinter(d) {
+    try {
+      if (!d) return
+      localStorage.setItem('bcb_printer', JSON.stringify({
+        vendorId: d.vendorId, productId: d.productId, serialNumber: d.serialNumber || null,
+      }))
+    } catch (_) { }
+  }
+  function preferRemembered(list) {
+    try {
+      const want = JSON.parse(localStorage.getItem('bcb_printer') || 'null')
+      if (!want) return list[0] || null
+      const hit = list.find(d => d.vendorId === want.vendorId && d.productId === want.productId
+        && (!want.serialNumber || d.serialNumber === want.serialNumber))
+      return hit || list[0] || null
+    } catch (_) { return list[0] || null }
+  }
+
   // silent: adopt an already-permitted printer without showing the chooser.
   // Staff should not have to pick the printer out of a list every time the
   // page reloads mid-service.
@@ -2785,7 +2832,7 @@ setStockShop(newSS); setStockOnline(newSO)
       let device = null
       if (silent) {
         const granted = await navigator.usb.getDevices()
-        device = granted[0] || null
+        device = preferRemembered(granted)
         if (!device) return false
       } else {
         // requestDevice waits for a person to pick from Chrome's chooser, so
@@ -2808,6 +2855,7 @@ setStockShop(newSS); setStockOnline(newSO)
       await acquireUsb(device, silent && !force ? { attempts: 2, allowReset: false } : {})
       await releaseUsb(device)
       usbDeviceRef.current = device
+      rememberPrinter(device)
       setUsbConnected(true)
       if (!silent) showToast(`🖨 USB ${device.productName || 'Printer'} ✅`, 'green')
       return true
