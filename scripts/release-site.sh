@@ -27,24 +27,34 @@ fs.writeFileSync(p, JSON.stringify(s));
 console.log('stamped build', s.build);
 " "$BUILD"
 
+# The chooser is the root page for an installed app. The Windows build opens
+# /staff directly and never looks at it, so one bundle serves both.
+cp scripts/android-launcher.html out-desktop/index.html
+
 mkdir -p "$DEST"
 echo "==> packing"
+# The Android updater wants a zip; the Windows one reads the tar.gz. Same
+# files, two containers, so neither platform needs a converter at the far end.
+( cd out-desktop && zip -rq9 "../$DEST/site.zip" . )
 # -C so paths inside are relative to the site root: the updater extracts
 # straight into a directory and expects staff/index.html at the top.
 tar -czf "$DEST/site.tar.gz" -C out-desktop .
 
 SIZE=$(stat -c%s "$DEST/site.tar.gz")
+ZSIZE=$(stat -c%s "$DEST/site.zip")
 cat > "$DEST/manifest.json" <<JSON
 {
   "build": "$BUILD",
   "created_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
-  "bytes": $SIZE
+  "bytes": $SIZE,
+  "zipBytes": $ZSIZE
 }
 JSON
 
 echo
 echo "==> build $BUILD — $(numfmt --to=iec "$SIZE" 2>/dev/null || echo "$SIZE bytes")"
-echo "    $DEST/site.tar.gz"
+echo "    $DEST/site.tar.gz  (Windows)"
+echo "    $DEST/site.zip      (Android)"
 echo "    $DEST/manifest.json"
 echo
 echo "now: git add public/desktop && git commit && git push"

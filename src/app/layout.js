@@ -1,5 +1,6 @@
 import './globals.css'
 import PwaHelper from './PwaHelper'
+import AndroidUpdater from './AndroidUpdater'
 import { Noto_Serif_Lao, Playfair_Display } from 'next/font/google'
 
 const notoSerifLao = Noto_Serif_Lao({
@@ -39,6 +40,7 @@ export default function RootLayout({ children }) {
     <html lang="lo" className={`${notoSerifLao.variable} ${playfairDisplay.variable}`}>
       <body>
         <PwaHelper />
+        <AndroidUpdater />
         {children}
       </body>
     </html>

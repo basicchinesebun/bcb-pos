@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1086.0",
+    "@capgo/capacitor-updater": "^8.52.1",
     "@next/swc-linux-x64-gnu": "16.2.4",
     "@next/swc-linux-x64-musl": "16.2.4",
     "@supabase/supabase-js": "^2.43.0",

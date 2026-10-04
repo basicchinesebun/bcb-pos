@@ -25,6 +25,21 @@ echo "==> exporting the site"
 ./scripts/build-desktop.sh > /dev/null
 cp scripts/android-launcher.html out-desktop/index.html
 
+# Stamp the apk with the build it carries, so a fresh install knows what it is
+# running. Without it the updater reads its own build as unknown, decides the
+# published one is newer, and downloads three megabytes it already has on its
+# very first launch — on the connection least likely to be there.
+if [ -f public/desktop/manifest.json ]; then
+  node -e "
+const fs=require('fs');
+const b=JSON.parse(fs.readFileSync('public/desktop/manifest.json','utf8')).build;
+const p='out-desktop/offline-seed.json';
+const s=JSON.parse(fs.readFileSync(p,'utf8'));
+s.build=b; fs.writeFileSync(p, JSON.stringify(s));
+console.log('==> apk carries build', b);
+"
+fi
+
 echo "==> syncing into the Android project"
 npx cap sync android
 
