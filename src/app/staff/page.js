@@ -643,7 +643,7 @@ export default function StaffPage() {
       const newItems = Object.entries(editItems)
         .filter(([, qty]) => qty > 0)
         .map(([i, qty]) => ({ menuIdx: +i, name: menus[+i]?.lo || '', qty, price: prices[+i] || 0, sub: (prices[+i] || 0) * qty }))
-      if (newItems.length === 0) { alert('ຕ້ອງມີສິນຄ້າຢ່າງໜ້ອຍ 1 ລາຍການ'); setEditSaving(false); return }
+      if (newItems.length === 0) { showToast('ຕ້ອງມີສິນຄ້າຢ່າງໜ້ອຍ 1 ລາຍການ', 'orange'); setEditSaving(false); return }
       const newTotal = newItems.reduce((s, it) => s + it.sub, 0)
       const stockKey = editOrder.type === 'online' ? 'stock_online' : 'stock_shop'
       // Send only what changed, and let the database do the arithmetic. This
@@ -695,7 +695,7 @@ export default function StaffPage() {
           const soldOut = Object.entries(taken?.short || {})
             .map(([i, left]) => `${menus[+i]?.lo || ''} (ເຫຼືອ ${left})`)
             .join('\n')
-          alert(`ສະຕັອກບໍ່ພໍ:\n${soldOut}\n\nຍັງບໍ່ໄດ້ແກ້ໄຂອໍເດີ`)
+          showToast(`ສະຕັອກບໍ່ພໍ: ${soldOut.replace(/\n/g, ', ')} — ຍັງບໍ່ໄດ້ແກ້ໄຂ`, 'red')
           setEditSaving(false)
           return
         }
@@ -718,7 +718,7 @@ export default function StaffPage() {
       logActivity('edit_order', `#${String(editOrder.qnum).padStart(4, '0')} → ${newTotal.toLocaleString()}`)
       setEditOrder(null)
       showToast(`✏️ #${String(editOrder.qnum).padStart(4, '0')} ແກ້ໄຂແລ້ວ`, 'green')
-    } catch (e) { alert('❌ ' + (e.message || 'error')) }
+    } catch (e) { showToast('❌ ' + (e.message || 'error'), 'red') }
     finally { setEditSaving(false) }
   }
 
@@ -958,7 +958,7 @@ export default function StaffPage() {
           const soldOut = Object.entries(taken?.short || {})
             .map(([i, left]) => `${menus[+i]?.lo || ''} (ເຫຼືອ ${left})`)
             .join('\n')
-          alert(`ສະຕັອກບໍ່ພໍ:\n${soldOut}\n\nຍັງບໍ່ໄດ້ບັນທຶກອໍເດີ`)
+          showToast(`ສະຕັອກບໍ່ພໍ: ${soldOut.replace(/\n/g, ', ')} — ຍັງບໍ່ໄດ້ບັນທຶກ`, 'red')
           return
         }
         setHeldStock(fromReserve.held)
@@ -1000,7 +1000,7 @@ export default function StaffPage() {
         }
         setTimeout(() => smartPrint(printObj), 300)
       }
-    } catch (e) { alert('❌ ' + (e.message || 'error')) }
+    } catch (e) { showToast('❌ ' + (e.message || 'error'), 'red') }
     finally { setQoSubmitting(false) }
   }
 
@@ -1911,7 +1911,7 @@ export default function StaffPage() {
     const already = []
     for (const o of list) {
       const { data, error } = await supabase.rpc('pickup_order', { p_id: o.id, p_by: activeStaffName || null, p_force: false })
-      if (error) { await loadOrders(); alert('ບັນທຶກບໍ່ສຳເລັດ: ' + error.message); return }
+      if (error) { await loadOrders(); showToast('ບັນທຶກບໍ່ສຳເລັດ: ' + error.message, 'red'); return }
       if (data && data.ok === false) already.push(o)
     }
     if (already.length) {
@@ -2061,7 +2061,7 @@ export default function StaffPage() {
           const short = Object.entries(taken?.short || {})
             .map(([i, left]) => `${menus[+i]?.lo || ''} (ເຫຼືອ ${left})`)
             .join('\n')
-          alert(`ສະຕັອກບໍ່ພໍຈະກູ້ອໍເດີນີ້ຄືນ:\n${short || 'ບໍ່ສາມາດກວດສະຕັອກໄດ້'}\n\nຕ້ອງເພີ່ມສະຕັອກກ່ອນ`)
+          showToast(`ສະຕັອກບໍ່ພໍຈະກູ້ຄືນ: ${(short || 'ກວດບໍ່ໄດ້').replace(/\n/g, ', ')}`, 'red')
           return
         }
         if (Array.isArray(taken.stock)) {
