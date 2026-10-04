@@ -1,0 +1,13 @@
+{
+  "appId": "com.basicchinesebun.pos",
+  "appName": "BCB POS",
+  "webDir": "out-desktop",
+  "android": {
+    "allowMixedContent": true
+  },
+  "server": {
+    "androidScheme": "http",
+    "hostname": "localhost",
+    "cleartext": true
+  }
+}

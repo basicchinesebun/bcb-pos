@@ -14,3 +14,8 @@ out/
 out-desktop/
 desktop-build/
 .api-parked/
+
+# Capacitor's generated Android project. Recreated by `npx cap add android`
+# and rebuilt by scripts/build-android.sh; the Gradle wrapper alone drags in
+# a 100 MB distribution nobody should be pulling from git.
+/android/

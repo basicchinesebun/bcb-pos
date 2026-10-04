@@ -74,6 +74,16 @@ export default function PwaHelper() {
     themeMeta.content = isPractice ? '#b45309' : '#3E2723'
 
     if (typeof window === 'undefined' || !('serviceWorker' in navigator)) return
+
+    // Inside the Android app every file is already on the device, so a worker
+    // would cache a copy of a copy — and then keep serving the old one after an
+    // update, which is the hardest kind of bug to explain to a shop. Skip it.
+    if (window.Capacitor?.isNativePlatform?.()) {
+      navigator.serviceWorker.getRegistrations()
+        .then(rs => rs.forEach(r => r.unregister()))
+        .catch(() => { })
+      return
+    }
     if (config.sw) {
       navigator.serviceWorker.register(config.sw, { scope: config.scope || base }).catch(() => { })
       return

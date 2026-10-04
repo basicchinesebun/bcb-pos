@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="lo">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>BCB POS</title>
+<!--
+  What the Android app opens on.
+  The Windows build goes straight to the till, because that machine is the
+  till. A tablet is whatever it is put down next to — the counter, the
+  steamer, a shelf facing the customers — so it asks once and remembers.
+  Replaces the exported root page, which sends a browser to the customer
+  ordering screen.
+-->
+<style>
+  :root { --brown:#3d1f0a; --cream:#fdf6ee; --cream2:#f5ebe0; --cream3:#e8d5c0; --brown2:#6b3a1f; }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body {
+    margin:0; min-height:100dvh; background:var(--cream); color:var(--brown);
+    font-family:'Noto Sans Lao','Noto Serif Lao',system-ui,sans-serif;
+    display:flex; flex-direction:column; justify-content:center;
+    padding:max(24px,env(safe-area-inset-top)) 20px max(24px,env(safe-area-inset-bottom));
+  }
+  h1 { font-size:26px; font-weight:900; text-align:center; margin:0 0 4px; }
+  p.sub { text-align:center; color:#8a6a55; font-weight:700; font-size:14px; margin:0 0 28px; }
+  .grid { display:grid; gap:14px; max-width:520px; width:100%; margin:0 auto; }
+  @media (min-width:600px) { .grid { grid-template-columns:1fr 1fr; } }
+  a.tile {
+    display:flex; align-items:center; gap:14px; text-decoration:none; color:inherit;
+    background:#fffbf6; border:2px solid var(--cream3); border-radius:18px;
+    padding:18px 20px; min-height:84px;
+  }
+  a.tile:active { transform:scale(0.98); }
+  .emoji { font-size:34px; line-height:1; }
+  .label { font-weight:900; font-size:18px; }
+  .hint { font-size:12px; font-weight:700; color:#8a6a55; margin-top:2px; }
+  .remember { text-align:center; margin-top:26px; font-size:13px; font-weight:700; color:#8a6a55; }
+  .remember label { display:inline-flex; align-items:center; gap:8px; cursor:pointer; }
+  input[type=checkbox] { width:20px; height:20px; accent-color:var(--brown); }
+</style>
+</head>
+<body>
+  <h1>BCB POS</h1>
+  <p class="sub">ເລືອກໜ້າຈໍສຳລັບເຄື່ອງນີ້</p>
+
+  <div class="grid">
+    <a class="tile" href="staff/"   data-k="staff"><span class="emoji">🧾</span><span><span class="label">ໜ້າຂາຍ</span><span class="hint">ຮັບອໍເດີ ຮັບເງິນ</span></span></a>
+    <a class="tile" href="kitchen/" data-k="kitchen"><span class="emoji">🍳</span><span><span class="label">ໜ້າຄົວ</span><span class="hint">ລາຍການທີ່ຕ້ອງເຮັດ</span></span></a>
+    <a class="tile" href="display/" data-k="display"><span class="emoji">📺</span><span><span class="label">ຈໍລູກຄ້າ</span><span class="hint">ເມນູ ແລະ ຍອດເງິນ</span></span></a>
+    <a class="tile" href="queue/"   data-k="queue"><span class="emoji">🔢</span><span><span class="label">ບອດຄິວ</span><span class="hint">ເລກຄິວທີ່ກຳລັງເອີ້ນ</span></span></a>
+  </div>
+
+  <div class="remember">
+    <label><input type="checkbox" id="remember"> ຈື່ໄວ້ ເປີດໜ້ານີ້ທຸກຄັ້ງ</label>
+  </div>
+
+<script>
+  // Remembering is opt-in and reversible: holding any tile for a moment clears
+  // it, so a tablet that was set to the kitchen can be moved to the counter
+  // without reinstalling anything.
+  var KEY = 'bcb_android_home';
+  try {
+    var saved = localStorage.getItem(KEY);
+    if (saved && /^[a-z]+$/.test(saved)) location.replace(saved + '/');
+  } catch (e) {}
+
+  document.querySelectorAll('a.tile').forEach(function (a) {
+    a.addEventListener('click', function () {
+      if (document.getElementById('remember').checked) {
+        try { localStorage.setItem(KEY, a.dataset.k); } catch (e) {}
+      }
+    });
+    var t;
+    a.addEventListener('touchstart', function () {
+      t = setTimeout(function () { try { localStorage.removeItem(KEY); } catch (e) {} }, 700);
+    });
+    ['touchend', 'touchmove', 'touchcancel'].forEach(function (ev) {
+      a.addEventListener(ev, function () { clearTimeout(t); });
+    });
+  });
+</script>
+</body>
+</html>
