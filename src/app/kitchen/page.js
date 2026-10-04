@@ -319,8 +319,11 @@ export default function KitchenPage() {
         <div className="flex px-4 pb-2 gap-2">
           {TABS.map(t => (
             <button key={t.key} onClick={() => setFilter(t.key)}
-              className="px-3 py-1 rounded-full text-xs font-black transition-colors"
+              className="px-4 rounded-full text-xs font-black transition-colors flex items-center"
               style={{
+                // 24px tall was a mis-tap waiting to happen on a tablet, and the
+                // cook is reaching for these with flour on their hands.
+                minHeight: 40,
                 background: filter === t.key ? 'var(--cream)' : 'rgba(253,246,238,0.15)',
                 color: filter === t.key ? 'var(--brown)' : 'rgba(253,246,238,0.8)',
               }}>

@@ -3946,8 +3946,8 @@ setStockShop(newSS); setStockOnline(newSO)
                     buttons already left empty. */}
                 <button
                   onClick={() => setMoneyScope(v => v === 'today' ? 'all' : 'today')}
-                  className="flex items-baseline gap-1.5 px-2.5 py-1 rounded-lg flex-shrink-0 whitespace-nowrap active:scale-95 transition-all"
-                  style={{ background: 'var(--cream2)', border: '1.5px solid var(--cream3)' }}
+                  className="flex items-baseline gap-1.5 px-2.5 rounded-lg flex-shrink-0 whitespace-nowrap active:scale-95 transition-all"
+                  style={{ background: 'var(--cream2)', border: '1.5px solid var(--cream3)', minHeight: 36 }}
                   title="ຍອດເງິນຂອງລາຍການທີ່ສະແດງຢູ່ (ບໍ່ນັບທີ່ຍົກເລີກ/ປະຕິເສດ) — ກົດເພື່ອສະຫຼັບ ມື້ນີ້ / ທັງໝົດ"
                 >
                   <span className="text-xs font-black flex-shrink-0" style={{ color: 'var(--gray3)' }}>
@@ -4203,8 +4203,8 @@ setStockShop(newSS); setStockOnline(newSO)
                                     {!alreadyBlocked && (
                                       <button
                                         onClick={() => blockUser(o)}
-                                        className="mt-1 px-3 py-1 rounded-lg text-xs font-black text-white"
-                                        style={{ background: '#7c3aed' }}
+                                        className="mt-1 px-3 rounded-lg text-xs font-black text-white inline-flex items-center"
+                                        style={{ background: '#7c3aed', minHeight: 36 }}
                                       >
                                         🚫 Block ຜູ້ໃຊ້ນີ້
                                       </button>
