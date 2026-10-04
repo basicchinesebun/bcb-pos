@@ -32,10 +32,12 @@
   }
   a.tile:active { transform:scale(0.98); }
   .emoji { font-size:34px; line-height:1; }
-  .label { font-weight:900; font-size:18px; }
-  .hint { font-size:12px; font-weight:700; color:#8a6a55; margin-top:2px; }
+  .text { display:flex; flex-direction:column; gap:3px; min-width:0; }
+  .label { font-weight:900; font-size:19px; line-height:1.2; }
+  .hint { font-size:12.5px; font-weight:700; color:#8a6a55; line-height:1.3; }
   .remember { text-align:center; margin-top:26px; font-size:13px; font-weight:700; color:#8a6a55; }
-  .remember label { display:inline-flex; align-items:center; gap:8px; cursor:pointer; }
+  .remember label { display:inline-flex; align-items:center; gap:10px; cursor:pointer; font-size:15px; }
+  .undo { margin-top:10px; font-size:12px; color:#a08a78; }
   input[type=checkbox] { width:20px; height:20px; accent-color:var(--brown); }
 </style>
 </head>
@@ -44,14 +46,15 @@
   <p class="sub">ເລືອກໜ້າຈໍສຳລັບເຄື່ອງນີ້</p>
 
   <div class="grid">
-    <a class="tile" href="staff/"   data-k="staff"><span class="emoji">🧾</span><span><span class="label">ໜ້າຂາຍ</span><span class="hint">ຮັບອໍເດີ ຮັບເງິນ</span></span></a>
-    <a class="tile" href="kitchen/" data-k="kitchen"><span class="emoji">🍳</span><span><span class="label">ໜ້າຄົວ</span><span class="hint">ລາຍການທີ່ຕ້ອງເຮັດ</span></span></a>
-    <a class="tile" href="display/" data-k="display"><span class="emoji">📺</span><span><span class="label">ຈໍລູກຄ້າ</span><span class="hint">ເມນູ ແລະ ຍອດເງິນ</span></span></a>
-    <a class="tile" href="queue/"   data-k="queue"><span class="emoji">🔢</span><span><span class="label">ບອດຄິວ</span><span class="hint">ເລກຄິວທີ່ກຳລັງເອີ້ນ</span></span></a>
+    <a class="tile" href="staff/"   data-k="staff"><span class="emoji">🧾</span><span class="text"><span class="label">ໜ້າຂາຍ</span><span class="hint">ຮັບອໍເດີ ຮັບເງິນ</span></span></a>
+    <a class="tile" href="kitchen/" data-k="kitchen"><span class="emoji">🍳</span><span class="text"><span class="label">ໜ້າຄົວ</span><span class="hint">ລາຍການທີ່ຕ້ອງເຮັດ</span></span></a>
+    <a class="tile" href="display/" data-k="display"><span class="emoji">📺</span><span class="text"><span class="label">ຈໍລູກຄ້າ</span><span class="hint">ເມນູ ແລະ ຍອດເງິນ</span></span></a>
+    <a class="tile" href="queue/"   data-k="queue"><span class="emoji">🔢</span><span class="text"><span class="label">ບອດຄິວ</span><span class="hint">ເລກຄິວທີ່ກຳລັງເອີ້ນ</span></span></a>
   </div>
 
   <div class="remember">
-    <label><input type="checkbox" id="remember"> ຈື່ໄວ້ ເປີດໜ້ານີ້ທຸກຄັ້ງ</label>
+    <label><input type="checkbox" id="remember" checked> ຈື່ໄວ້ — ຄັ້ງຕໍ່ໄປເຂົ້າໜ້ານັ້ນເລີຍ</label>
+    <div class="undo">ຢາກປ່ຽນໜ້າ: ກົດປຸ່ມ ← ຂອງເຄື່ອງ ເພື່ອກັບມາໜ້ານີ້</div>
   </div>
 
 <script>
@@ -59,9 +62,18 @@
   // it, so a tablet that was set to the kitchen can be moved to the counter
   // without reinstalling anything.
   var KEY = 'bcb_android_home';
+
+  // Once a screen is remembered this page redirects on sight, which would
+  // leave no way back to it — the long press is on a page nobody ever sees
+  // again. Android's back button lands here, so coming back is how you change
+  // your mind: arriving backwards, or with ?pick, shows the chooser and stays.
+  var nav = (performance.getEntriesByType('navigation') || [])[0];
+  var cameBack = (nav && nav.type === 'back_forward')
+    || location.search.indexOf('pick') !== -1;
+
   try {
     var saved = localStorage.getItem(KEY);
-    if (saved && /^[a-z]+$/.test(saved)) location.replace(saved + '/');
+    if (saved && /^[a-z]+$/.test(saved) && !cameBack) location.replace(saved + '/');
   } catch (e) {}
 
   document.querySelectorAll('a.tile').forEach(function (a) {
