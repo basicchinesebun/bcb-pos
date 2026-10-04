@@ -6,3 +6,11 @@ out/
 
 # Practice-shop env files, pasted into Vercel by hand. Never committed.
 .env.test-shop
+
+# Build output from the Windows desktop build, which is produced on the test
+# branch. 377 MB of Electron binaries that are rebuilt by its scripts and must
+# never reach a commit — least of all on this branch, which deploys the shop.
+.next-desktop/
+out-desktop/
+desktop-build/
+.api-parked/
