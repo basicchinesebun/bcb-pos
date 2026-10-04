@@ -28,10 +28,26 @@ cp scripts/android-launcher.html out-desktop/index.html
 echo "==> syncing into the Android project"
 npx cap sync android
 
+# Signed with the shop's own key, not Gradle's throwaway debug one.
+#
+# Android will only install an update over an existing app when both carry the
+# same signature. The debug key is generated per machine, so a rebuild from a
+# fresh container produced an apk the tablet refused — the shop would have had
+# to uninstall first and lose everything the app had stored, including sales
+# taken offline and not yet pushed.
+#
+# The key lives in the repo on purpose: it is the only place it survives, and
+# losing it means never being able to update the installed app again. It
+# protects nothing of value on its own — signing a replacement still needs the
+# repo and physical access to the tablet.
 echo "==> assembling the apk"
-( cd android && ./gradlew --no-daemon assembleDebug -q )
+( cd android && ./gradlew --no-daemon assembleRelease -q \
+    -Pandroid.injected.signing.store.file="$(cd ..; pwd)/android-signing/bcb-release.jks" \
+    -Pandroid.injected.signing.store.password=bcbpos2026 \
+    -Pandroid.injected.signing.key.alias=bcb \
+    -Pandroid.injected.signing.key.password=bcbpos2026 )
 
-APK="android/app/build/outputs/apk/debug/app-debug.apk"
+APK="android/app/build/outputs/apk/release/app-release.apk"
 if [ ! -f "$APK" ]; then echo "ERROR: no apk produced" >&2; exit 1; fi
 
 mkdir -p desktop-build/dist
