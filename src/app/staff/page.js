@@ -158,6 +158,11 @@ export default function StaffPage() {
   const [imgPreviews, setImgPreviews] = useState({})
   const [qrImage, setQrImage] = useState(null)
   const [qrPreview, setQrPreview] = useState(null)
+  // The notice customers see before the pre-order form. It was only ever set by
+  // writing to shop_config by hand, so from the shop's side it was a picture
+  // nobody could find, let alone change.
+  const [noticeImage, setNoticeImage] = useState(null)
+  const [noticePreview, setNoticePreview] = useState(null)
   const [logoPreview, setLogoPreview] = useState(null)
   const [shopInfo, setShopInfo] = useState({ name: 'Basic Chinese Bun', address: '', phone: '', footer: 'ຂອບໃຈທີ່ໃຊ້ບໍລິການ', logo: '', printerWidth: 384, printOffset: 0 })
   const [receiptDraft, setReceiptDraft] = useState({ name: 'Basic Chinese Bun', address: '', phone: '', footer: 'ຂອບໃຈທີ່ໃຊ້ບໍລິການ', logo: '', printerWidth: 384, printOffset: 0 })
@@ -1587,6 +1592,7 @@ export default function StaffPage() {
     setTimeout(() => checkLowStock(loadedStockShop), 500)
     if (cfg.menu_images) setImages(JSON.parse(cfg.menu_images))
     if (cfg.qr_image) setQrImage(cfg.qr_image)
+    setNoticeImage(cfg.notice_image || null)
     if (cfg.shop_info) {
       const info = JSON.parse(cfg.shop_info)
       setShopInfo(prev => ({ ...prev, ...info }))
@@ -2295,6 +2301,32 @@ setStockShop(newSS); setStockOnline(newSO)
   }
 
   // ─── QR ───
+  async function uploadNotice(e) {
+    const file = e.target.files[0]
+    e.target.value = ''
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = ev => setNoticePreview(ev.target.result)
+    reader.readAsDataURL(file)
+    const data = await uploadToR2(file, 'shop/notice.jpg')
+    if (!data.success) { showToast('❌ ' + (data.error || 'ຜິດ'), 'red'); setNoticePreview(null); return }
+    // Cache-busting: the file name never changes, so without this the old
+    // picture stays on every phone that has already seen it.
+    const url = data.url + '?t=' + Date.now()
+    setNoticeImage(url)
+    setNoticePreview(null)
+    await saveConfig('notice_image', url)
+    logActivity('upload_notice', '')
+    showToast('ອັບໂຫລດຮູບແຈ້ງການ ✅', 'green')
+  }
+
+  async function removeNotice() {
+    setNoticeImage(null)
+    await saveConfig('notice_image', '')
+    logActivity('remove_notice', '')
+    showToast('ລຶບຮູບແຈ້ງການແລ້ວ', 'orange')
+  }
+
   async function uploadQR(e) {
     const file = e.target.files[0]
     if (!file) return
@@ -4847,6 +4879,37 @@ setStockShop(newSS); setStockOnline(newSO)
                     📤 ອັບໂຫລດ QR
                     <input type="file" accept="image/*" className="hidden" onChange={uploadQR} />
                   </label>
+                </div>
+              </details>
+
+              {/* The notice customers meet before the pre-order form. It lived
+                  only in shop_config, set by hand, so from the shop's side it
+                  was a picture nobody could find — and it is the one place to
+                  announce a market stall or a change of pickup. */}
+              <details className="card" open>
+                <summary className="font-black text-xs tracking-widest uppercase cursor-pointer" style={{ color: 'var(--brown3)' }}>
+                  📢 ຮູບແຈ້ງການລູກຄ້າ
+                </summary>
+                <div className="mt-2 text-xs font-bold leading-5" style={{ color: 'var(--gray3)' }}>
+                  ຂຶ້ນກ່ອນໜ້າຟອມ Pre-order — ໃຊ້ປະກາດງານອອກຮ້ານ, ວັນພັກ, ຫຼື ເງື່ອນໄຂການຮັບເຄື່ອງ
+                </div>
+                <div className="mt-3 flex flex-col items-center gap-3">
+                  <div className="w-full max-w-[220px] rounded-xl border-2 border-dashed border-[#e8d5c0] flex items-center justify-center overflow-hidden relative" style={{ minHeight: 160 }}>
+                    {noticePreview
+                      ? <><img src={noticePreview} className="w-full object-contain" alt="preview" /><span className="absolute inset-0 flex items-center justify-center text-sm font-black text-white bg-black/40">ກຳລັງອັບ...</span></>
+                      : noticeImage
+                        ? <img src={noticeImage} className="w-full object-contain" alt="ແຈ້ງການ" />
+                        : <span className="text-sm" style={{ color: 'var(--gray3)' }}>ຍັງບໍ່ມີ</span>}
+                  </div>
+                  <label className="btn-outline text-sm py-2 cursor-pointer text-center">
+                    📤 {noticeImage ? 'ປ່ຽນຮູບແຈ້ງການ' : 'ອັບໂຫລດຮູບແຈ້ງການ'}
+                    <input type="file" accept="image/*" className="hidden" onChange={uploadNotice} />
+                  </label>
+                  {noticeImage && (
+                    <button onClick={removeNotice} className="text-xs font-black text-red-500">
+                      ✕ ລຶບຮູບ (ຈະກັບໄປໃຊ້ຂໍ້ຄວາມມາດຕະຖານ)
+                    </button>
+                  )}
                 </div>
               </details>
 
