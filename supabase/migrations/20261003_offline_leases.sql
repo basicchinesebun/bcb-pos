@@ -32,21 +32,27 @@ create policy stock_leases_all on stock_leases for all using (true) with check (
 
 -- Advance the counter by the whole block under the same lock next_qnum uses,
 -- so a second till asking at the same moment starts after this block.
+--
+-- next_qnum stores the number it LAST handed out: it increments first, then
+-- returns. This read the same value as the next number to hand out, so a block
+-- taken after any ordinary sale began on that sale's queue number and the shop
+-- issued it twice — the exact collision the lease exists to stop. A block of N
+-- therefore runs from cur + 1 to cur + N.
 create or replace function lease_qnums(p_device text, p_count integer, p_key text default 'next_queue_walkin', p_hours integer default 36)
 returns jsonb language plpgsql security definer set search_path = public, pg_temp as $$
 declare cur integer; start_num integer;
 begin
   if p_count < 1 or p_count > 500 then return jsonb_build_object('ok', false, 'reason', 'bad_count'); end if;
-  select coalesce(nullif(value,'')::integer,1) into cur from shop_config where key=p_key for update;
+  select coalesce(nullif(value,'')::integer,0) into cur from shop_config where key=p_key for update;
   if cur is null then
-    insert into shop_config (key, value) values (p_key,'1') on conflict (key) do nothing;
-    select coalesce(nullif(value,'')::integer,1) into cur from shop_config where key=p_key for update;
+    insert into shop_config (key, value) values (p_key,'0') on conflict (key) do nothing;
+    select coalesce(nullif(value,'')::integer,0) into cur from shop_config where key=p_key for update;
   end if;
-  start_num := cur;
+  start_num := cur + 1;
   update shop_config set value=(cur+p_count)::text where key=p_key;
   insert into qnum_leases (device_id, key, from_num, to_num, expires_at)
-    values (p_device, p_key, start_num, start_num+p_count-1, now()+make_interval(hours=>p_hours));
-  return jsonb_build_object('ok',true,'from',start_num,'to',start_num+p_count-1);
+    values (p_device, p_key, start_num, cur+p_count, now()+make_interval(hours=>p_hours));
+  return jsonb_build_object('ok',true,'from',start_num,'to',cur+p_count);
 end $$;
 
 -- Top this device's holding up to p_target per menu, taking the difference off
