@@ -354,15 +354,41 @@ export default function StaffPage() {
         else loadConfig()
       })
       .subscribe(status => {
-        if (status === 'SUBSCRIBED') setLiveStatus('live')
-        else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+        if (status === 'SUBSCRIBED') {
+          setLiveStatus('live')
+          // Re-read on every (re)connect, not just the first. A channel that
+          // drops and comes back missed everything in between, and the stock
+          // number is the one thing with no other way to catch up.
+          loadOrders()
+          loadConfig()
+        } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
           setLiveStatus('error')
-          loadOrders() // fallback full-sync on error
+          loadOrders()
+          loadConfig()
         }
       })
 
-    // Polling fallback — catches any events that realtime misses (table not in publication etc.)
+    // Polling fallback — catches any events that realtime misses (table not in
+    // publication etc.).
+    //
+    // Config was left out of this, and that is why the stock number could sit
+    // at a value the shop had already sold past. The order board has both this
+    // poll and the resync above, so it kept moving; stock had only the realtime
+    // event, so one dropped frame on shop wifi froze it until someone reloaded
+    // the page — and the screen gave no sign, because the board beside it was
+    // plainly live. It is a few kilobytes; read it too.
     const poll = setInterval(() => loadOrders('recent'), 60000)
+    const configPoll = setInterval(() => loadConfig(), 60000)
+
+    // And whenever someone comes back to the till, which is exactly when they
+    // are about to trust what it says.
+    const onConfigVisible = () => {
+      if (document.visibilityState !== 'visible') return
+      loadOrders('recent')
+      loadConfig()
+    }
+    document.addEventListener('visibilitychange', onConfigVisible)
+    window.addEventListener('focus', onConfigVisible)
 
     // Voices
     const loadVoices = () => { voicesRef.current = window.speechSynthesis.getVoices() }
@@ -377,6 +403,9 @@ export default function StaffPage() {
     return () => {
       supabase.removeChannel(ch)
       clearInterval(poll)
+      clearInterval(configPoll)
+      document.removeEventListener('visibilitychange', onConfigVisible)
+      window.removeEventListener('focus', onConfigVisible)
       clearTimeout(timer)
       clearInterval(heal)
       window.removeEventListener('online', onOnline)
