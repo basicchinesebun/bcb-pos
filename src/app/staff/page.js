@@ -1740,7 +1740,16 @@ export default function StaffPage() {
     // anywhere, which is nearly every phone number. Prefix-match the queue
     // number and only try it as a phone fragment once it's long enough to
     // mean a phone number, not a queue number.
-    if (isNumeric && (qnum.padStart(4, '0') === qDigits || qnum.startsWith(qDigits))) return true
+    //
+    // The receipt and the customer board both print the queue number padded
+    // to four digits, so that is what gets typed in — and "001" used to find
+    // nothing at all, because it is neither equal to "0001" nor a prefix of
+    // "1". Strip the padding off the query first. Leading zeros also mean the
+    // number was read off a ticket in full, so take it as the exact number
+    // rather than a prefix: "0001" is queue #1, not #1, #10 and #100 at once.
+    const qPadded = /^0/.test(qDigits)
+    const qBare = qDigits.replace(/^0+/, '')
+    if (isNumeric && qBare && (qnum === qBare || (!qPadded && qnum.startsWith(qBare)))) return true
     const idx = searchIndex.get(o.id)
     if (!idx) return false
     if (qDigits.length >= 3 && idx.phone.includes(qDigits)) return true
