@@ -4146,7 +4146,12 @@ setStockShop(newSS); setStockOnline(newSO)
               )}{/* end fixed header */}
 
               <div className="flex-1 overflow-y-auto px-3 pb-20">
-              {activeOrders.length === 0 && <div className="text-center py-12 text-lg font-bold" style={{ color: 'var(--cream3)' }}>{search.trim() ? 'ບໍ່ພົບຜົນ' : 'ຍັງບໍ່ມີອໍເດີ'}</div>}
+              {/* ບໍ່ພົບຜົນ only when the search really found nothing. A done
+                  order matches into the archive below, not into this list, so
+                  saying "no results" above an open archive holding the answer
+                  would be a lie. */}
+              {activeOrders.length === 0 && (!search.trim() || archivedOrders.length === 0) &&
+                <div className="text-center py-12 text-lg font-bold" style={{ color: 'var(--cream3)' }}>{search.trim() ? 'ບໍ່ພົບຜົນ' : 'ຍັງບໍ່ມີອໍເດີ'}</div>}
 
               <div className="flex flex-col gap-3 xl:grid xl:grid-cols-2 xl:items-start xl:gap-3">
                 {activeOrders.map(o => {
