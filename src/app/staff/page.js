@@ -211,6 +211,10 @@ export default function StaffPage() {
   const isTablet = stationMode === 'tablet'
   const [editItems, setEditItems] = useState({})
   const [editSaving, setEditSaving] = useState(false)
+  // Kept as a string, not a number: this is typed into an input, and a
+  // numeric state turns a half-typed "" into 0 and fights the cursor.
+  const [editDiscount, setEditDiscount] = useState('')
+  const [editDiscountReason, setEditDiscountReason] = useState('')
   const [qoOpen, setQoOpen] = useState(false)
   const [qoBagMode, setQoBagMode] = useState('items')
   const [qoSelected, setQoSelected] = useState({})
@@ -519,7 +523,26 @@ export default function StaffPage() {
     items.forEach(it => { if (it.qty > 0) itemMap[it.menuIdx] = it.qty })
     setEditItems(itemMap)
     setEditBagPacks(parseBagLabelToPacks(o.bag_label, menus))
+    // Seed from what the order already carries, so re-opening a discounted
+    // order shows the discount instead of silently dropping it — the save
+    // writes whatever is in this box, so an empty box would mean "no
+    // discount" and quietly put the price back up.
+    setEditDiscount(o.discount ? String(o.discount) : '')
+    setEditDiscountReason(o.discount_reason || '')
     setEditOrder(o)
+  }
+
+  // ─── Edit-order money ───
+  // One place for the arithmetic. The footer used to recompute the total in
+  // three separate expressions and saveEditOrder in a fourth, which is
+  // exactly how a screen ends up disagreeing with what it saves.
+  function editMoney(items, discountStr) {
+    const gross = Object.entries(items).reduce((s, [i, q]) => s + (prices[+i] || 0) * q, 0)
+    const asked = Math.max(0, Math.floor(Number(String(discountStr).replace(/[^\d]/g, '')) || 0))
+    // Nothing is ever given away past free. A discount bigger than the bill
+    // would otherwise save a negative total and read as the shop owing money.
+    const discount = Math.min(asked, gross)
+    return { gross, discount, net: gross - discount, overAsked: asked > gross }
   }
 
   // How many of this item are still unbagged, against what the order now says.
@@ -567,7 +590,12 @@ export default function StaffPage() {
         .filter(([, qty]) => qty > 0)
         .map(([i, qty]) => ({ menuIdx: +i, name: menus[+i]?.lo || '', qty, price: prices[+i] || 0, sub: (prices[+i] || 0) * qty }))
       if (newItems.length === 0) { showToast('ຕ້ອງມີສິນຄ້າຢ່າງໜ້ອຍ 1 ລາຍການ', 'orange'); setEditSaving(false); return }
-      const newTotal = newItems.reduce((s, it) => s + it.sub, 0)
+      // items[] stays at list price — a line's price is what that bun is
+      // worth, and the discount is a fact about this sale, not about the
+      // menu. So the saved total is the net, and `discount` carries what was
+      // given away. Everything already reading `total` keeps working.
+      const { discount: newDiscount, net: newTotal } = editMoney(editItems, editDiscount)
+      const newReason = newDiscount > 0 ? (editDiscountReason.trim() || 'ຊຳລຸດ') : null
       const stockKey = editOrder.type === 'online' ? 'stock_online' : 'stock_shop'
       // Send only what changed, and let the database do the arithmetic. This
       // used to copy the whole stock array out of local state, apply the
@@ -628,7 +656,10 @@ export default function StaffPage() {
       }
 
       const { error: updErr } = await supabase.from('orders')
-        .update({ items: JSON.stringify(newItems), total: newTotal, bag_label: newBagLabel })
+        .update({
+          items: JSON.stringify(newItems), total: newTotal, bag_label: newBagLabel,
+          discount: newDiscount, discount_reason: newReason,
+        })
         .eq('id', editOrder.id)
       if (updErr) {
         const giveBack = {}
@@ -637,8 +668,12 @@ export default function StaffPage() {
         throw updErr
       }
       setOrders(prev => prev.map(o => o.id === editOrder.id
-        ? { ...o, items: JSON.stringify(newItems), total: newTotal, bag_label: newBagLabel } : o))
-      logActivity('edit_order', `#${String(editOrder.qnum).padStart(4, '0')} → ${newTotal.toLocaleString()}`)
+        ? {
+          ...o, items: JSON.stringify(newItems), total: newTotal, bag_label: newBagLabel,
+          discount: newDiscount, discount_reason: newReason,
+        } : o))
+      logActivity('edit_order', `#${String(editOrder.qnum).padStart(4, '0')} → ${newTotal.toLocaleString()}`
+        + (newDiscount > 0 ? ` (ສ່ວນລົດ ${newDiscount.toLocaleString()} · ${newReason})` : ''))
       setEditOrder(null)
       showToast(`✏️ #${String(editOrder.qnum).padStart(4, '0')} ແກ້ໄຂແລ້ວ`, 'green')
     } catch (e) { showToast('❌ ' + (e.message || 'error'), 'red') }
@@ -2368,6 +2403,15 @@ setStockShop(newSS); setStockOnline(newSO)
     })
     if (o.bag_label) { line(); write('Bag: ' + o.bag_label) }
     line('=')
+    // The lines above are at list price, so without these two the receipt's
+    // own arithmetic does not add up — the customer sees items totalling
+    // 75,000 and a TOTAL of 67,500 with nothing to explain the gap.
+    if ((o.discount || 0) > 0) {
+      const row = (l, r) => write(l + ' '.repeat(Math.max(1, 32 - l.length - r.length)) + r)
+      row('Subtotal', ((o.total || 0) + (o.discount || 0)).toLocaleString())
+      row('Discount' + (o.discount_reason ? ' (' + String(o.discount_reason).slice(0, 10) + ')' : ''),
+        '-' + (o.discount || 0).toLocaleString())
+    }
     const tl = 'TOTAL', tr = (o.total || 0).toLocaleString() + ' LAK'
     write(tl + ' '.repeat(Math.max(1, 32 - tl.length - tr.length)) + tr, { bold: true })
     if (o.customer) {
@@ -2744,6 +2788,24 @@ setStockShop(newSS); setStockOnline(newSO)
       })
     }))
     push(() => { y += Math.round(8 * s); dash() })
+    // Same reason as the thermal receipt: the item lines are at list price, so
+    // without this the box at the bottom is simply less than the sum above it.
+    if ((o.discount || 0) > 0) push(() => {
+      const gross = (o.total || 0) + (o.discount || 0)
+      ctx.fillStyle = '#555'
+      ctx.font = f(13, '700')
+      ctx.textAlign = 'left'
+      ctx.fillText('ລາຄາເຕັມ', 10, y += Math.round(24 * s))
+      ctx.textAlign = 'right'
+      ctx.fillText(gross.toLocaleString(), W - 10, y)
+      ctx.textAlign = 'left'
+      ctx.fillText('ສ່ວນລົດ' + (o.discount_reason ? ` (${o.discount_reason})` : ''), 10, y += Math.round(22 * s))
+      ctx.textAlign = 'right'
+      ctx.fillText('-' + (o.discount || 0).toLocaleString(), W - 10, y)
+      ctx.fillStyle = '#000'
+      ctx.textAlign = 'left'
+      y += Math.round(6 * s)
+    })
     push(() => {
       const bx = Math.round(16 * s)
       const totalStr = (o.total || 0).toLocaleString()
@@ -2998,6 +3060,12 @@ setStockShop(newSS); setStockOnline(newSO)
     return d >= salesDateFrom && d <= salesDateTo
   })
   const salesTotal = salesOrders.reduce((s, o) => s + (o.total || 0), 0)
+  // What was given away over the range. `total` is already the net, so the
+  // takings need no adjusting — but with the discount invisible there was no
+  // way to tell a quiet day from a day spent selling damaged stock cheap.
+  // The list price of everything sold is salesTotal + salesDiscount.
+  const salesDiscount = salesOrders.reduce((s, o) => s + (o.discount || 0), 0)
+  const salesDiscountOrders = salesOrders.filter(o => (o.discount || 0) > 0).length
   const walkinTotal = salesOrders.filter(o => o.type === 'walkin').reduce((s, o) => s + (o.total || 0), 0)
   const onlineTotal = salesOrders.filter(o => o.type === 'online').reduce((s, o) => s + (o.total || 0), 0)
   const menuCount = {}
@@ -3057,7 +3125,10 @@ setStockShop(newSS); setStockOnline(newSO)
 
   function exportSalesCSV() {
     const esc = v => `"${String(v ?? '').replace(/"/g, '""')}"`
-    const rows = [['ຄິວ', 'ວັນທີ', 'ເວລາ', 'ປະເພດ', 'ລາຍການ', 'ຍອດລວມ']]
+    // ສ່ວນລົດ gets its own columns rather than being folded into the total:
+    // the shop needs to see what was given away, and a row showing only the
+    // net reads as though the buns were simply cheaper that day.
+    const rows = [['ຄິວ', 'ວັນທີ', 'ເວລາ', 'ປະເພດ', 'ລາຍການ', 'ລາຄາເຕັມ', 'ສ່ວນລົດ', 'ເຫດຜົນ', 'ຍອດລວມ']]
     salesOrders.forEach(o => {
       const items = typeof o.items === 'string' ? JSON.parse(o.items) : o.items || []
       const dt = new Date(o.done_at || o.created_at)
@@ -3067,11 +3138,18 @@ setStockShop(newSS); setStockOnline(newSO)
         dt.toLocaleTimeString('lo-LA', { hour: '2-digit', minute: '2-digit', hour12: false }),
         o.type === 'online' ? 'Online' : 'Walk-in',
         items.map(it => `${it.name} x${it.qty}`).join('; '),
+        (o.total || 0) + (o.discount || 0),
+        o.discount || 0,
+        o.discount_reason || '',
         o.total || 0,
       ])
     })
     rows.push([])
     rows.push(['ຊ່ວງວັນທີ', `${salesDateFrom} - ${salesDateTo}`])
+    if (salesDiscount > 0) {
+      rows.push(['ລາຄາເຕັມ', salesTotal + salesDiscount])
+      rows.push(['ສ່ວນລົດ', salesDiscount])
+    }
     rows.push(['ຍອດລວມ', salesTotal])
     rows.push(['Walk-in', walkinTotal])
     rows.push(['Online', onlineTotal])
@@ -4331,8 +4409,17 @@ setStockShop(newSS); setStockOnline(newSO)
                           </div>
                         )}
 
-                        <div className="text-base font-black mb-3" style={{ color: 'var(--brown)' }}>
-                          ລວມ: {(o.total || 0).toLocaleString()} ກີບ
+                        <div className="text-base font-black mb-3 flex items-center flex-wrap gap-x-2 gap-y-1" style={{ color: 'var(--brown)' }}>
+                          <span>ລວມ: {(o.total || 0).toLocaleString()} ກີບ</span>
+                          {/* Says the price was lowered on purpose. Without it
+                              a discounted order just looks like the wrong
+                              money was taken, and someone goes looking for a
+                              mistake that isn't there. */}
+                          {(o.discount || 0) > 0 && (
+                            <span className="font-black px-2 py-0.5 rounded-lg" style={{ fontSize: 11, background: '#fef3c7', color: '#92400e', border: '1.5px solid #b45309' }}>
+                              🔧 {o.discount_reason || 'ສ່ວນລົດ'} −{(o.discount || 0).toLocaleString()}
+                            </span>
+                          )}
                         </div>
 
                         {/* Money already collected no longer matches the total
@@ -4523,6 +4610,12 @@ setStockShop(newSS); setStockOnline(newSO)
                 <span className="text-sm font-bold" style={{ color: 'rgba(253,246,238,0.7)' }}>ຍອດລວມ</span>
                 <span className="font-serif text-2xl font-black" style={{ color: 'var(--cream)' }}>{salesTotal.toLocaleString()} ກີບ</span>
               </div>
+              {salesDiscount > 0 && (
+                <div className="mt-2 pt-2 border-t border-[rgba(253,246,238,0.15)] flex justify-between text-sm">
+                  <span style={{ color: 'rgba(253,246,238,0.6)' }}>🔧 ສ່ວນລົດ ({salesDiscountOrders} ອໍເດີ)</span>
+                  <span className="font-black" style={{ color: '#fcd34d' }}>- {salesDiscount.toLocaleString()} ກີບ</span>
+                </div>
+              )}
               {hasCosts && (!profitPin || profitUnlocked) && (
                 <div className="mt-2 pt-2 border-t border-[rgba(253,246,238,0.15)] flex flex-col gap-1">
                   <div className="flex justify-between text-sm">
@@ -5612,21 +5705,116 @@ setStockShop(newSS); setStockOnline(newSO)
           </div>
           <div className="p-4 border-t-2 border-[#e8d5c0] flex-shrink-0" style={{ background: 'var(--warm-white)' }}>
             <div className="max-w-2xl mx-auto w-full">
-            <div className="flex justify-between mb-3 px-1">
-              <span className="font-black" style={{ color: 'var(--brown)' }}>
-                {Object.values(editItems).reduce((s, q) => s + q, 0)} ກ້ອນ
-              </span>
-              <span className="font-black" style={{ color: 'var(--brown)' }}>
-                {Object.entries(editItems).reduce((s, [i, q]) => s + (prices[+i] || 0) * q, 0).toLocaleString()} ກີບ
-              </span>
-            </div>
+            {(() => {
+              const { gross, discount, net, overAsked } = editMoney(editItems, editDiscount)
+              const has = discount > 0
+              // Rounded down to the nearest 1,000 ກີບ: there is no coin below
+              // it here, so an exact 30% of 67,000 is a figure nobody can hand
+              // over. Flooring it means the rounding never costs the shop.
+              const cut = pct => String(Math.floor((gross * pct) / 100 / 1000) * 1000)
+              return (
+                <>
+                  <div className="flex justify-between mb-2 px-1">
+                    <span className="font-black" style={{ color: 'var(--brown)' }}>
+                      {Object.values(editItems).reduce((s, q) => s + q, 0)} ກ້ອນ
+                    </span>
+                    <span className="font-black" style={{ color: has ? 'var(--gray3)' : 'var(--brown)', textDecoration: has ? 'line-through' : 'none' }}>
+                      {gross.toLocaleString()} ກີບ
+                    </span>
+                  </div>
+
+                  {/* Damaged stock. The shop would rather sell a squashed bun
+                      cheap than bin it, and the till could only ever charge
+                      list price. Sell at full price, then come in here and
+                      take the difference off — so the takings show what was
+                      actually put in the drawer, and ສ່ວນລົດ shows what the
+                      damage cost. */}
+                  <div className="rounded-xl mb-3 overflow-hidden" style={{ border: `2px solid ${has ? '#b45309' : 'var(--cream3)'}`, background: has ? '#fffbeb' : 'var(--cream2)' }}>
+                    <div className="flex items-center gap-2 px-3 pt-2.5 pb-1.5">
+                      <span className="text-xs font-black flex-1" style={{ color: has ? '#92400e' : 'var(--gray3)' }}>
+                        🔧 ສ່ວນລົດ · Discount
+                      </span>
+                      {has && (
+                        <button
+                          onClick={() => { setEditDiscount(''); setEditDiscountReason('') }}
+                          className="flex items-center text-xs font-black px-2.5 min-h-[32px] rounded-lg"
+                          style={{ color: 'var(--brown)', background: 'var(--cream2)' }}
+                        >
+                          ລ້າງ · Clear
+                        </button>
+                      )}
+                    </div>
+                    <div className="flex flex-wrap gap-1.5 px-3 pb-2">
+                      {[['ຊຳລຸດ 50%', 50], ['-30%', 30], ['-20%', 20], ['-10%', 10]].map(([label, pct]) => (
+                        <button
+                          key={pct}
+                          onClick={() => { setEditDiscount(cut(pct)); if (!editDiscountReason.trim()) setEditDiscountReason('ຊຳລຸດ') }}
+                          className="flex items-center text-xs font-black px-3 min-h-[36px] rounded-lg border-2"
+                          style={{ borderColor: 'var(--cream3)', background: 'var(--warm-white)', color: 'var(--brown)' }}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="flex items-center gap-2 px-3 pb-2">
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        value={editDiscount}
+                        onChange={e => setEditDiscount(e.target.value.replace(/[^\d]/g, ''))}
+                        placeholder="ຫຼຸດເທົ່າໃດ (ກີບ)"
+                        className="input-field flex-1 min-w-0 text-sm"
+                        style={{ fontVariantNumeric: 'tabular-nums' }}
+                      />
+                      <span className="text-xs font-black flex-shrink-0" style={{ color: 'var(--gray3)' }}>ກີບ</span>
+                    </div>
+                    {overAsked && (
+                      <div className="px-3 pb-2 text-xs font-black" style={{ color: '#b45309' }}>
+                        ຫຼຸດໄດ້ສູງສຸດ {gross.toLocaleString()} ກີບ — ໃຊ້ເທົ່ານີ້
+                      </div>
+                    )}
+                    {has && (
+                      <div className="flex flex-wrap gap-1.5 px-3 pb-3">
+                        {['ຊຳລຸດ', 'ບີບແປ', 'ໃກ້ໝົດອາຍຸ', 'ຂອງແຖມ', 'ລູກຄ້າເກົ່າ'].map(r => (
+                          <button
+                            key={r}
+                            onClick={() => setEditDiscountReason(r)}
+                            className="flex items-center text-xs font-black px-3 min-h-[34px] rounded-lg border-2"
+                            style={{
+                              borderColor: editDiscountReason === r ? '#b45309' : 'var(--cream3)',
+                              background: editDiscountReason === r ? '#b45309' : 'var(--warm-white)',
+                              color: editDiscountReason === r ? '#fff' : 'var(--brown)',
+                            }}
+                          >
+                            {r}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {has && (
+                    <div className="flex justify-between items-baseline mb-3 px-1">
+                      <span className="text-xs font-black" style={{ color: '#92400e' }}>
+                        − {discount.toLocaleString()} ກີບ {editDiscountReason.trim() ? `· ${editDiscountReason.trim()}` : ''}
+                      </span>
+                      <span className="text-xl font-black" style={{ color: 'var(--brown)', fontVariantNumeric: 'tabular-nums' }}>
+                        {net.toLocaleString()} ກີບ
+                      </span>
+                    </div>
+                  )}
+                </>
+              )
+            })()}
             {/* If the customer already paid, spell out the difference this
                 edit creates before it's saved — swapping a 28,000 item for a
-                33,000 one means 5,000 still has to change hands. */}
+                33,000 one means 5,000 still has to change hands. A discount
+                lands here too: taking 7,500 off a paid order is 7,500 to
+                hand back, and this is the line that says so. */}
             {(() => {
               const paid = editOrder.paid_amount != null ? Number(editOrder.paid_amount) : null
               if (paid == null) return null
-              const newTotal = Object.entries(editItems).reduce((s, [i, q]) => s + (prices[+i] || 0) * q, 0)
+              const { net: newTotal } = editMoney(editItems, editDiscount)
               const diff = newTotal - paid
               if (diff === 0) return null
               const owed = diff > 0
