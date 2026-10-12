@@ -4069,10 +4069,15 @@ setStockShop(newSS); setStockOnline(newSO)
                 </button>
                 <span className="text-xs font-black tracking-widest uppercase" style={{ color: 'var(--gray3)' }}>ລາຍການ</span>
                 {/* Takings for the current filter, sitting in the gap the filter
-                    buttons already left empty. */}
+                    buttons already left empty.
+                    items-center, not items-baseline: a display:flex button loses
+                    the browser's own vertical centring, and baseline puts the
+                    single line flush against the top — so once this got a
+                    min-height for the fingertip, the figure rode along the top
+                    edge with a band of dead cream underneath it. */}
                 <button
                   onClick={() => setMoneyScope(v => v === 'today' ? 'all' : 'today')}
-                  className="flex items-baseline gap-1.5 px-2.5 min-h-[34px] rounded-lg flex-shrink-0 active:scale-95 transition-all"
+                  className="flex items-center gap-1.5 px-2.5 min-h-[34px] rounded-lg flex-shrink-0 active:scale-95 transition-all"
                   style={{ background: 'var(--cream2)', border: '1.5px solid var(--cream3)' }}
                   title="ຍອດເງິນຂອງລາຍການທີ່ສະແດງຢູ່ (ບໍ່ນັບທີ່ຍົກເລີກ/ປະຕິເສດ) — ກົດເພື່ອສະຫຼັບ ມື້ນີ້ / ທັງໝົດ"
                 >
