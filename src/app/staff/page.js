@@ -148,7 +148,6 @@ export default function StaffPage() {
   // service; all-time is one tap away for when the question is the other one.
   const [moneyScope, setMoneyScope] = useState('today')
   const [search, setSearch] = useState('')
-  const [customerSearch, setCustomerSearch] = useState('')
   const [toast, setToast] = useState([])
   const [slipModal, setSlipModal] = useState(null)
   const [confirmModal, setConfirmModal] = useState(null) // { message, onConfirm }
@@ -229,7 +228,6 @@ export default function StaffPage() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [statsCollapsed, setStatsCollapsed] = useState(false)
   const [headerCollapsed, setHeaderCollapsed] = useState(false)
-  const [customerSearchCollapsed, setCustomerSearchCollapsed] = useState(true)
   const [displayOrderId, setDisplayOrderId] = useState(null)
   const [qtyModal, setQtyModal] = useState(null)
   const [qtyInput, setQtyInput] = useState('')
@@ -1169,14 +1167,23 @@ export default function StaffPage() {
     const qDigits = q.replace(/\s+/g, '')
     const isNumeric = /^\d+$/.test(qDigits)
     const qnum = String(o.qnum || '')
-    const qnumPad = qnum.padStart(4, '0')
     // A short numeric query (typing a queue number) used to be matched as a
     // substring anywhere in qnum AND against phone digits — e.g. "56" matched
     // queue #1562 and also any customer whose phone happened to contain "56"
     // anywhere, which is nearly every phone number. Prefix-match the queue
     // number and only try it as a phone fragment once it's long enough to
     // mean a phone number, not a queue number.
-    if (isNumeric && (qnum === qDigits || qnumPad === qDigits || qnum.startsWith(qDigits))) return true
+    //
+    // The receipt and the customer board both print the queue number padded
+    // to four digits, so that is what gets typed in — and "001" used to find
+    // nothing at all, because it is neither equal to "1" nor to "0001" nor a
+    // prefix of "1". Strip the padding off the query first. Leading zeros
+    // also mean the number was read off a ticket in full, so take it as the
+    // exact number rather than a prefix: "0001" is queue #1, not #1, #10 and
+    // #100 at once.
+    const qPadded = /^0/.test(qDigits)
+    const qBare = qDigits.replace(/^0+/, '')
+    if (isNumeric && qBare && (qnum === qBare || (!qPadded && qnum.startsWith(qBare)))) return true
     const items = typeof o.items === 'string' ? JSON.parse(o.items) : o.items || []
     if (items.some(it => (it.name || '').toLowerCase().includes(q))) return true
     if (o.customer) {
@@ -1203,22 +1210,6 @@ export default function StaffPage() {
   }, 0)
   const filterMoneyIcon = filter === 'walkin' ? ' 🏪' : filter === 'online' ? ' 🌐' : ''
   const filterMoneyLabel = (moneyScope === 'today' ? 'ມື້ນີ້' : 'ທັງໝົດ') + filterMoneyIcon
-
-  // ─── Customer Search ───
-  const customerSearchResults = customerSearch.trim()
-    ? orders.filter(o => {
-        const q = customerSearch.trim().toLowerCase().replace(/\s+/g, ' ')
-        const qDigits = q.replace(/\s+/g, '')
-        const isNumeric = /^\d+$/.test(qDigits)
-        const c = (() => { try { return JSON.parse(o.customer || '{}') } catch { return {} } })()
-        const qnum = String(o.qnum || '')
-        const qnumPad = qnum.padStart(4, '0')
-        if (isNumeric && (qnum === qDigits || qnumPad === qDigits || qnum.startsWith(qDigits))) return true
-        if ((c.name || '').toLowerCase().replace(/\s+/g, ' ').includes(q)) return true
-        if ((!isNumeric || qDigits.length >= 5) && (c.phone || '').replace(/\s+/g, '').includes(qDigits)) return true
-        return false
-      })
-    : []
 
   const waiting = orders.filter(o => !o.done && !o.cancelled && o.status !== 'rejected' && o.status !== 'blocked').length
   const done = orders.filter(o => o.done).length
@@ -4134,13 +4125,6 @@ setStockShop(newSS); setStockOnline(newSO)
                   >
                     🔍
                   </button>
-                  <button
-                    onClick={() => setCustomerSearchCollapsed(v => !v)}
-                    className={`px-3 py-1 rounded-lg text-xs font-black border ${!customerSearchCollapsed ? 'bg-[#3d1f0a] text-[#fdf6ee] border-[#3d1f0a]' : 'border-[#e8d5c0] text-[#8a6a55]'}`}
-                    title="ຄົ້ນຫາລູກຄ້າ · Customer"
-                  >
-                    👤
-                  </button>
                 </div>
               </div>
               {!mainSearchCollapsed && (
@@ -4158,91 +4142,13 @@ setStockShop(newSS); setStockOnline(newSO)
                 </div>
               )}
 
-              {/* Customer search */}
-              {!customerSearchCollapsed && (
-                <div className="relative mb-3">
-                  <input
-                    type="text"
-                    value={customerSearch}
-                    onChange={e => setCustomerSearch(e.target.value)}
-                    placeholder="ຊື່, ເບີໂທ, ເລກຄິວ (0001)..."
-                    className="input-field w-full text-sm pl-8"
-                  />
-                  <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-sm" style={{ color: 'var(--gray3)' }}>👤</span>
-                  {customerSearch && (
-                    <button onClick={() => setCustomerSearch('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs font-black px-2 py-0.5 rounded" style={{ color: 'var(--brown)', background: 'var(--cream2)' }}>
-                      ລ້າງ · Clear
-                    </button>
-                  )}
-                </div>
-              )}
               </div>
               )}{/* end fixed header */}
 
               <div className="flex-1 overflow-y-auto px-3 pb-20">
-              {/* Customer search results */}
-              {customerSearch.trim() && (
-                <div className="mb-4">
-                  <div className="text-xs font-black tracking-widest uppercase mb-2" style={{ color: 'var(--gray3)' }}>
-                    ຜົນຄົ້ນຫາ · Results ({customerSearchResults.length})
-                  </div>
-                  {customerSearchResults.length === 0 && (
-                    <div className="text-center py-6 text-sm font-bold rounded-xl" style={{ color: 'var(--cream3)', background: 'var(--cream2)' }}>
-                      ບໍ່ພົບຜົນ
-                    </div>
-                  )}
-                  <div className="flex flex-col gap-3">
-                    {customerSearchResults.map(o => {
-                      const items = typeof o.items === 'string' ? JSON.parse(o.items) : o.items || []
-                      const cust = o.customer ? (typeof o.customer === 'string' ? JSON.parse(o.customer) : o.customer) : null
-                      const time = orderStamp(o.created_at)
-                      const stale = isFromEarlierDay(o.created_at) && !o.done && !o.cancelled
-                      const borderColor = o.cancelled || o.status === 'rejected' ? '#fca5a5' : o.status === 'blocked' ? '#c4b5fd' : o.done ? '#e8d5c0' : '#3d1f0a'
-                      return (
-                        <div key={o.id} className="rounded-2xl overflow-hidden" style={{ border: `2px solid ${borderColor}`, background: 'var(--warm-white)' }}>
-                          <div className="p-3">
-                            <div className="flex justify-between items-start mb-2">
-                              <div className="flex items-center gap-2">
-                                <div className="font-serif text-2xl font-black" style={{ color: 'var(--brown)' }}>
-                                  #{String(o.qnum).padStart(4,'0')}
-                                </div>
-                              </div>
-                              <div className="text-right">
-                                <div className="text-xs font-bold" style={{ color: stale ? '#c2410c' : 'var(--gray3)' }}>{stale ? '⚠️ ' : ''}{time}</div>
-                                <span className={`tag text-xs mt-1 ${o.type === 'online' ? 'bg-orange-50 text-orange-700' : 'bg-blue-50 text-blue-700'}`}>
-                                  {o.type === 'online' ? '🌐 Online' : '🏪 Walk-in'}
-                                </span>
-                                {o.done && <span className="tag bg-green-50 text-green-700 text-xs ml-1">✓ Done</span>}
-                                {o.cancelled && <span className="tag bg-red-50 text-red-700 text-xs ml-1">✕ ຍົກເລີກ</span>}
-                                {o.status === 'rejected' && <span className="tag bg-red-50 text-red-700 text-xs ml-1">✕ ປະຕິເສດ</span>}
-                                {o.status === 'blocked' && <span className="tag bg-purple-50 text-purple-700 text-xs ml-1">🚫 ຖືກບ໋ອກ</span>}
-                                {o.status === 'confirmed' && !o.done && <span className="tag bg-green-50 text-green-700 text-xs ml-1">✓ ຢືນຢັນ</span>}
-                                {o.status === 'pending' && !o.cancelled && <span className="tag bg-yellow-50 text-yellow-700 text-xs ml-1">⏳ ລໍຖ້າ</span>}
-                              </div>
-                            </div>
-                            {cust && (
-                              <div className="rounded-xl p-2 mb-2 text-sm font-bold leading-6" style={{ background: 'var(--cream2)', color: 'var(--brown2)' }}>
-                                <div>👤 {cust.name} · 📞 {cust.phone}</div>
-                                {cust.time && <div>🕐 {cust.time}</div>}
-                              </div>
-                            )}
-                            <div className="text-sm font-bold mb-1" style={{ color: 'var(--brown2)' }}>
-                              {items.map((it, ii) => <span key={ii} className="mr-2">{it.name} ×{it.qty}</span>)}
-                            </div>
-                            <div className="text-sm font-black" style={{ color: 'var(--brown)' }}>
-                              ລວມ: {(o.total || 0).toLocaleString()} ກີບ
-                            </div>
-                          </div>
-                        </div>
-                      )
-                    })}
-                  </div>
-                </div>
-              )}
+              {activeOrders.length === 0 && <div className="text-center py-12 text-lg font-bold" style={{ color: 'var(--cream3)' }}>{search.trim() ? 'ບໍ່ພົບຜົນ' : 'ຍັງບໍ່ມີອໍເດີ'}</div>}
 
-              {!customerSearch.trim() && activeOrders.length === 0 && <div className="text-center py-12 text-lg font-bold" style={{ color: 'var(--cream3)' }}>ຍັງບໍ່ມີອໍເດີ</div>}
-
-              {!customerSearch.trim() && <div className="flex flex-col gap-3 xl:grid xl:grid-cols-2 xl:items-start xl:gap-3">
+              <div className="flex flex-col gap-3 xl:grid xl:grid-cols-2 xl:items-start xl:gap-3">
                 {activeOrders.map(o => {
                   const items = typeof o.items === 'string' ? JSON.parse(o.items) : o.items || []
                   const cust = o.customer ? (typeof o.customer === 'string' ? JSON.parse(o.customer) : o.customer) : null
@@ -4491,10 +4397,15 @@ setStockShop(newSS); setStockOnline(newSO)
                     </div>
                   )
                 })}
-              </div>}
+              </div>
 
               {/* ─── Archive ─── */}
-              {!customerSearch.trim() && archivedOrders.length > 0 && (
+              {/* While a search is running the archive opens itself. The whole
+                  reason to look an order up is usually "has this customer
+                  already taken their bag?", and the answer lives in here —
+                  leaving it shut showed a count and hid the one order asked
+                  for. */}
+              {archivedOrders.length > 0 && (
                 <div className="mt-4">
                   <button
                     onClick={() => setArchiveOpen(o => !o)}
@@ -4502,10 +4413,10 @@ setStockShop(newSS); setStockOnline(newSO)
                     style={{ background: 'var(--cream2)', color: 'var(--gray3)' }}
                   >
                     <span>📦 ປະຫວັດ · Archive ({archivedOrders.length})</span>
-                    <span>{archiveOpen ? '▲' : '▼'}</span>
+                    <span>{(archiveOpen || search.trim()) ? '▲' : '▼'}</span>
                   </button>
 
-                  {archiveOpen && (
+                  {(archiveOpen || search.trim()) && (
                     <div className="flex flex-col gap-1 mt-2">
                       {archivedOrders.map(o => {
                         const isExp = expandedArchive.has(o.id)
