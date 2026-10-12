@@ -1093,7 +1093,7 @@ export default function StaffPage() {
     if (cfg.blocked_ips) try { setBlockedIps(JSON.parse(cfg.blocked_ips)) } catch (_) {}
     if (cfg.blocked_fp) try { setBlockedFp(JSON.parse(cfg.blocked_fp)) } catch (_) {}
 
-    // ถ້າຍັງບໍ່ມີຂໍ້ມູນໃນ Supabase ໃຫ້ save default ຂຶ້ນໄປກ່ອນ
+    // ຖ້າຍັງບໍ່ມີຂໍ້ມູນໃນ Supabase ໃຫ້ save default ຂຶ້ນໄປກ່ອນ
     if (!cfg.menus) {
       supabase.from('shop_config').upsert([
         { key: 'menus', value: JSON.stringify(DEFAULT_MENUS) },
@@ -4052,7 +4052,13 @@ setStockShop(newSS); setStockOnline(newSO)
             <div className="flex-1 flex flex-col overflow-hidden min-w-0">
               {!headerCollapsed && (
               <div className="flex-shrink-0 px-3 pt-3 pb-1">
-              <div className="flex gap-2 items-center mb-2">
+              {/* flex-wrap: on a phone this row held ☰, the label, the
+                  takings and five filter buttons on one line, and the takings
+                  chip is the only shrinkable thing in it — so it collapsed to
+                  a 22px sliver with the figure truncated away. Let the filter
+                  group drop to its own line instead; on the till there is
+                  room for everything and nothing moves. */}
+              <div className="flex flex-wrap gap-2 items-center mb-2">
                 <button
                   onClick={() => setSidebarOpen(v => !v)}
                   className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-black transition-all active:scale-95 flex-shrink-0"
@@ -4066,7 +4072,7 @@ setStockShop(newSS); setStockOnline(newSO)
                     buttons already left empty. */}
                 <button
                   onClick={() => setMoneyScope(v => v === 'today' ? 'all' : 'today')}
-                  className="flex items-baseline gap-1.5 px-2.5 py-1 rounded-lg flex-shrink min-w-0 active:scale-95 transition-all"
+                  className="flex items-baseline gap-1.5 px-2.5 min-h-[34px] rounded-lg flex-shrink-0 active:scale-95 transition-all"
                   style={{ background: 'var(--cream2)', border: '1.5px solid var(--cream3)' }}
                   title="ຍອດເງິນຂອງລາຍການທີ່ສະແດງຢູ່ (ບໍ່ນັບທີ່ຍົກເລີກ/ປະຕິເສດ) — ກົດເພື່ອສະຫຼັບ ມື້ນີ້ / ທັງໝົດ"
                 >
@@ -4074,7 +4080,7 @@ setStockShop(newSS); setStockOnline(newSO)
                     {filterMoneyLabel}
                   </span>
                   <span
-                    className="text-sm font-black truncate"
+                    className="text-sm font-black"
                     style={{ color: 'var(--brown)', fontVariantNumeric: 'tabular-nums' }}
                   >
                     {filterMoney.toLocaleString()}
@@ -4115,12 +4121,14 @@ setStockShop(newSS); setStockOnline(newSO)
                       </button>
                     ) : null
                   })()}
+                  {/* min-h-[34px]: these were 26px tall, and 26px on a greasy
+                      touch screen in the middle of service is a mis-tap. */}
                   {[['all','ທັງໝົດ'],['walkin','🏪'],['online','🌐']].map(([f,l]) => (
-                    <button key={f} onClick={() => setFilter(f)} className={`px-3 py-1 rounded-lg text-xs font-black border ${filter===f ? 'bg-[#3d1f0a] text-[#fdf6ee] border-[#3d1f0a]' : 'border-[#e8d5c0] text-[#8a6a55]'}`}>{l}</button>
+                    <button key={f} onClick={() => setFilter(f)} className={`px-3 min-h-[34px] rounded-lg text-xs font-black border ${filter===f ? 'bg-[#3d1f0a] text-[#fdf6ee] border-[#3d1f0a]' : 'border-[#e8d5c0] text-[#8a6a55]'}`}>{l}</button>
                   ))}
                   <button
                     onClick={() => setMainSearchCollapsed(v => !v)}
-                    className={`px-3 py-1 rounded-lg text-xs font-black border ${!mainSearchCollapsed ? 'bg-[#3d1f0a] text-[#fdf6ee] border-[#3d1f0a]' : 'border-[#e8d5c0] text-[#8a6a55]'}`}
+                    className={`px-3 min-h-[34px] rounded-lg text-xs font-black border ${!mainSearchCollapsed ? 'bg-[#3d1f0a] text-[#fdf6ee] border-[#3d1f0a]' : 'border-[#e8d5c0] text-[#8a6a55]'}`}
                     title="ຄົ້ນຫາ: ເລກຄິວ, ຊື່, ເບີໂທ, ເມນູ"
                   >
                     🔍
@@ -5967,7 +5975,7 @@ setStockShop(newSS); setStockOnline(newSO)
                 <div className="text-xs font-black mb-1" style={{ color: 'var(--gray3)' }}>ເຫດຜົນ</div>
                 <textarea
                   value={cancelReason} onChange={e => setCancelReason(e.target.value)}
-                  placeholder="ເຊັ່น: ລູກຄ້າສັ່ງຜິດ, ຂອງໝົດ, ຍົກເລີກເອງ..."
+                  placeholder="ເຊັ່ນ: ລູກຄ້າສັ່ງຜິດ, ຂອງໝົດ, ຍົກເລີກເອງ..."
                   className="input-field w-full text-sm" rows={2}
                 />
               </div>
