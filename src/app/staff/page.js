@@ -140,8 +140,8 @@ export default function StaffPage() {
   const settingsSaveChainRef = useRef(Promise.resolve())
   const [walkinCode, setWalkinCode] = useState('')
   const [branches, setBranches] = useState([
-    { id: 'simeuang',  name: 'ສາຂາສີເມື່ອງ',  nameEn: 'Si Meuang Branch',  visible: true, schedule: 'ຈ · ພ · ສ (Mon / Wed / Fri)', mapUrl: '', facebookUrl: '', tiktokUrl: '', phone1: '', phone2: '', whatsapp: '' },
-    { id: 'houayhong', name: 'ສາຂາຫວຍຫົງ', nameEn: 'Houay Hong Branch', visible: true, schedule: 'ຄ · ສກ · ອ (Tue / Thu / Sat)', mapUrl: '', facebookUrl: '', tiktokUrl: '', phone1: '', phone2: '', whatsapp: '' },
+    { id: 'simeuang',  name: 'ສາຂາສີເມື່ອງ',  nameEn: 'Si Meuang Branch',  visible: true, schedule: 'ວັນຈັນ · ວັນພຸດ · ວັນສຸກ', mapUrl: '', facebookUrl: '', tiktokUrl: '', phone1: '', phone2: '', whatsapp: '' },
+    { id: 'houayhong', name: 'ສາຂາຫວຍຫົງ', nameEn: 'Houay Hong Branch', visible: true, schedule: 'ວັນອັງຄານ · ວັນພະຫັດ · ວັນເສົາ', mapUrl: '', facebookUrl: '', tiktokUrl: '', phone1: '', phone2: '', whatsapp: '' },
   ])
   const [filter, setFilter] = useState('all')
   // Takings shown next to the filter buttons. Today is what matters during
