@@ -16,6 +16,7 @@ export default function MenuPage() {
   const [prices, setPrices] = useState([])
   const [images, setImages] = useState({})
   const [stock, setStock] = useState([])
+  const [branches, setBranches] = useState([])
   const [updatedAt, setUpdatedAt] = useState(null)
   const [loading, setLoading] = useState(true)
   const [failed, setFailed] = useState(false)
@@ -34,6 +35,7 @@ export default function MenuPage() {
     if (cfg.prices) setPrices(parse(cfg.prices, []))
     if (cfg.menu_images) setImages(parse(cfg.menu_images, {}))
     if (cfg.stock_shop) setStock(parse(cfg.stock_shop, []))
+    if (cfg.branches) setBranches(parse(cfg.branches, []))
     setUpdatedAt(new Date())
     setFailed(false)
     setLoading(false)
@@ -68,15 +70,29 @@ export default function MenuPage() {
     }
   }, [loadAll, loadStock])
 
-  // In stock first, then by how much is left, and sold-out last. A customer
-  // scrolling a live on their phone should not have to hunt past thirteen
-  // empty lines to find the two things they can actually buy.
-  const rows = menus
+  // Only what can actually be bought, biggest pile first. Sold-out items are
+  // left off entirely: this page is read on a phone mid-live, and a wall of
+  // grey ໝົດ cards to scroll past is the opposite of "come over, we have it".
+  // The space they were taking is where the way to the shop goes instead.
+  const SHOW = 8
+  const inStock = menus
     .map((m, i) => ({ m, i, qty: stock[i] || 0, price: prices[i] || 0 }))
-    .sort((a, b) => (a.qty > 0 ? 0 : 1) - (b.qty > 0 ? 0 : 1) || b.qty - a.qty)
-  const inStock = rows.filter(r => r.qty > 0)
-  const soldOut = rows.filter(r => r.qty <= 0)
+    .filter(r => r.qty > 0)
+    .sort((a, b) => b.qty - a.qty)
+  const shown = inStock.slice(0, SHOW)
+  const moreCount = inStock.length - shown.length
   const totalPieces = inStock.reduce((s, r) => s + r.qty, 0)
+
+  // The branch the shop is sending people to. Taken from the config the owner
+  // already fills in rather than written in here, so moving or adding a shop
+  // is a settings edit and not a deploy. The saved map link has a space on
+  // the front of it, which an href would carry straight into a broken tap.
+  const branch = branches.find(b => b.visible !== false && String(b.mapUrl || '').trim())
+    || branches.find(b => b.visible !== false)
+    || branches[0]
+  const mapUrl = String(branch?.mapUrl || '').trim()
+  const safeMapUrl = /^https?:\/\//i.test(mapUrl) ? mapUrl : ''
+  const phones = [branch?.phone1, branch?.phone2].map(p => String(p || '').trim()).filter(Boolean)
 
   const clock = d => d
     ? `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
@@ -202,36 +218,80 @@ export default function MenuPage() {
           <div className="text-center py-16 font-bold" style={{ color: 'var(--gray3)' }}>ຍັງບໍ່ໄດ້ຕັ້ງເມນູ</div>
         ) : (
           <>
-            {inStock.length > 0 && (
+            {shown.length > 0 ? (
               <div className="grid gap-3 grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
-                {inStock.map(r => <Card key={r.i} r={r} out={false} />)}
+                {shown.map(r => <Card key={r.i} r={r} out={false} />)}
+              </div>
+            ) : (
+              <div className="rounded-2xl text-center py-10 px-4 font-bold" style={{ background: 'var(--cream2)', color: 'var(--brown)' }}>
+                ມື້ນີ້ຂາຍໝົດແລ້ວ 🙏<br />
+                <span style={{ color: 'var(--gray3)', fontSize: 13 }}>ພົບກັນໃໝ່ມື້ອື່ນເດີ້</span>
               </div>
             )}
 
-            {soldOut.length > 0 && (
-              <>
-                {/* Sold-out items stay on the page rather than disappearing:
-                    someone looking for the taro bun needs to know it exists
-                    and is gone today, not be left wondering whether the shop
-                    stopped making it. */}
-                <div className="flex items-center gap-3 mt-7 mb-3">
-                  <div className="flex-1" style={{ height: 1.5, background: 'var(--cream3)' }} />
-                  <span className="font-black tracking-widest uppercase" style={{ color: 'var(--gray3)', fontSize: 10, letterSpacing: '0.18em' }}>
-                    ໝົດມື້ນີ້ · SOLD OUT ({soldOut.length})
-                  </span>
-                  <div className="flex-1" style={{ height: 1.5, background: 'var(--cream3)' }} />
-                </div>
-                <div className="grid gap-3 grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
-                  {soldOut.map(r => <Card key={r.i} r={r} out />)}
-                </div>
-              </>
+            {/* The page is capped at eight so it stays one thumb-flick long,
+                but the summary above counts everything on the shelf — so when
+                there is more than fits, say so rather than letting the two
+                numbers quietly disagree. */}
+            {moreCount > 0 && (
+              <div className="text-center font-bold mt-3" style={{ color: 'var(--gray3)', fontSize: 12 }}>
+                ແລະ ອີກ {moreCount} ລາຍການທີ່ໜ້າຮ້ານ
+              </div>
             )}
           </>
         )}
 
-        <div className="text-center font-bold mt-8 pb-6" style={{ color: 'var(--gray3)', fontSize: 12, lineHeight: 1.7 }}>
-          ຈຳນວນແມ່ນຂອງໜ້າຮ້ານ ແລະ ປ່ຽນແປງຕະຫຼອດເວລາ<br />
-          ເຊີນມາຊື້ທີ່ຮ້ານໄດ້ເລີຍ 🥟
+        {/* Where the sold-out wall used to be. Someone who has scrolled to the
+            end of what the shop has is exactly the person deciding whether to
+            come over, so this is the spot that has to answer "where are you".
+            One tap opens Google Maps with the shop already pinned. */}
+        {branch && (
+          <div className="rounded-2xl overflow-hidden mt-7" style={{ background: 'var(--brown)' }}>
+            <div className="px-5 pt-5 pb-4 text-center">
+              <div className="font-black tracking-widest uppercase" style={{ color: 'rgba(253,246,238,0.45)', fontSize: 10, letterSpacing: '0.2em' }}>
+                ມາຊື້ທີ່ຮ້ານ · COME TO THE SHOP
+              </div>
+              <div className="font-serif font-black mt-1.5" style={{ color: 'var(--cream)', fontSize: 24 }}>
+                {branch.name}
+              </div>
+              {branch.schedule && (
+                <div className="font-bold mt-1" style={{ color: 'rgba(253,246,238,0.6)', fontSize: 13 }}>
+                  {branch.schedule}
+                </div>
+              )}
+            </div>
+            <div className="px-4 pb-5 flex flex-col gap-2.5">
+              {safeMapUrl && (
+                <a
+                  href={safeMapUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center justify-center gap-2 rounded-xl font-black active:scale-95 transition-transform"
+                  style={{ background: 'var(--cream)', color: 'var(--brown)', minHeight: 54, fontSize: 16 }}
+                >
+                  📍 ເສັ້ນທາງໄປຮ້ານ · Google Maps
+                </a>
+              )}
+              {phones.length > 0 && (
+                <div className="flex gap-2.5">
+                  {phones.map(ph => (
+                    <a
+                      key={ph}
+                      href={`tel:${ph.replace(/[^\d+]/g, '')}`}
+                      className="flex-1 flex items-center justify-center gap-1.5 rounded-xl font-black active:scale-95 transition-transform"
+                      style={{ border: '2px solid rgba(253,246,238,0.3)', color: 'var(--cream)', minHeight: 48, fontSize: 14, fontVariantNumeric: 'tabular-nums' }}
+                    >
+                      📞 {ph}
+                    </a>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        <div className="text-center font-bold mt-6 pb-8" style={{ color: 'var(--gray3)', fontSize: 12, lineHeight: 1.7 }}>
+          ຈຳນວນແມ່ນຂອງໜ້າຮ້ານ ແລະ ປ່ຽນແປງຕະຫຼອດເວລາ
         </div>
       </div>
     </div>
