@@ -37,10 +37,45 @@ export default function QueuePage() {
     } catch (_) {}
   }
 
-  function applyQueue(val) {
+  // This board hangs where walk-in customers stand and wait, so it shows
+  // walk-in numbers only. current_queue is whatever the staff last called,
+  // and they call preorder collections on it too — a customer holding #0042
+  // watching #1203 come up has no idea whether their turn has passed.
+  //
+  // Filtered here rather than where the number is written: current_queue has
+  // four writers (the till's 📢, its ✓ ສຳເລັດຫຼາຍໃບ, and two in the kitchen)
+  // and the status page reads it as well, where a preorder number is right.
+  // One reader changes; nothing else moves.
+  async function isWalkin(qnum) {
+    const n = Number(qnum)
+    if (!Number.isFinite(n)) return false
+    let data, error
+    try {
+      ({ data, error } = await supabase.from('orders')
+        .select('type')
+        .eq('qnum', n)
+        .order('created_at', { ascending: false })
+        .limit(1))
+    } catch (_) { return null }
+    // A number that matches no order at all is left to show: it is almost
+    // certainly a board being tested or a row since deleted, and a blank
+    // screen in the shop is worse than an unexplained number.
+    if (error) return null
+    if (!data || !data.length) return true
+    return data[0].type === 'walkin'
+  }
+
+  async function applyQueue(val) {
     if (val == null) return
     const next = String(val)
-    if (lastSeen.current !== null && lastSeen.current !== next) triggerFlash()
+    if (lastSeen.current === next) return
+    const walkin = await isWalkin(next)
+    // Lookup failed — the line is flaky. Hold the number that is up rather
+    // than risking a preorder number on a walk-in board; lastSeen is left
+    // alone so the 5s poll tries this one again.
+    if (walkin === null) return
+    if (!walkin) { lastSeen.current = next; return }
+    if (lastSeen.current !== null) triggerFlash()
     lastSeen.current = next
     setCurrentQueue(next)
   }
@@ -59,8 +94,12 @@ export default function QueuePage() {
       }
       // How many are still ahead. "What number are you on" is really "how long
       // do I have to wait", and the number alone doesn't answer that.
+      // Walk-in only, to match the number above it: counting the preorder
+      // backlog here told someone waiting for two buns that 180 orders stood
+      // in front of them, when the real queue at the counter was four.
       const { count } = await supabase.from('orders')
         .select('id', { count: 'exact', head: true })
+        .eq('type', 'walkin')
         .eq('done', false).eq('cancelled', false).eq('status', 'confirmed')
       if (typeof count === 'number') setWaiting(count)
     }
