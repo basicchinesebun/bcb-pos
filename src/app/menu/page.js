@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../../lib/supabase'
+import ClosedOverlay from '../../components/ClosedOverlay'
 
 // The link the shop pins at the top of a Facebook live: a customer taps it,
 // looks once, and decides whether it is worth coming over. So the page answers
@@ -17,6 +18,10 @@ export default function MenuPage() {
   const [images, setImages] = useState({})
   const [stock, setStock] = useState([])
   const [branches, setBranches] = useState([])
+  // Same flag the walk-in page closes on. Starts true like /order's does, but
+  // nothing renders until the first load lands, so the shelf never flashes up
+  // for a moment on a shop that is shut.
+  const [walkinOn, setWalkinOn] = useState(true)
   const [updatedAt, setUpdatedAt] = useState(null)
   const [loading, setLoading] = useState(true)
   const [failed, setFailed] = useState(false)
@@ -36,6 +41,7 @@ export default function MenuPage() {
     if (cfg.menu_images) setImages(parse(cfg.menu_images, {}))
     if (cfg.stock_shop) setStock(parse(cfg.stock_shop, []))
     if (cfg.branches) setBranches(parse(cfg.branches, []))
+    if (cfg.settings) setWalkinOn(parse(cfg.settings, {}).walkinOn !== false)
     setUpdatedAt(new Date())
     setFailed(false)
     setLoading(false)
@@ -46,12 +52,24 @@ export default function MenuPage() {
   // this page at once, so the repeating fetch is the small one — and there is
   // no realtime subscription here on purpose, because a hundred sockets is a
   // bill and a connection cap for a number that is fine fifteen seconds late.
+  // settings rides along with the stock rather than being left to the one-time
+  // load: the shop is closed with the same switch that closes the walk-in
+  // page, and someone holding this page open when that happens has to see it
+  // too — otherwise they set off for a shop that shut while they were reading.
   const loadStock = useCallback(async () => {
     if (!supabase) return
-    const { data, error } = await supabase.from('shop_config').select('value').eq('key', 'stock_shop').limit(1)
+    const { data, error } = await supabase.from('shop_config').select('key,value').in('key', ['stock_shop', 'settings'])
     if (error || !data || !data.length) { setFailed(true); return }
-    const v = parse(data[0].value, null)
-    if (Array.isArray(v)) { setStock(v); setUpdatedAt(new Date()); setFailed(false) }
+    for (const row of data) {
+      if (row.key === 'stock_shop') {
+        const v = parse(row.value, null)
+        if (Array.isArray(v)) setStock(v)
+      } else if (row.key === 'settings') {
+        setWalkinOn(parse(row.value, {}).walkinOn !== false)
+      }
+    }
+    setUpdatedAt(new Date())
+    setFailed(false)
   }, [])
 
   useEffect(() => {
@@ -163,6 +181,14 @@ export default function MenuPage() {
         </div>
       </div>
     )
+  }
+
+  // Closed is closed. A shelf count on a shut shop is worse than no page at
+  // all — it sends someone across town for buns nobody is selling. Same
+  // component and same switch as the walk-in page, so whichever link they
+  // tapped they get the same answer.
+  if (!loading && !walkinOn) {
+    return <ClosedOverlay shopInfo={shopInfo} branches={branches} subtitle="ບໍ່ຮັບ Walk-in ໃນຕອນນີ້" />
   }
 
   return (
