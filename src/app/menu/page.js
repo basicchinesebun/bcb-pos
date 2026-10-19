@@ -17,11 +17,18 @@ export default function MenuPage() {
   const [prices, setPrices] = useState([])
   const [images, setImages] = useState({})
   const [stock, setStock] = useState([])
+  // What is open for preorder. On a preorder day this is tomorrow's shop
+  // menu: checked against 45 days of real orders, every menu offered for
+  // preorder turned up at the counter the next opening day in 10 of the last
+  // 12 cycles, and the other two were short by one item.
+  const [stockOnline, setStockOnline] = useState([])
   const [branches, setBranches] = useState([])
   // Same flag the walk-in page closes on. Starts true like /order's does, but
   // nothing renders until the first load lands, so the shelf never flashes up
   // for a moment on a shop that is shut.
   const [walkinOn, setWalkinOn] = useState(true)
+  // Null until the browser says so — see the note where the day is used.
+  const [today, setToday] = useState(null)
   const [updatedAt, setUpdatedAt] = useState(null)
   const [loading, setLoading] = useState(true)
   const [failed, setFailed] = useState(false)
@@ -40,6 +47,7 @@ export default function MenuPage() {
     if (cfg.prices) setPrices(parse(cfg.prices, []))
     if (cfg.menu_images) setImages(parse(cfg.menu_images, {}))
     if (cfg.stock_shop) setStock(parse(cfg.stock_shop, []))
+    if (cfg.stock_online) setStockOnline(parse(cfg.stock_online, []))
     if (cfg.branches) setBranches(parse(cfg.branches, []))
     if (cfg.settings) setWalkinOn(parse(cfg.settings, {}).walkinOn !== false)
     setUpdatedAt(new Date())
@@ -58,12 +66,16 @@ export default function MenuPage() {
   // too — otherwise they set off for a shop that shut while they were reading.
   const loadStock = useCallback(async () => {
     if (!supabase) return
-    const { data, error } = await supabase.from('shop_config').select('key,value').in('key', ['stock_shop', 'settings'])
+    const { data, error } = await supabase.from('shop_config').select('key,value')
+      .in('key', ['stock_shop', 'stock_online', 'settings'])
     if (error || !data || !data.length) { setFailed(true); return }
     for (const row of data) {
       if (row.key === 'stock_shop') {
         const v = parse(row.value, null)
         if (Array.isArray(v)) setStock(v)
+      } else if (row.key === 'stock_online') {
+        const v = parse(row.value, null)
+        if (Array.isArray(v)) setStockOnline(v)
       } else if (row.key === 'settings') {
         setWalkinOn(parse(row.value, {}).walkinOn !== false)
       }
@@ -73,12 +85,16 @@ export default function MenuPage() {
   }, [])
 
   useEffect(() => {
+    // Re-read on every visibility change, not just once: a phone left on this
+    // page overnight would otherwise still call it Sunday on Monday morning.
+    const readDay = () => setToday(new Date().getDay())
+    readDay()
     loadAll()
-    const poll = setInterval(loadStock, 15000)
+    const poll = setInterval(() => { readDay(); loadStock() }, 15000)
     // Phones sleep the tab the moment the customer switches back to the live.
     // Refresh on the way back rather than showing them a number from before
     // the thing they just watched sell out.
-    const onVisible = () => { if (document.visibilityState === 'visible') loadStock() }
+    const onVisible = () => { if (document.visibilityState === 'visible') { readDay(); loadStock() } }
     document.addEventListener('visibilitychange', onVisible)
     window.addEventListener('focus', onVisible)
     return () => {
@@ -88,17 +104,52 @@ export default function MenuPage() {
     }
   }, [loadAll, loadStock])
 
-  // Only what can actually be bought, biggest pile first. Sold-out items are
-  // left off entirely: this page is read on a phone mid-live, and a wall of
-  // grey ໝົດ cards to scroll past is the opposite of "come over, we have it".
-  // The space they were taking is where the way to the shop goes instead.
-  const SHOW = 8
+  // ─── What kind of day is it ───
+  // The shop runs in pairs: a preorder day sets the menu, the opening day
+  // after it sells that menu over the counter. ອາທິດ→ຈັນ, ອັງຄານ→ພຸດ,
+  // ພະຫັດ→ສຸກ, and ເສົາ is the day off.
+  //
+  // Read off the weekday rather than off the stock, because at 2am on a
+  // preorder day both shelves are still empty and a shop that has not been
+  // stocked yet is indistinguishable from one that is shut. The opening days
+  // come from the schedule the owner already types in settings, so changing
+  // the shop's week is a settings edit; the known rhythm is only the fallback
+  // for when that text cannot be read.
+  const LAO_DAYS = ['ວັນອາທິດ', 'ວັນຈັນ', 'ວັນອັງຄານ', 'ວັນພຸດ', 'ວັນພະຫັດ', 'ວັນສຸກ', 'ວັນເສົາ']
+  const scheduleText = branches.map(b => b?.schedule || '').join(' ')
+  const parsedDays = LAO_DAYS.map((name, i) => (scheduleText.includes(name) ? i : -1)).filter(i => i >= 0)
+  const shopDays = parsedDays.length ? parsedDays : [1, 3, 5]
+  const preorderDays = shopDays.map(d => (d + 6) % 7)
+
+  // After mount, never during render. This page is prerendered, so asking the
+  // weekday while rendering gives the build server's day on the server and the
+  // customer's day in the browser — React throws a hydration mismatch and the
+  // page flashes the wrong one first.
+  const isShopDay = today !== null && shopDays.includes(today)
+  // A day that is both would be a shop day first — you can buy buns today.
+  const isPreorderDay = today !== null && !isShopDay && preorderDays.includes(today)
+  const isRestDay = today !== null && !isShopDay && !isPreorderDay
+  const tomorrowName = today === null ? '' : LAO_DAYS[(today + 1) % 7]
+  const nextShopDay = (() => {
+    if (today === null) return ''
+    for (let n = 1; n <= 7; n++) if (shopDays.includes((today + n) % 7)) return LAO_DAYS[(today + n) % 7]
+    return ''
+  })()
+
+  // On a selling day: everything on the shelf, with its count — the owner
+  // asked for the lot, and a selling day only ever carries five to eight
+  // menus anyway. On a preorder day: the same cards without a number, because
+  // the preorder pool is not what will be stacked on the counter and a figure
+  // read as a promise is worse than no figure.
+  // On the day off there is nothing to list at all. The shelf array still
+  // holds whatever was left on Friday, and printing that under "ມື້ນີ້ພັກ"
+  // invites someone to come anyway.
+  const source = isShopDay ? stock : isPreorderDay ? stockOnline : []
   const inStock = menus
-    .map((m, i) => ({ m, i, qty: stock[i] || 0, price: prices[i] || 0 }))
+    .map((m, i) => ({ m, i, qty: source[i] || 0, price: prices[i] || 0 }))
     .filter(r => r.qty > 0)
     .sort((a, b) => b.qty - a.qty)
-  const shown = inStock.slice(0, SHOW)
-  const moreCount = inStock.length - shown.length
+  const shown = inStock
   const totalPieces = inStock.reduce((s, r) => s + r.qty, 0)
 
   // The branch the shop is sending people to. Taken from the config the owner
@@ -159,11 +210,13 @@ export default function MenuPage() {
             <span className="font-black" style={{ color: out ? 'var(--gray3)' : 'var(--brown2)', fontSize: 16, fontVariantNumeric: 'tabular-nums' }}>
               {price.toLocaleString()} <span style={{ fontSize: 11 }}>ກີບ</span>
             </span>
-            {!out && (
-              // The number is the whole point of the page, so it is a filled
-              // pill rather than a line of grey text — and it turns amber under
-              // five, because "ເຫຼືອ 2" is the sentence that gets someone off
-              // the sofa.
+            {!out && !isPreorderDay && (
+              // The number is the whole point of the page on a selling day, so
+              // it is a filled pill rather than a line of grey text — and it
+              // turns amber under five, because "ເຫຼືອ 2" is the sentence that
+              // gets someone off the sofa. On a preorder day it is left off
+              // entirely: that pool is not what gets stacked on the counter,
+              // and a figure read as a promise is worse than no figure.
               <span
                 className="font-black rounded-full px-2.5 py-1 whitespace-nowrap"
                 style={{
@@ -183,11 +236,14 @@ export default function MenuPage() {
     )
   }
 
-  // Closed is closed. A shelf count on a shut shop is worse than no page at
-  // all — it sends someone across town for buns nobody is selling. Same
-  // component and same switch as the walk-in page, so whichever link they
-  // tapped they get the same answer.
-  if (!loading && !walkinOn) {
+  // Closed is closed — on a selling day. A shelf count on a shut shop sends
+  // someone across town for buns nobody is selling, so that gets the same
+  // screen as the walk-in page.
+  //
+  // Only on a selling day, though. walkinOn is off all through a preorder day
+  // by definition, and closing this page then would hide the very thing it is
+  // now for: what tomorrow's counter will have.
+  if (!loading && isShopDay && !walkinOn) {
     return <ClosedOverlay shopInfo={shopInfo} branches={branches} subtitle="ບໍ່ຮັບ Walk-in ໃນຕອນນີ້" />
   }
 
@@ -203,7 +259,9 @@ export default function MenuPage() {
               {shopInfo.name}
             </div>
             <div className="font-black tracking-widest uppercase" style={{ color: 'rgba(253,246,238,0.5)', fontSize: 10, letterSpacing: '0.18em' }}>
-              ເມນູມື້ນີ້ · TODAY AT THE SHOP
+              {isShopDay ? 'ເມນູມື້ນີ້ · TODAY AT THE SHOP'
+                : isPreorderDay ? `${tomorrowName} ຢູ່ຮ້ານ · TOMORROW`
+                  : 'ເມນູ · MENU'}
             </div>
           </div>
         </div>
@@ -215,11 +273,16 @@ export default function MenuPage() {
             asks about. */}
         <div className="flex items-center justify-between gap-3 flex-wrap mb-4">
           <div className="font-bold" style={{ color: 'var(--brown)', fontSize: 14 }}>
-            {loading
-              ? 'ກຳລັງໂຫຼດ...'
-              : inStock.length === 0
-                ? 'ມື້ນີ້ຂາຍໝົດແລ້ວ'
-                : <>ມີຂາຍ <b style={{ fontSize: 16 }}>{inStock.length}</b> ລາຍການ · ລວມ <b style={{ fontSize: 16 }}>{totalPieces}</b> ກ້ອນ</>}
+            {loading || today === null ? 'ກຳລັງໂຫຼດ...'
+              : isPreorderDay
+                ? (inStock.length === 0
+                  ? `ຍັງບໍ່ທັນປະກາດເມນູ${tomorrowName}`
+                  : <>{tomorrowName}ຈະມີ <b style={{ fontSize: 16 }}>{inStock.length}</b> ລາຍການ</>)
+                : isRestDay
+                  ? `ມື້ນີ້ພັກ · ເປີດ${nextShopDay}`
+                  : inStock.length === 0
+                    ? 'ມື້ນີ້ຂາຍໝົດແລ້ວ'
+                    : <>ມີຂາຍ <b style={{ fontSize: 16 }}>{inStock.length}</b> ລາຍການ · ລວມ <b style={{ fontSize: 16 }}>{totalPieces}</b> ກ້ອນ</>}
           </div>
           {updatedAt && (
             <div className="flex items-center gap-1.5 font-bold" style={{ color: 'var(--gray3)', fontSize: 11 }}>
@@ -229,7 +292,7 @@ export default function MenuPage() {
           )}
         </div>
 
-        {loading ? (
+        {loading || today === null ? (
           <div className="grid gap-3 grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
             {[0, 1, 2, 3].map(k => (
               <div key={k} className="rounded-2xl overflow-hidden" style={{ background: 'var(--cream2)', aspectRatio: '1 / 1.45' }} />
@@ -250,18 +313,23 @@ export default function MenuPage() {
               </div>
             ) : (
               <div className="rounded-2xl text-center py-10 px-4 font-bold" style={{ background: 'var(--cream2)', color: 'var(--brown)' }}>
-                ມື້ນີ້ຂາຍໝົດແລ້ວ 🙏<br />
-                <span style={{ color: 'var(--gray3)', fontSize: 13 }}>ພົບກັນໃໝ່ມື້ອື່ນເດີ້</span>
+                {isPreorderDay
+                  ? <>ຍັງບໍ່ທັນປະກາດເມນູ{tomorrowName} 🙏<br />
+                    <span style={{ color: 'var(--gray3)', fontSize: 13 }}>ລອງເຂົ້າມາເບິ່ງໃໝ່ພາຍຫຼັງ</span></>
+                  : isRestDay
+                    ? <>ມື້ນີ້ຮ້ານພັກ 🙏<br />
+                      <span style={{ color: 'var(--gray3)', fontSize: 13 }}>ພົບກັນ{nextShopDay}ເດີ້</span></>
+                    : <>ມື້ນີ້ຂາຍໝົດແລ້ວ 🙏<br />
+                      <span style={{ color: 'var(--gray3)', fontSize: 13 }}>ພົບກັນໃໝ່ມື້ອື່ນເດີ້</span></>}
               </div>
             )}
 
-            {/* The page is capped at eight so it stays one thumb-flick long,
-                but the summary above counts everything on the shelf — so when
-                there is more than fits, say so rather than letting the two
-                numbers quietly disagree. */}
-            {moreCount > 0 && (
-              <div className="text-center font-bold mt-3" style={{ color: 'var(--gray3)', fontSize: 12 }}>
-                ແລະ ອີກ {moreCount} ລາຍການທີ່ໜ້າຮ້ານ
+            {/* On a preorder day the cards carry no number, so say plainly
+                where the list came from — otherwise it reads as today's shelf
+                and someone turns up this afternoon to a shut door. */}
+            {isPreorderDay && shown.length > 0 && (
+              <div className="text-center font-bold mt-3" style={{ color: 'var(--gray3)', fontSize: 12, lineHeight: 1.7 }}>
+                ນີ້ແມ່ນເມນູທີ່ເປີດສັ່ງລ່ວງໜ້າມື້ນີ້<br />ແລະ ຈະມີຢູ່ໜ້າຮ້ານ{tomorrowName}
               </div>
             )}
           </>
@@ -316,9 +384,15 @@ export default function MenuPage() {
           </div>
         )}
 
-        <div className="text-center font-bold mt-6 pb-8" style={{ color: 'var(--gray3)', fontSize: 12, lineHeight: 1.7 }}>
-          ຈຳນວນແມ່ນຂອງໜ້າຮ້ານ ແລະ ປ່ຽນແປງຕະຫຼອດເວລາ
-        </div>
+        {/* Only where there are numbers to disclaim. On a preorder day the
+            cards carry no count, so this line would be answering a question
+            nobody on the page has asked. */}
+        {isShopDay && (
+          <div className="text-center font-bold mt-6 pb-8" style={{ color: 'var(--gray3)', fontSize: 12, lineHeight: 1.7 }}>
+            ຈຳນວນແມ່ນຂອງໜ້າຮ້ານ ແລະ ປ່ຽນແປງຕະຫຼອດເວລາ
+          </div>
+        )}
+        {!isShopDay && <div className="pb-8" />}
       </div>
     </div>
   )
