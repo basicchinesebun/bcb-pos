@@ -23,10 +23,15 @@ export default function MenuPage() {
   // 12 cycles, and the other two were short by one item.
   const [stockOnline, setStockOnline] = useState([])
   const [branches, setBranches] = useState([])
-  // Same flag the walk-in page closes on. Starts true like /order's does, but
-  // nothing renders until the first load lands, so the shelf never flashes up
-  // for a moment on a shop that is shut.
-  const [walkinOn, setWalkinOn] = useState(true)
+  // This page has its own switch in staff settings, deliberately not the
+  // walk-in one. The link lives at the top of a Facebook live and the shop
+  // wants it readable on days the counter is shut — tying the two together
+  // would have taken the menu down every preorder day, which is exactly when
+  // someone is deciding whether to come tomorrow.
+  //
+  // Missing means open: a settings row saved before this switch existed must
+  // not darken the page.
+  const [menuOn, setMenuOn] = useState(true)
   // Null until the browser says so — see the note where the day is used.
   const [today, setToday] = useState(null)
   const [updatedAt, setUpdatedAt] = useState(null)
@@ -49,7 +54,7 @@ export default function MenuPage() {
     if (cfg.stock_shop) setStock(parse(cfg.stock_shop, []))
     if (cfg.stock_online) setStockOnline(parse(cfg.stock_online, []))
     if (cfg.branches) setBranches(parse(cfg.branches, []))
-    if (cfg.settings) setWalkinOn(parse(cfg.settings, {}).walkinOn !== false)
+    if (cfg.settings) setMenuOn(parse(cfg.settings, {}).menuOn !== false)
     setUpdatedAt(new Date())
     setFailed(false)
     setLoading(false)
@@ -77,7 +82,7 @@ export default function MenuPage() {
         const v = parse(row.value, null)
         if (Array.isArray(v)) setStockOnline(v)
       } else if (row.key === 'settings') {
-        setWalkinOn(parse(row.value, {}).walkinOn !== false)
+        setMenuOn(parse(row.value, {}).menuOn !== false)
       }
     }
     setUpdatedAt(new Date())
@@ -236,15 +241,11 @@ export default function MenuPage() {
     )
   }
 
-  // Closed is closed — on a selling day. A shelf count on a shut shop sends
-  // someone across town for buns nobody is selling, so that gets the same
-  // screen as the walk-in page.
-  //
-  // Only on a selling day, though. walkinOn is off all through a preorder day
-  // by definition, and closing this page then would hide the very thing it is
-  // now for: what tomorrow's counter will have.
-  if (!loading && isShopDay && !walkinOn) {
-    return <ClosedOverlay shopInfo={shopInfo} branches={branches} subtitle="ບໍ່ຮັບ Walk-in ໃນຕອນນີ້" />
+  // One switch, this page's own, on every day. Nothing here reads the walk-in
+  // flag any more: that one is off through every preorder day by definition,
+  // and letting it close this page would hide the very thing the page is for.
+  if (!loading && !menuOn) {
+    return <ClosedOverlay shopInfo={shopInfo} branches={branches} subtitle="ໜ້າເມນູປິດຊົ່ວຄາວ" />
   }
 
   return (

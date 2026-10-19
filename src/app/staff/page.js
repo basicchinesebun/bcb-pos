@@ -136,7 +136,12 @@ export default function StaffPage() {
   const [receiptPreviewUrl, setReceiptPreviewUrl] = useState('')
   const [previewLoading, setPreviewLoading] = useState(false)
   const previewTimerRef = useRef(null)
-  const [settings, setSettings] = useState({ soundOn: true, walkinOn: true, onlineOn: true, aiOn: true, autoprintOn: false, autoKickDrawer: true, pickupTimeStart: '15:30', pickupTimeEnd: '19:00' })
+  // menuOn defaults true here on purpose, and the saved settings are merged
+  // over these rather than replacing them. A shop whose settings row predates
+  // the switch would otherwise read undefined, which toggleSetting flips to
+  // true — so the first press of a switch already showing OFF would appear to
+  // do nothing, while the page it governs had been open the whole time.
+  const [settings, setSettings] = useState({ soundOn: true, walkinOn: true, onlineOn: true, menuOn: true, aiOn: true, autoprintOn: false, autoKickDrawer: true, pickupTimeStart: '15:30', pickupTimeEnd: '19:00' })
   const settingsSaveChainRef = useRef(Promise.resolve())
   const [walkinCode, setWalkinCode] = useState('')
   const [branches, setBranches] = useState([
@@ -3470,6 +3475,10 @@ setStockShop(newSS); setStockOnline(newSO)
                     ['soundOn', '🔊 ສຽງຮຽກຄິວ'],
                     ['walkinOn', '🏪 ເປີດ Walk-in'],
                     ['onlineOn', '🌐 ເປີດ Online'],
+                    // Its own switch, not tied to Walk-in: the menu link is
+                    // pinned to a Facebook live and wants to stay readable on
+                    // days the counter is shut.
+                    ['menuOn', '📋 ເປີດໜ້າເມນູ (/menu)'],
                     ['aiOn', '🤖 AI ຕອບແຊັດ'],
                     ['autoprintOn', '🖨 ພິມອັດຕະໂນມັດ (Walk-in ເທົ່ານັ້ນ)'],
                     ['autoKickDrawer', '🔓 ເປີດລິ້ນຊັກອັດຕະໂນມັດ (ເງິນສົດ)'],
