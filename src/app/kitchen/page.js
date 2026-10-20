@@ -11,6 +11,28 @@ export default function KitchenPage() {
   const [menus, setMenus] = useState([])
   const [images, setImages] = useState({})
   const [liveStatus, setLiveStatus] = useState('connecting')
+  // The board already has both layouts — a scrolling list for a phone and
+  // side-by-side columns for a wide screen — but Tailwind picks between them
+  // on width alone, and a tablet stood on its end is around 800px wide. So it
+  // got the wide layout: fixed-width columns on a narrow screen, read through
+  // a letterbox. What decides it should be the shape of the screen, not how
+  // many pixels across it is.
+  //
+  // Null until mounted. This page is prerendered, so measuring the window
+  // during render gives the build server's answer on the server and the
+  // tablet's in the browser; while it is null the original width-based classes
+  // stand, which is byte-for-byte what the server sends today.
+  const [portrait, setPortrait] = useState(null)
+  useEffect(() => {
+    const read = () => setPortrait(window.innerHeight > window.innerWidth)
+    read()
+    window.addEventListener('resize', read)
+    window.addEventListener('orientationchange', read)
+    return () => {
+      window.removeEventListener('resize', read)
+      window.removeEventListener('orientationchange', read)
+    }
+  }, [])
   const [filter, setFilter] = useState('all')
   // The order the ✕ is asking about, and the tray-clearing screen.
   const [cancelAsk, setCancelAsk] = useState(null)
@@ -320,8 +342,8 @@ export default function KitchenPage() {
         </div>
       )}
 
-      {/* ── Mobile: vertical scroll (original layout) ── */}
-      <div className="md:hidden flex-1 overflow-y-auto p-3">
+      {/* ── Phone, and any screen taller than it is wide: vertical scroll ── */}
+      <div className={`flex-1 overflow-y-auto p-3 ${portrait ? '' : 'md:hidden'}`}>
         {confirmed.length === 0 && pending.length === 0 && (
           <div className="flex items-center justify-center h-64 text-xl font-black" style={{ color: 'var(--cream3)' }}>
             ຍັງບໍ່ມີອໍເດີ
@@ -345,8 +367,8 @@ export default function KitchenPage() {
         )}
       </div>
 
-      {/* ── Tablet/Desktop: horizontal swipe ── */}
-      <div className="hidden md:flex flex-1 overflow-hidden">
+      {/* ── Landscape only: horizontal swipe through fixed-width columns ── */}
+      <div className={portrait ? 'hidden' : 'hidden md:flex flex-1 overflow-hidden'}>
         {confirmed.length === 0 && pending.length === 0 ? (
           <div className="flex-1 flex items-center justify-center text-xl font-black" style={{ color: 'var(--cream3)' }}>
             ຍັງບໍ່ມີອໍເດີ
