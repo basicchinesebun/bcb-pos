@@ -20,6 +20,10 @@ const PWA_CONFIG = {
   // running all day, so it asks for fullscreen rather than standalone — there
   // is no address bar or tab strip for a stray touch to land on.
   '/display':  { manifest: '/manifest-display.json',  sw: '/sw-display.js',  icon: '/icon-display-192.png' },
+  // Saved to customers' home screens, so it is labelled ເມນູ with a plain
+  // lettered icon rather than the logo. No worker: a cached copy of a live
+  // stock board would only ever show stale numbers.
+  '/menu':     { manifest: '/manifest-menu.json',     sw: null,              icon: '/icon-menu-180.png' },
 }
 
 function setOrCreate(rel, attrs) {

@@ -33,6 +33,11 @@ export const metadata = {
   // A stock board is only ever worth reading now, and a search engine serving
   // a cached copy of it would show numbers from whenever it last crawled.
   robots: { index: false, follow: true },
+  // Add to Home Screen on iPhone/iPad reads these from the served HTML, so
+  // they are set here as well as by PwaHelper: the icon tile says ເມນູ.
+  manifest: '/manifest-menu.json',
+  icons: { apple: '/icon-menu-180.png' },
+  appleWebApp: { capable: true, title: 'ເມນູ', statusBarStyle: 'default' },
 }
 
 export default function MenuLayout({ children }) {
