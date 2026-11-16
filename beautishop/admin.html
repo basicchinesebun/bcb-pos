@@ -52,7 +52,8 @@
   .stk{display:flex;align-items:center;gap:8px;margin-top:12px}
   .stk .lbl{font-size:13px;font-weight:600;color:var(--mute);min-width:42px}
   .stk .btn{min-width:42px;font-size:18px;line-height:1;padding:7px 0}
-  .stk input{width:96px;text-align:center;font-weight:700}
+  .stk .btn.ten{font-size:14px;min-width:50px}
+  .stk input{width:84px;text-align:center;font-weight:700}
   .stk input.neg{color:var(--red)}
   .savebar{position:fixed;left:0;right:0;bottom:0;background:#fff;border-top:1px solid var(--line);padding:10px 14px calc(10px + env(safe-area-inset-bottom));display:flex;justify-content:center;gap:10px;z-index:6}
   .toast{position:fixed;top:14px;left:50%;transform:translateX(-50%);background:#2b211c;color:#fff;padding:10px 18px;border-radius:10px;z-index:40;font-size:14px;display:none}
@@ -231,53 +232,57 @@ function stockRow(m){
   const n = D.stock[m.id], on = typeof n === 'number';
   return `<div class="stk" data-id="${esc(m.id)}">
           <span class="lbl">สต๊อก</span>
-          <button class="btn ghost sm sd" data-d="-1"${on ? '' : ' disabled'}>−</button>
+          <button class="btn ghost sm sd" data-d="-1"${on && n > 0 ? '' : ' disabled'}>−</button>
           <input class="sv${on && n < 0 ? ' neg' : ''}" type="number" inputmode="numeric" min="0" value="${on ? n : ''}" placeholder="ไม่จำกัด">
-          <button class="btn ghost sm sd" data-d="1"${on ? '' : ' disabled'}>+</button>
+          <button class="btn ghost sm sd" data-d="1">+</button>
+          <button class="btn ghost sm sd ten" data-d="10">+10</button>
         </div>
-        <div class="hint">กด − / + หรือพิมพ์จำนวน (บันทึกทันที) · เว้นว่าง = ไม่จำกัด</div>`;
+        <div class="hint">กด + / − / +10 หรือพิมพ์จำนวน แล้วบันทึกเอง · เว้นว่าง = ไม่จำกัด</div>`;
 }
-// − / + change the number on screen at once; taps made close together are
-// saved as one change (saving takes a second or two).
+// + / − / +10 change the number on screen at once and save straight away;
+// taps made while a save is still on its way go out right after it.
 function bindStock(row){
-  const id = row.dataset.id, inp = row.querySelector('.sv'), pm = row.querySelectorAll('.sd');
-  let pending = 0, sending = 0, timer = null, inflight = null;
-  const val = () => { const n = D.stock[id]; return typeof n === 'number' ? n + sending + pending : null; };
+  const id = row.dataset.id, inp = row.querySelector('.sv'), pm = row.querySelectorAll('.sd'), minus = row.querySelector('[data-d="-1"]');
+  let pending = 0, sending = 0, inflight = null, typeTimer = null;
+  const base = () => typeof D.stock[id] === 'number' ? D.stock[id] : null;
+  const val = () => base() === null && !sending && !pending ? null : (base() || 0) + sending + pending;
   const show = () => {
     const v = val();
     if (document.activeElement !== inp) inp.value = v === null ? '' : v;
     inp.classList.toggle('neg', v !== null && v < 0);
-    pm.forEach(b => b.disabled = v === null);
+    minus.disabled = v === null || v <= 0;
   };
   const send = async payload => {
     try { D.stock = (await api({ action:'stock', id, ...payload })).stock || {}; return true; }
     catch(e){ toast(cleanErr(e)); return false; }
   };
   const flush = async () => {
-    timer = null;
     if (inflight || !pending) return;
     sending = pending; pending = 0;
     inflight = send({ delta: sending });
     const ok = await inflight;
     inflight = null; sending = 0; show();
-    if (pending) flush();
-    else if (ok) toast(`สต๊อกเหลือ ${D.stock[id]} ✓`);
+    if (pending) return flush();
+    if (ok) toast(`สต๊อกเหลือ ${D.stock[id]} ✓`);
   };
   pm.forEach(b => b.onclick = () => {
     const v = val(), d = Number(b.dataset.d);
-    if (v === null || (d < 0 && v <= 0)) return;
-    pending += d; show();
-    clearTimeout(timer); timer = setTimeout(flush, 500);
+    if (d < 0 && (v === null || v + d < 0)) return;
+    pending += d; show(); flush();
   });
-  inp.onchange = async () => {
-    clearTimeout(timer); timer = null; pending = 0;
+  const setTyped = async () => {
+    clearTimeout(typeTimer); typeTimer = null;
+    const t = inp.value.trim(), want = t === '' ? null : Math.max(0, Math.floor(Number(t) || 0));
+    if (want === base() && !pending && !sending) return;
+    pending = 0;
     if (inflight) await inflight;
-    const t = inp.value.trim();
-    inp.disabled = true;
-    const ok = await send({ set: t === '' ? null : Math.max(0, Math.floor(Number(t) || 0)) });
-    inp.disabled = false; inp.blur(); show();
+    const ok = await send({ set: want });
+    show();
     if (ok) { const n = D.stock[id]; toast(typeof n === 'number' ? `สต๊อกเหลือ ${n} ✓` : 'ไม่จำกัดสต๊อกแล้ว ✓'); }
   };
+  // a typed number saves by itself a moment after the last digit (an empty box only on leaving it)
+  inp.oninput = () => { clearTimeout(typeTimer); if (inp.value.trim() !== '') typeTimer = setTimeout(setTyped, 900); };
+  inp.onchange = setTyped;
 }
 function drawMenu(){
   const cur = D.settings.currency || '';

@@ -1,6 +1,8 @@
 import { getConfig, saveConfig, listOrders, getStatuses, updateStatuses, getStock, updateStock, findOrder, putFile, STATUSES } from '../lib/store.js';
 import { send, body, checkPw, sleep } from '../lib/http.js';
 
+class NeedsMenu extends Error {}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') return send(res, 405, { error: 'POST only' });
   const d = await body(req);
@@ -54,20 +56,30 @@ export default async function handler(req, res) {
         return send(res, 200, { ok: true, stock, moved });
       }
       case 'stock': {
-        const id = String(d.id || '');
-        const { menu } = await getConfig();
-        if (!menu.some(m => m.id === id)) return send(res, 400, { error: 'ไม่พบเมนูนี้ กดบันทึกเมนูก่อน' });
-        const stock = await updateStock(s => {
-          if (d.set === null || d.set === '') delete s[id];                 // no limit
-          else if (d.set !== undefined) s[id] = Math.min(99999, Math.max(0, Math.floor(Number(d.set) || 0)));
-          else {                                                            // − / + : never pushed below 0 by hand
-            if (typeof s[id] !== 'number') return undefined;                 // not counted: nothing to move
-            const cur = s[id], step = Math.trunc(Number(d.delta) || 0);
-            s[id] = Math.min(99999, Math.max(Math.min(cur, 0), cur + step));
+        const id = String(d.id || '').slice(0, 60);
+        // Only an item that isn't counted yet needs the menu looked up (one less
+        // storage read for the usual − / + on an item that already has a count).
+        let known = false;
+        for (;;) {
+          try {
+            const stock = await updateStock(s => {
+              if (d.set === null || d.set === '') { if (!(id in s)) return undefined; delete s[id]; return s; }  // no limit
+              if (typeof s[id] !== 'number' && !known) throw new NeedsMenu();
+              if (d.set !== undefined) s[id] = Math.min(99999, Math.max(0, Math.floor(Number(d.set) || 0)));
+              else {                                                        // − / + : never pushed below 0 by hand
+                const cur = typeof s[id] === 'number' ? s[id] : 0, step = Math.trunc(Number(d.delta) || 0);
+                s[id] = Math.min(99999, Math.max(Math.min(cur, 0), cur + step));
+              }
+              return s;
+            });
+            return send(res, 200, { stock });
+          } catch (e) {
+            if (!(e instanceof NeedsMenu) || known) throw e;
+            const { menu } = await getConfig();
+            if (!menu.some(m => m.id === id)) return send(res, 400, { error: 'ไม่พบเมนูนี้ กดบันทึกเมนูก่อน' });
+            known = true;
           }
-          return s;
-        });
-        return send(res, 200, { stock });
+        }
       }
       case 'upload': {
         const buf = Buffer.from(String(d.data || ''), 'base64');
