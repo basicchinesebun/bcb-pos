@@ -25,6 +25,10 @@
   .qty button{width:34px;height:34px;border-radius:50%;border:1px solid var(--red);background:#fff;color:var(--red);font-size:20px;line-height:1;cursor:pointer}
   .qty button.plus{background:var(--red);color:#fff}
   .qty span{min-width:18px;text-align:center;font-weight:700}
+  .qty button:disabled{opacity:.35;cursor:default}
+  .card .st{font-size:13px;color:var(--mute);margin-top:2px}
+  .card .st.zero{color:var(--red);font-weight:700}
+  .card.out img,.card.out .ph,.card.out .nm,.card.out .ds,.card.out .pr{opacity:.45}
   .box{background:#fff;border:1px solid var(--line);border-radius:14px;padding:14px}
   label{display:block;font-size:14px;font-weight:600;margin:12px 0 6px}
   label:first-child{margin-top:0}
@@ -70,7 +74,7 @@
 async function api(path, data){
   const r = await fetch(path, data ? { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(data) } : {});
   const j = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(j.error || 'ຜິດພາດ');
+  if (!r.ok) { const e = new Error(j.error || 'ຜິດພາດ'); e.data = j; throw e; }
   return j;
 }
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -97,7 +101,7 @@ function render(){
   app.innerHTML = `
     <h2>${n()}. ເລືອກສິນຄ້າ</h2>
     ${MENU.map(m => `
-      <div class="card">
+      <div class="card" id="c-${esc(m.id)}">
         ${m.image ? `<img src="${esc(m.image)}" alt="">` : `<div class="ph">膏</div>`}
         <div class="info"><div class="nm">${esc(m.name)}</div>
           ${m.desc ? `<div class="ds">${esc(m.desc)}</div>` : ''}
@@ -134,9 +138,11 @@ function render(){
     <div class="err" id="err"></div>`;
 
   app.querySelectorAll('.qty button').forEach(b => b.onclick = () => {
-    const id = b.dataset.id; cart[id] = Math.max(0, Math.min(99, (cart[id] || 0) + Number(b.dataset.d)));
-    document.getElementById('q-' + id).textContent = cart[id]; updateTotal();
+    const m = MENU.find(x => x.id === b.dataset.id); if (!m) return;
+    cart[m.id] = Math.max(0, Math.min(lim(m), (cart[m.id] || 0) + Number(b.dataset.d)));
+    paintItem(m); updateTotal();
   });
+  MENU.forEach(paintItem);
   app.querySelectorAll('.br').forEach(el => el.onclick = e => {
     if (e.target.tagName === 'A') return;
     branchId = el.dataset.b; app.querySelectorAll('.br').forEach(x => x.classList.toggle('on', x === el));
@@ -147,6 +153,23 @@ function render(){
   if (cp) cp.onclick = () => { navigator.clipboard?.writeText(S.bankAccount); cp.textContent = 'ສຳເນົາແລ້ວ ✓'; };
   document.getElementById('bar').style.display = '';
   updateTotal();
+}
+
+// How many of m one order can take: what's left, or 99 when it isn't counted.
+const lim = m => m.stock == null ? 99 : Math.max(0, Math.min(99, m.stock));
+function paintItem(m){
+  const card = document.getElementById('c-' + m.id); if (!card) return;
+  const counted = m.stock != null;
+  card.classList.toggle('out', counted && m.stock <= 0);
+  let st = card.querySelector('.st');
+  if (counted && !st) { st = document.createElement('div'); st.className = 'st'; card.querySelector('.info').appendChild(st); }
+  if (st) {
+    st.hidden = !counted; st.classList.toggle('zero', counted && m.stock <= 0);
+    st.textContent = !counted ? '' : m.stock > 0 ? 'ເຫຼືອ ' + m.stock : 'ໝົດແລ້ວ';
+  }
+  cart[m.id] = Math.min(cart[m.id] || 0, lim(m));
+  document.getElementById('q-' + m.id).textContent = cart[m.id];
+  card.querySelector('.plus').disabled = cart[m.id] >= lim(m);
 }
 
 function total(){ return MENU.reduce((t, m) => t + m.price * (cart[m.id] || 0), 0); }
@@ -200,6 +223,8 @@ document.getElementById('submit').onclick = async () => {
         <button class="btn" onclick="location.reload()">ສັ່ງເພີ່ມ</button></div>`;
     window.scrollTo(0, 0);
   } catch(e){
+    const left = e.data && e.data.stock;   // sent when something ran out meanwhile
+    if (left) { MENU.forEach(m => { if (m.id in left) { m.stock = left[m.id]; paintItem(m); } }); updateTotal(); }
     err.textContent = (e.message || 'ສົ່ງບໍ່ສຳເລັດ') + ' — ລອງໃໝ່ອີກຄັ້ງ';
     btn.disabled = false; btn.textContent = 'ສົ່ງອໍເດີ';
   }

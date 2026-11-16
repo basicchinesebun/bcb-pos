@@ -20,6 +20,20 @@
   `/beautishop/`. Keep it that way: a bare `/api/...` on the shop domain goes to
   the bun shop app instead.
 
+## Stock
+
+- `stock.json` in the Blob store holds `{ menuId: count }`. A menu item with no
+  entry has no limit.
+- Admin → เมนู: − / + change the number at once and save when you stop tapping;
+  typing a number sets it; an empty box means no limit. Stock saves on its own,
+  separately from "บันทึกเมนู".
+- An order takes its counted items out of stock when it is placed. The write is
+  conditional on the file's ETag, so two orders can't both take the last one.
+  Orders remember which items were counted (`stocked: true`); cancelling an order
+  puts those back, un-cancelling takes them out again.
+- The customer page shows "ເຫຼືອ N" / "ໝົດແລ້ວ" and won't let the cart go past
+  what is left.
+
 ## Deploying
 
 Git does not deploy this folder. Pushing the repo only rebuilds the bun shop app.

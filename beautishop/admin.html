@@ -49,6 +49,11 @@
   .pic.busy::after{content:'กำลังอัปโหลด…';position:absolute;inset:0;background:rgba(255,255,255,.85);display:grid;place-items:center;color:var(--red);font-weight:600}
   .chk{display:flex;align-items:center;gap:6px;font-size:14px;margin:0}
   .chk input{width:auto}
+  .stk{display:flex;align-items:center;gap:8px;margin-top:12px}
+  .stk .lbl{font-size:13px;font-weight:600;color:var(--mute);min-width:42px}
+  .stk .btn{min-width:42px;font-size:18px;line-height:1;padding:7px 0}
+  .stk input{width:96px;text-align:center;font-weight:700}
+  .stk input.neg{color:var(--red)}
   .savebar{position:fixed;left:0;right:0;bottom:0;background:#fff;border-top:1px solid var(--line);padding:10px 14px calc(10px + env(safe-area-inset-bottom));display:flex;justify-content:center;gap:10px;z-index:6}
   .toast{position:fixed;top:14px;left:50%;transform:translateX(-50%);background:#2b211c;color:#fff;padding:10px 18px;border-radius:10px;z-index:40;font-size:14px;display:none}
   .hint{font-size:12px;color:var(--mute);margin-top:4px}
@@ -109,7 +114,7 @@ function loginView(msg){
 async function load(first){
   try {
     const r = await api({ action:'data' });
-    D = { menu: r.config.menu, settings: r.config.settings, branches: r.config.branches || [], orders: r.orders, statuses: r.statuses };
+    D = { menu: r.config.menu, settings: r.config.settings, branches: r.config.branches || [], orders: r.orders, statuses: r.statuses, stock: r.stock || {} };
     try { sessionStorage.setItem('ylpw', PW); } catch(e){}
     dirty = false;
     document.getElementById('refresh').style.display = '';
@@ -212,13 +217,68 @@ function drawOrders(){
   document.querySelectorAll('.slipBtn').forEach(a => a.onclick = e => { e.preventDefault(); showSlip(a.dataset.p); });
   document.querySelectorAll('select[data-id]').forEach(s => s.onchange = async () => {
     s.disabled = true;
-    try { await api({ action:'setStatus', orderId: s.dataset.id, status: s.value });
-      D.orders.find(o => o.orderId == s.dataset.id).status = s.value; toast('อัปเดตแล้ว'); drawOrders();
+    try { const r = await api({ action:'setStatus', orderId: s.dataset.id, status: s.value });
+      if (r.stock) D.stock = r.stock;
+      D.orders.find(o => o.orderId == s.dataset.id).status = s.value;
+      toast(r.moved > 0 ? 'อัปเดตแล้ว · คืนสต๊อกแล้ว' : r.moved < 0 ? 'อัปเดตแล้ว · ตัดสต๊อกแล้ว' : 'อัปเดตแล้ว'); drawOrders();
     } catch(e){ toast(cleanErr(e)); s.disabled = false; }
   });
 }
 
 /* ---------- เมนู ---------- */
+function stockRow(m){
+  if (!m.id) return `<div class="hint" style="margin-top:12px">กด "บันทึกเมนู" ก่อน แล้วค่อยใส่สต๊อก</div>`;
+  const n = D.stock[m.id], on = typeof n === 'number';
+  return `<div class="stk" data-id="${esc(m.id)}">
+          <span class="lbl">สต๊อก</span>
+          <button class="btn ghost sm sd" data-d="-1"${on ? '' : ' disabled'}>−</button>
+          <input class="sv${on && n < 0 ? ' neg' : ''}" type="number" inputmode="numeric" min="0" value="${on ? n : ''}" placeholder="ไม่จำกัด">
+          <button class="btn ghost sm sd" data-d="1"${on ? '' : ' disabled'}>+</button>
+        </div>
+        <div class="hint">กด − / + หรือพิมพ์จำนวน (บันทึกทันที) · เว้นว่าง = ไม่จำกัด</div>`;
+}
+// − / + change the number on screen at once; taps made close together are
+// saved as one change (saving takes a second or two).
+function bindStock(row){
+  const id = row.dataset.id, inp = row.querySelector('.sv'), pm = row.querySelectorAll('.sd');
+  let pending = 0, sending = 0, timer = null, inflight = null;
+  const val = () => { const n = D.stock[id]; return typeof n === 'number' ? n + sending + pending : null; };
+  const show = () => {
+    const v = val();
+    if (document.activeElement !== inp) inp.value = v === null ? '' : v;
+    inp.classList.toggle('neg', v !== null && v < 0);
+    pm.forEach(b => b.disabled = v === null);
+  };
+  const send = async payload => {
+    try { D.stock = (await api({ action:'stock', id, ...payload })).stock || {}; return true; }
+    catch(e){ toast(cleanErr(e)); return false; }
+  };
+  const flush = async () => {
+    timer = null;
+    if (inflight || !pending) return;
+    sending = pending; pending = 0;
+    inflight = send({ delta: sending });
+    const ok = await inflight;
+    inflight = null; sending = 0; show();
+    if (pending) flush();
+    else if (ok) toast(`สต๊อกเหลือ ${D.stock[id]} ✓`);
+  };
+  pm.forEach(b => b.onclick = () => {
+    const v = val(), d = Number(b.dataset.d);
+    if (v === null || (d < 0 && v <= 0)) return;
+    pending += d; show();
+    clearTimeout(timer); timer = setTimeout(flush, 500);
+  });
+  inp.onchange = async () => {
+    clearTimeout(timer); timer = null; pending = 0;
+    if (inflight) await inflight;
+    const t = inp.value.trim();
+    inp.disabled = true;
+    const ok = await send({ set: t === '' ? null : Math.max(0, Math.floor(Number(t) || 0)) });
+    inp.disabled = false; inp.blur(); show();
+    if (ok) { const n = D.stock[id]; toast(typeof n === 'number' ? `สต๊อกเหลือ ${n} ✓` : 'ไม่จำกัดสต๊อกแล้ว ✓'); }
+  };
+}
 function drawMenu(){
   const cur = D.settings.currency || '';
   document.getElementById('main').innerHTML = `
@@ -233,6 +293,7 @@ function drawMenu(){
           </div>
         </div>
         <label>รายละเอียด (ไม่บังคับ)</label><input data-k="desc" value="${esc(m.desc)}">
+        ${stockRow(m)}
         <div class="row" style="margin-top:12px;justify-content:space-between">
           <label class="chk"><input type="checkbox" data-k="active" ${m.active?'checked':''}> เปิดขาย</label>
           <div class="row">
@@ -251,6 +312,7 @@ function drawMenu(){
       m[k] = k === 'active' ? inp.checked : k === 'price' ? Number(inp.value) || 0 : inp.value; });
   });
   document.querySelectorAll('.mi [data-k]').forEach(inp => inp.oninput = inp.onchange = () => { dirty = true; });
+  document.querySelectorAll('.mi .stk').forEach(bindStock);
   document.querySelectorAll('.mi').forEach(el => bindPic(el.querySelector('.pic'), url => { sync(); D.menu[el.dataset.i].image = url; dirty = true; drawMenu(); if (url) toast('ใส่รูปแล้ว อย่าลืมกดบันทึก'); }));
   document.getElementById('add').onclick = () => { sync(); D.menu.push({ id:'', name:'', desc:'', price:0, image:'', active:true }); dirty = true; drawMenu(); window.scrollTo(0, document.body.scrollHeight); };
   document.querySelectorAll('.mi .del').forEach(b => b.onclick = async () => {

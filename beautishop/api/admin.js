@@ -1,4 +1,4 @@
-import { getConfig, saveConfig, listOrders, getStatuses, saveStatuses, putFile, STATUSES } from '../lib/store.js';
+import { getConfig, saveConfig, listOrders, getStatuses, updateStatuses, getStock, updateStock, findOrder, putFile, STATUSES } from '../lib/store.js';
 import { send, body, checkPw, sleep } from '../lib/http.js';
 
 export default async function handler(req, res) {
@@ -8,8 +8,8 @@ export default async function handler(req, res) {
   try {
     switch (d.action) {
       case 'data': {
-        const [config, orders, statuses] = await Promise.all([getConfig(), listOrders(), getStatuses()]);
-        return send(res, 200, { config, statuses: STATUSES,
+        const [config, orders, statuses, stock] = await Promise.all([getConfig(), listOrders(), getStatuses(), getStock()]);
+        return send(res, 200, { config, stock, statuses: STATUSES,
           orders: orders.filter(Boolean).map(o => ({ ...o, status: statuses[o.orderId] || 'new' })) });
       }
       case 'saveConfig': {
@@ -33,8 +33,41 @@ export default async function handler(req, res) {
       }
       case 'setStatus': {
         if (!STATUSES.includes(d.status)) return send(res, 400, { error: 'bad status' });
-        const s = await getStatuses(); s[String(d.orderId)] = d.status; await saveStatuses(s);
-        return send(res, 200, { ok: true });
+        const id = String(d.orderId);
+        let prev = 'new';
+        await updateStatuses(s => { prev = s[id] || 'new'; s[id] = d.status; return s; });
+        // Cancelling puts the order's counted items back in stock; un-cancelling takes them out again.
+        const sign = prev !== 'cancelled' && d.status === 'cancelled' ? 1
+          : prev === 'cancelled' && d.status !== 'cancelled' ? -1 : 0;
+        let stock, moved = 0;
+        if (sign) {
+          const o = await findOrder(id);
+          const back = ((o && o.items) || []).filter(i => i.stocked && i.id);
+          if (back.length) {
+            stock = await updateStock(s => {
+              for (const i of back) if (typeof s[i.id] === 'number') s[i.id] += sign * i.qty;
+              return s;
+            });
+            moved = sign;
+          }
+        }
+        return send(res, 200, { ok: true, stock, moved });
+      }
+      case 'stock': {
+        const id = String(d.id || '');
+        const { menu } = await getConfig();
+        if (!menu.some(m => m.id === id)) return send(res, 400, { error: 'ไม่พบเมนูนี้ กดบันทึกเมนูก่อน' });
+        const stock = await updateStock(s => {
+          if (d.set === null || d.set === '') delete s[id];                 // no limit
+          else if (d.set !== undefined) s[id] = Math.min(99999, Math.max(0, Math.floor(Number(d.set) || 0)));
+          else {                                                            // − / + : never pushed below 0 by hand
+            if (typeof s[id] !== 'number') return undefined;                 // not counted: nothing to move
+            const cur = s[id], step = Math.trunc(Number(d.delta) || 0);
+            s[id] = Math.min(99999, Math.max(Math.min(cur, 0), cur + step));
+          }
+          return s;
+        });
+        return send(res, 200, { stock });
       }
       case 'upload': {
         const buf = Buffer.from(String(d.data || ''), 'base64');
