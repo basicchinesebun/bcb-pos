@@ -1,0 +1,9 @@
+{
+  "cleanUrls": true,
+  "regions": ["sin1"],
+  "rewrites": [
+    { "source": "/beautishop", "destination": "/" },
+    { "source": "/beautishop/admin", "destination": "/admin" },
+    { "source": "/beautishop/api/:path*", "destination": "/api/:path*" }
+  ]
+}

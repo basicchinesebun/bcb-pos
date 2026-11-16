@@ -16,6 +16,9 @@ const nextConfig = {
         destination: '/order',
         permanent: false,
       },
+      // Both spellings reach the 玉灵膏 shop.
+      { source: '/beautyshop', destination: '/beautishop', permanent: false },
+      { source: '/beautyshop/:path*', destination: '/beautishop/:path*', permanent: false },
     ]
   },
   // The 玉灵膏 shop is its own Vercel project (beautishop). Serve it under
